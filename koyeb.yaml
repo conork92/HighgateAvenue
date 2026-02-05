@@ -1,0 +1,16 @@
+name: highgate-avenue
+services:
+  - name: web
+    dockerfile: Dockerfile
+    ports:
+      - port: 5000
+        http_path: /
+    env:
+      - name: SUPABASE_URL
+        secret: SUPABASE_URL
+      - name: SUPABASE_KEY
+        secret: SUPABASE_KEY
+      - name: FLASK_ENV
+        value: production
+      - name: PORT
+        value: "5000"
