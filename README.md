@@ -15,6 +15,7 @@ A modern, lightweight web application for showcasing renovation ideas and design
 
 - **Backend**: Flask (Python)
 - **Database**: Supabase (PostgreSQL)
+- **Image Storage**: Google Cloud Storage
 - **Frontend**: Vanilla JavaScript, HTML5, CSS3
 - **Deployment**: Docker, Koyeb-ready
 
@@ -34,12 +35,20 @@ git clone <your-repo-url>
 cd HighgateAvenue
 ```
 
-### 2. Set Up Supabase
+### 2. Set Up Supabase (Database)
 
 1. Create a new project in [Supabase](https://supabase.com)
 2. Go to the SQL Editor in your Supabase dashboard
 3. Run the SQL script from `supabase_schema.sql` to create the necessary tables
 4. Note your Supabase URL and anon key from Settings > API
+
+### 2b. Set Up Google Cloud Storage (Image Storage)
+
+1. Create a GCP project and enable Cloud Storage API
+2. Create a Cloud Storage bucket for images
+3. Set up a service account with Storage permissions
+4. Download the service account credentials JSON file
+5. See [GCP_SETUP.md](GCP_SETUP.md) for detailed step-by-step instructions
 
 ### 3. Configure Environment Variables
 
@@ -49,14 +58,26 @@ Create a `.env` file in the root directory:
 cp .env.example .env
 ```
 
-Edit `.env` and add your Supabase credentials:
+Edit `.env` and add your credentials:
 
 ```env
+# Supabase (Database)
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-anon-key-here
+
+# Google Cloud Storage (Image Storage)
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_BUCKET_NAME=highgate-avenue-images
+GOOGLE_APPLICATION_CREDENTIALS=./gcp-credentials.json
+# OR use JSON string instead:
+# GCP_CREDENTIALS_JSON='{"type":"service_account",...}'
+
+# Application
 FLASK_ENV=production
 PORT=5000
 ```
+
+**Note**: See [GCP_SETUP.md](GCP_SETUP.md) for detailed instructions on setting up Google Cloud Storage for image uploads.
 
 ### 4. Local Development
 

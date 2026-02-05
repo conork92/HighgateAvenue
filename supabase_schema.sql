@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS plans (
     description TEXT,
     room VARCHAR(100),
     image_url TEXT,
+    storage_path TEXT, -- Path to file in Supabase Storage
     source_url TEXT,
     tags TEXT[], -- Array of tags for categorization
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
