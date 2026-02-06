@@ -9,7 +9,7 @@ help: ## Show this help message
 start: ## Start the application using Docker Compose
 	@echo "Starting Highgate Avenue application..."
 	docker-compose up -d
-	@echo "Application is running at http://localhost:8000"
+	@echo "Application is running at http://localhost:8001"
 
 stop: ## Stop the application
 	@echo "Stopping Highgate Avenue application..."

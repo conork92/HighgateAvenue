@@ -15,6 +15,17 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# Disable caching for static files
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Add no-cache headers for all responses
+@app.after_request
+def after_request(response):
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # Configuration
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
