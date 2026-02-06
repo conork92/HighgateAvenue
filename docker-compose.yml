@@ -4,7 +4,7 @@ services:
   web:
     build: .
     ports:
-      - "8000:5000"
+      - "8001:5000"
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_ANON_KEY}

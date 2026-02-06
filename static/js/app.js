@@ -77,33 +77,39 @@ function filterPlans() {
 
 // Render plans to the grid
 function renderPlans() {
-    if (filteredPlans.length === 0) {
-        plansGrid.innerHTML = `
-            <div class="plan-card" style="grid-column: 1 / -1; text-align: center; padding: 3rem;">
-                <p style="color: var(--text-secondary); font-size: 1.125rem;">
-                    No plans found. Add some renovation ideas to get started!
-                </p>
+        if (filteredPlans.length === 0) {
+            plansGrid.innerHTML = `
+                <div class="plan-card" style="grid-column: 1 / -1; text-align: center; padding: 4rem 2rem;">
+                    <p style="color: #666; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em;">
+                        No plans found. Add some renovation ideas to get started.
+                    </p>
+                </div>
+            `;
+            return;
+        }
+    
+    plansGrid.innerHTML = filteredPlans.map(plan => {
+        const imageHtml = plan.image_url ? 
+            `<img src="${escapeHtml(plan.image_url)}" alt="${escapeHtml(plan.title || 'Plan image')}" class="plan-image" loading="lazy" onerror="this.style.display='none'">` : 
+            '';
+        
+        return `
+            <div class="plan-card">
+                ${imageHtml}
+                <div class="plan-header">
+                    <span class="plan-room">${escapeHtml(plan.room || 'General')}</span>
+                </div>
+                <h2 class="plan-title">${escapeHtml(plan.title || 'Untitled')}</h2>
+                ${plan.description ? `<p class="plan-description">${escapeHtml(plan.description)}</p>` : ''}
+                ${plan.tags && plan.tags.length > 0 ? `
+                    <div class="plan-tags">
+                        ${plan.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                ` : ''}
+                ${plan.source_url ? `<p style="margin-top: 1rem;"><a href="${escapeHtml(plan.source_url)}" target="_blank" rel="noopener noreferrer">View Source →</a></p>` : ''}
             </div>
         `;
-        return;
-    }
-    
-    plansGrid.innerHTML = filteredPlans.map(plan => `
-        <div class="plan-card">
-            <div class="plan-header">
-                <span class="plan-room">${escapeHtml(plan.room || 'General')}</span>
-            </div>
-            <h2 class="plan-title">${escapeHtml(plan.title || 'Untitled')}</h2>
-            ${plan.description ? `<p class="plan-description">${escapeHtml(plan.description)}</p>` : ''}
-            ${plan.image_url ? `<img src="${escapeHtml(plan.image_url)}" alt="${escapeHtml(plan.title || 'Plan image')}" class="plan-image" onerror="this.style.display='none'">` : ''}
-            ${plan.tags && plan.tags.length > 0 ? `
-                <div class="plan-tags">
-                    ${plan.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
-                </div>
-            ` : ''}
-            ${plan.source_url ? `<p style="margin-top: 1rem;"><a href="${escapeHtml(plan.source_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: none;">View Source →</a></p>` : ''}
-        </div>
-    `).join('');
+    }).join('');
 }
 
 // Escape HTML to prevent XSS
