@@ -30,6 +30,7 @@ INSERT INTO rooms (name, description) VALUES
     ('Bathroom 1', 'Main bathroom'),
     ('Bathroom 2', 'Second bathroom'),
     ('Hallway', 'Entrance and hallway'),
+    ('Stairways', 'Stairways'),
     ('Other', 'Other spaces')
 ON CONFLICT (name) DO NOTHING;
 

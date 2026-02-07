@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Highgate Avenue - Renovation Ideas</title>
+    <title>Highgate Avenue{% if section_filter %} - {{ sections[section_filter].label }}{% else %} - Renovation Ideas{% endif %}</title>
     <style>
         /* Critical inline CSS to override cached styles */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -23,8 +23,15 @@
         </header>
 
         <main>
+            <nav class="design-tabs" aria-label="Design sections">
+                <a href="{{ url_for('index') }}" class="design-tab {% if not section_filter %}design-tab--active{% endif %}">All</a>
+                {% for sid, s in all_sections.items() %}
+                <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab {% if section_filter == sid %}design-tab--active{% endif %}">{{ s.label }}</a>
+                {% endfor %}
+            </nav>
+
             <div class="filter-section">
-                <select id="roomFilter" class="filter-select">
+                <select id="roomFilter" class="filter-select room-filter">
                     <option value="">All Rooms</option>
                     <option value="Living Room">Living Room</option>
                     <option value="Kitchen">Kitchen</option>
@@ -34,10 +41,23 @@
                     <option value="Bathroom 1">Bathroom 1</option>
                     <option value="Bathroom 2">Bathroom 2</option>
                     <option value="Hallway">Hallway</option>
+                    <option value="Stairways">Stairways</option>
                     <option value="Other">Other</option>
                 </select>
+                <a href="https://photos.app.goo.gl/wjgNAaovuHe9Mdg78" target="_blank" rel="noopener noreferrer" class="upload-btn design-ideas-link">Design ideas</a>
                 <button id="uploadBtn" class="upload-btn"><span>+ Add Design</span></button>
             </div>
+
+            {% for section_id, section in sections.items() %}
+            <section class="exterior-section" id="section-{{ section_id }}">
+                <h2 class="exterior-label">{{ section.label }}</h2>
+                <div class="hero-image {% if section.layout == 'double' %}plans-two{% endif %}">
+                    {% for img in section.images %}
+                    <img src="{{ img.url }}" alt="{{ img.alt }}" class="homepage-image" referrerpolicy="no-referrer">
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
 
             <!-- Upload Modal -->
             <div id="uploadModal" class="modal" style="display: none;">
@@ -74,6 +94,7 @@
                                 <option value="Bathroom 1">Bathroom 1</option>
                                 <option value="Bathroom 2">Bathroom 2</option>
                                 <option value="Hallway">Hallway</option>
+                                <option value="Stairways">Stairways</option>
                                 <option value="Other">Other</option>
                             </select>
                         </div>
