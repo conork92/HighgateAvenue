@@ -101,6 +101,48 @@ def index():
     """Render the main page"""
     return render_template('index.html')
 
+@app.route('/api/image/<path:image_path>')
+def serve_gcp_image(image_path):
+    """Serve images from GCP Storage"""
+    try:
+        if not gcp_storage_client:
+            return jsonify({'error': 'GCP Storage not configured'}), 500
+        
+        # Get the blob from GCP Storage
+        # Handle both bucket names - try the configured bucket first, then the designs bucket
+        bucket_name = GCP_BUCKET_NAME
+        if 'highgate-avenue-designs' in image_path or image_path.startswith('designs/'):
+            bucket_name = 'highgate-avenue-designs'
+            # Remove 'designs/' prefix if present in path
+            if image_path.startswith('designs/'):
+                image_path = image_path.replace('designs/', '', 1)
+        
+        bucket = gcp_storage_client.bucket(bucket_name)
+        blob = bucket.blob(image_path)
+        
+        if not blob.exists():
+            return jsonify({'error': 'Image not found'}), 404
+        
+        # Download the image content
+        image_data = blob.download_as_bytes()
+        
+        # Get content type
+        content_type = blob.content_type or 'image/png'
+        
+        # Return the image with appropriate headers
+        from flask import Response
+        return Response(
+            image_data,
+            mimetype=content_type,
+            headers={
+                'Cache-Control': 'public, max-age=3600',
+                'Content-Disposition': f'inline; filename="{blob.name}"'
+            }
+        )
+    except Exception as e:
+        app.logger.error(f"Error serving image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/plans', methods=['GET'])
 def get_plans():
     """Get all renovation plans/ideas"""

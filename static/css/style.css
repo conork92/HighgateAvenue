@@ -77,6 +77,32 @@ header h1 {
     font-weight: 500;
 }
 
+.exterior-section {
+    margin-bottom: 4rem;
+}
+
+.exterior-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--black);
+    margin-bottom: 1rem;
+}
+
+.hero-image {
+    width: 100%;
+}
+
+.homepage-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    border: 1px solid var(--black);
+    object-fit: contain;
+    object-position: top;
+}
+
 /* Filter Section */
 .filter-section {
     margin-bottom: 4rem;
@@ -114,7 +140,8 @@ header h1 {
     color: var(--white);
 }
 
-.upload-btn {
+.upload-btn,
+.design-ideas-link {
     padding: 0.5rem 1.5rem;
     font-size: 0.875rem;
     font-weight: 500;
@@ -126,6 +153,16 @@ header h1 {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-family: inherit;
+}
+
+.design-ideas-link {
+    text-decoration: none;
+    display: inline-block;
+}
+
+.design-ideas-link:hover {
+    background: var(--black);
+    color: var(--white);
 }
 
 .upload-btn:hover {
@@ -567,7 +604,8 @@ a:hover {
     }
     
     .filter-select,
-    .upload-btn {
+    .upload-btn,
+    .design-ideas-link {
         width: 100%;
     }
 
