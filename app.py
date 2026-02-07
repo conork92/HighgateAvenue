@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for, abort
 from flask_cors import CORS
 import os
 import uuid
@@ -43,7 +43,12 @@ GCP_CREDENTIALS_PATH = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')  # Path to cr
 # Initialize Supabase client (for database)
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        import logging
+        logging.warning(f"Supabase client not available: {e}. DB features (plans, upload) will be disabled.")
+        supabase = None
 
 # Initialize GCP Storage client
 gcp_storage_client = None
@@ -96,10 +101,132 @@ init_gcp_storage()
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Design sections: single source of truth for labels and images (used by / and /designs/<id>/)
+DESIGN_SECTIONS = {
+    'exterior': {
+        'label': 'Exterior',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/Outside.png', 'alt': 'Highgate Avenue Exterior'},
+        ],
+    },
+    'floor-plans': {
+        'label': 'Floor plans',
+        'layout': 'double',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/old_floor_plan.PNG', 'alt': 'Original floor plan'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/floor_plan_clear.PNG', 'alt': 'New floor plan'},
+        ],
+    },
+    'entrance': {
+        'label': 'Entrance',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/entrance/entrance_hall_2.JPG', 'alt': 'Entrance hall'},
+        ],
+    },
+    'stairs': {
+        'label': 'Stairs into entrance',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Stairs into entrance'},
+        ],
+    },
+    'hallway': {
+        'label': 'Hallway',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/hallway/hallway.PNG', 'alt': 'Hallway'},
+        ],
+    },
+    'living-room': {
+        'label': 'Living Room',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/living_room/living_room.jpg', 'alt': 'Living room'},
+        ],
+    },
+    'kitchen': {
+        'label': 'Kitchen',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Kitchen and living area'},
+        ],
+    },
+    'master-bedroom': {
+        'label': 'Master bedroom',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/main_bedroom/master_bedroom.PNG', 'alt': 'Master bedroom'},
+        ],
+    },
+    'en-suite': {
+        'label': 'En suite',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/en_suite/ensuite_idea.PNG', 'alt': 'En suite bathroom'},
+        ],
+    },
+    'nursery': {
+        'label': 'Nursery',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/nursery/nursery.jpg', 'alt': 'Nursery'},
+        ],
+    },
+    'study': {
+        'label': 'Study',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/study/study_1.jpg', 'alt': 'Study'},
+        ],
+    },
+    'garden': {
+        'label': 'Garden',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/garden/garden.PNG', 'alt': 'Garden'},
+        ],
+    },
+    'summer-house': {
+        'label': 'Summer house',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/summer_house/summer_house.PNG', 'alt': 'Summer house'},
+        ],
+    },
+}
+
+# Main "All" page excludes exterior (exterior has its own tab only)
+SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k != 'exterior'}
+
 @app.route('/')
 def index():
-    """Render the main page"""
-    return render_template('index.html')
+    """Render the main page with all design sections (exterior only on its own tab)."""
+    return render_template(
+        'index.html',
+        sections=SECTIONS_FOR_INDEX,
+        section_filter=None,
+        all_sections=DESIGN_SECTIONS,
+    )
+
+@app.route('/designs/')
+def designs_index():
+    """Redirect /designs/ to main page (all designs)."""
+    return redirect(url_for('index'), code=302)
+
+@app.route('/designs/<section_id>/')
+def design_section(section_id):
+    """Render the page for a single design section."""
+    if section_id not in DESIGN_SECTIONS:
+        abort(404)
+    sections = {section_id: DESIGN_SECTIONS[section_id]}
+    return render_template(
+        'index.html',
+        sections=sections,
+        section_filter=section_id,
+        all_sections=DESIGN_SECTIONS,
+    )
 
 @app.route('/api/image/<path:image_path>')
 def serve_gcp_image(image_path):
