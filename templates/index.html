@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Highgate Avenue{% if section_filter %} - {{ sections[section_filter].label }}{% else %} - Renovation Ideas{% endif %}</title>
+    <title>Highgate Avenue{% if section_filter == 'photo-gallery' %} - Photo gallery{% elif section_filter and section_filter in sections %} - {{ sections[section_filter].label }}{% else %} - Renovation Ideas{% endif %}</title>
     <style>
         /* Critical inline CSS to override cached styles */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -28,6 +28,7 @@
                 {% for sid, s in all_sections.items() %}
                 <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab {% if section_filter == sid %}design-tab--active{% endif %}">{{ s.label }}</a>
                 {% endfor %}
+                <a href="{{ url_for('photo_gallery') }}" class="design-tab {% if section_filter == 'photo-gallery' %}design-tab--active{% endif %}">Photo gallery</a>
             </nav>
 
             <div class="filter-section">
@@ -46,7 +47,25 @@
                 </select>
                 <a href="https://photos.app.goo.gl/wjgNAaovuHe9Mdg78" target="_blank" rel="noopener noreferrer" class="upload-btn design-ideas-link">Design ideas</a>
                 <button id="uploadBtn" class="upload-btn"><span>+ Add Design</span></button>
+                <button id="addProductBtn" class="upload-btn"><span>+ Add Product</span></button>
             </div>
+
+            {% if show_photo_gallery %}
+            <section class="photo-carousel-section">
+                <h2 class="exterior-label">Photo gallery</h2>
+                <p class="photo-carousel-desc">Photos from the house (Nov 12, 2025 – Feb 6, 2026). Use arrows to browse, or <a href="https://photos.google.com/share/AF1QipMpEwNv4pTHnXCS0Ie9P9OWbATC_ngDV84CKka5LtFglQbgnM2NHmLHuD-xanKARQ?key=Wklya296MmhULW5wLU40Z25WcDJ4VGktaFM0Y1dR" target="_blank" rel="noopener noreferrer">open full album</a>.</p>
+                <div class="custom-carousel" id="photoCarousel">
+                    <button type="button" class="carousel-btn carousel-prev" aria-label="Previous">‹</button>
+                    <div class="carousel-track">
+                        {% for url in carousel_images %}
+                        <div class="carousel-slide"><img src="{{ url }}" alt="Photo {{ loop.index }}" loading="lazy"></div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="carousel-btn carousel-next" aria-label="Next">›</button>
+                </div>
+                <div class="carousel-dots" id="carouselDots"></div>
+            </section>
+            {% endif %}
 
             {% for section_id, section in sections.items() %}
             <section class="exterior-section" id="section-{{ section_id }}">
@@ -129,12 +148,89 @@
                 </div>
             </div>
 
+            <!-- Add Product Modal -->
+            <div id="productModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close-product-modal">&times;</span>
+                    <h2>Add Product</h2>
+                    <form id="productForm">
+                        <div class="form-group">
+                            <label for="productLink">Product link (e.g. Amazon) *</label>
+                            <input type="url" id="productLink" name="link" placeholder="https://..." required>
+                            <button type="button" id="fetchPreviewBtn" class="btn-secondary">Fetch image &amp; title from URL</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="productWebsiteName">Website name</label>
+                            <input type="text" id="productWebsiteName" name="website_name" placeholder="e.g. Amazon, IKEA, John Lewis">
+                        </div>
+                        <div class="form-group">
+                            <label for="productTitle">Title</label>
+                            <input type="text" id="productTitle" name="title" placeholder="Product name">
+                        </div>
+                        <div class="form-group">
+                            <label for="productImageUrl">Image URL</label>
+                            <input type="url" id="productImageUrl" name="image_url" placeholder="Leave empty to fetch from link">
+                        </div>
+                        <div class="form-group">
+                            <label for="productPrice">Price</label>
+                            <input type="text" id="productPrice" name="price" placeholder="e.g. £24.99 or From $19">
+                        </div>
+                        <div class="form-group">
+                            <label for="productCategory">Category</label>
+                            <select id="productCategory" name="category">
+                                <option value="">—</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Lighting">Lighting</option>
+                                <option value="Decor">Decor</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Storage">Storage</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="productRoom">Room</label>
+                            <select id="productRoom" name="room">
+                                <option value="">—</option>
+                                <option value="Living Room">Living Room</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Bedroom 1">Bedroom 1</option>
+                                <option value="Bedroom 2">Bedroom 2</option>
+                                <option value="Bedroom 3">Bedroom 3</option>
+                                <option value="Bathroom 1">Bathroom 1</option>
+                                <option value="Bathroom 2">Bathroom 2</option>
+                                <option value="Hallway">Hallway</option>
+                                <option value="Stairways">Stairways</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="productTags">Tags (comma-separated)</label>
+                            <input type="text" id="productTags" name="tags" placeholder="e.g. modern, wooden, accent">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" id="cancelProduct">Cancel</button>
+                            <button type="submit" class="btn-submit" id="submitProduct">Add Product</button>
+                        </div>
+                    </form>
+                    <div id="productStatus" class="upload-status" style="display: none;"></div>
+                </div>
+            </div>
+
             <div id="plansGrid" class="plans-grid">
                 <!-- Plans will be loaded here -->
             </div>
 
             <div id="loading" class="loading">Loading ideas...</div>
             <div id="error" class="error" style="display: none;"></div>
+
+            <section class="products-section" id="productsSection" data-product-room="{{ product_room_filter or '' }}">
+                <h2 class="exterior-label">Products</h2>
+                <div id="productsGrid" class="products-grid">
+                    <!-- Products loaded by JS -->
+                </div>
+                <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
+            </section>
         </main>
 
         <footer>

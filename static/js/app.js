@@ -32,7 +32,191 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPlans();
     roomFilter.addEventListener('change', filterPlans);
     initUploadHandlers();
+    initPhotoCarousel();
+    initProducts();
 });
+
+// Products: load and show only products for the current page (no dropdowns)
+function initProducts() {
+    const section = document.getElementById('productsSection');
+    const grid = document.getElementById('productsGrid');
+    const loadingEl = document.getElementById('productsLoading');
+    if (!section || !grid) return;
+
+    const productRoom = (section.getAttribute('data-product-room') || '').trim();
+    loadProducts(productRoom, grid, loadingEl);
+    initProductModal(section, grid, loadingEl);
+}
+
+function initProductModal(section, grid, loadingEl) {
+    const addBtn = document.getElementById('addProductBtn');
+    const modal = document.getElementById('productModal');
+    const closeBtn = modal && modal.querySelector('.close-product-modal');
+    const cancelBtn = document.getElementById('cancelProduct');
+    const form = document.getElementById('productForm');
+    const productStatus = document.getElementById('productStatus');
+    const fetchPreviewBtn = document.getElementById('fetchPreviewBtn');
+    const productLinkInput = document.getElementById('productLink');
+
+    if (!addBtn || !modal || !form) return;
+
+    addBtn.addEventListener('click', () => {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    });
+
+    function closeProductModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        form.reset();
+        if (productStatus) productStatus.style.display = 'none';
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', closeProductModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeProductModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeProductModal();
+    });
+
+    if (fetchPreviewBtn && productLinkInput) {
+        fetchPreviewBtn.addEventListener('click', async () => {
+            const url = (productLinkInput.value || '').trim();
+            if (!url) return;
+            fetchPreviewBtn.disabled = true;
+            fetchPreviewBtn.textContent = 'Fetching...';
+            try {
+                const r = await fetch(`${API_BASE}/products/preview?url=${encodeURIComponent(url)}`);
+                const data = await r.json();
+                if (r.ok && data) {
+                    if (data.title) document.getElementById('productTitle').value = data.title;
+                    if (data.image_url) document.getElementById('productImageUrl').value = data.image_url;
+                }
+            } catch (e) { console.error(e); }
+            fetchPreviewBtn.disabled = false;
+            fetchPreviewBtn.textContent = 'Fetch image & title from URL';
+        });
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const link = (document.getElementById('productLink').value || '').trim();
+        if (!link) return;
+        const tagsInput = (document.getElementById('productTags').value || '').trim();
+        const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
+        const payload = {
+            link,
+            title: (document.getElementById('productTitle').value || '').trim() || null,
+            image_url: (document.getElementById('productImageUrl').value || '').trim() || null,
+            price: (document.getElementById('productPrice').value || '').trim() || null,
+            category: (document.getElementById('productCategory').value || '').trim() || null,
+            room: (document.getElementById('productRoom').value || '').trim() || null,
+            website_name: (document.getElementById('productWebsiteName').value || '').trim() || null,
+            tags
+        };
+        const submitBtn = document.getElementById('submitProduct');
+        submitBtn.disabled = true;
+        if (productStatus) { productStatus.style.display = 'block'; productStatus.textContent = 'Adding...'; productStatus.className = 'upload-status loading'; }
+        try {
+            const r = await fetch(`${API_BASE}/products`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || 'Failed to add product');
+            if (productStatus) { productStatus.textContent = 'Product added.'; productStatus.className = 'upload-status success'; }
+            const roomFilter = (section.getAttribute('data-product-room') || '').trim();
+            loadProducts(roomFilter, grid, loadingEl);
+            setTimeout(closeProductModal, 1200);
+        } catch (err) {
+            if (productStatus) { productStatus.textContent = err.message || 'Error'; productStatus.className = 'upload-status error'; productStatus.style.display = 'block'; }
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+}
+
+function getProductWebsiteDisplay(p) {
+    const name = (p.website_name && p.website_name.trim()) ? p.website_name.trim() : null;
+    if (name) return name;
+    const url = (p.link && p.link.trim()) ? p.link.trim() : '';
+    if (!url) return '';
+    try {
+        const host = new URL(url).hostname || '';
+        const withoutWww = host.replace(/^www\./i, '');
+        const base = withoutWww.split('.')[0] || withoutWww;
+        return base ? base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() : '';
+    } catch (e) { return ''; }
+}
+
+async function loadProducts(roomFilter, grid, loadingEl) {
+    if (loadingEl) loadingEl.style.display = 'block';
+    try {
+        const url = roomFilter
+            ? `${API_BASE}/products?room=${encodeURIComponent(roomFilter)}`
+            : `${API_BASE}/products`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const products = await response.json();
+        const list = Array.isArray(products) ? products : [];
+        grid.innerHTML = list.length === 0
+            ? ''
+            : list.map(p => {
+                const hasImage = p.image_url && p.image_url.trim();
+                const imgHtml = hasImage
+                    ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.title || 'Product')}" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add('product-tile-image--failed')">`
+                    : '';
+                const title = escapeHtml(p.title || 'Product');
+                const rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+                const displayPrice = rawPrice && !rawPrice.startsWith('£') ? `£ ${escapeHtml(rawPrice)}` : escapeHtml(rawPrice);
+                const price = rawPrice ? `<span class="product-tile-price">${displayPrice}</span>` : '';
+                const websiteDisplay = getProductWebsiteDisplay(p);
+                const websiteHtml = websiteDisplay ? `<span class="product-tile-website">${escapeHtml(websiteDisplay)}</span>` : '';
+                const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+                return `<div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${price}</div></a></div>`;
+            }).join('');
+    } catch (e) {
+        console.error('Error loading products:', e);
+        grid.innerHTML = '';
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+}
+
+// Photo gallery carousel (only on photo-gallery page)
+function initPhotoCarousel() {
+    const carousel = document.getElementById('photoCarousel');
+    if (!carousel) return;
+
+    const track = carousel.querySelector('.carousel-track');
+    const slides = track ? track.querySelectorAll('.carousel-slide') : [];
+    const prevBtn = carousel.querySelector('.carousel-prev');
+    const nextBtn = carousel.querySelector('.carousel-next');
+    const dotsContainer = document.getElementById('carouselDots');
+
+    if (slides.length === 0) return;
+
+    let index = 0;
+
+    function showSlide(i) {
+        index = ((i % slides.length) + slides.length) % slides.length;
+        slides.forEach((s, j) => s.classList.toggle('active', j === index));
+        dotsContainer.querySelectorAll('button').forEach((d, j) => d.classList.toggle('active', j === index));
+    }
+
+    prevBtn.addEventListener('click', () => showSlide(index - 1));
+    nextBtn.addEventListener('click', () => showSlide(index + 1));
+
+    slides.forEach((_, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('aria-label', `Go to slide ${i + 1}`);
+        btn.addEventListener('click', () => showSlide(i));
+        dotsContainer.appendChild(btn);
+    });
+
+    showSlide(0);
+}
 
 // Load plans from API
 async function loadPlans() {
@@ -55,8 +239,9 @@ async function loadPlans() {
     } catch (error) {
         console.error('Error loading plans:', error);
         loading.style.display = 'none';
-        errorDiv.style.display = 'block';
-        errorDiv.textContent = `Error loading plans: ${error.message}`;
+        allPlans = [];
+        filteredPlans = [];
+        renderPlans();
     }
 }
 
@@ -77,17 +262,10 @@ function filterPlans() {
 
 // Render plans to the grid
 function renderPlans() {
-        if (filteredPlans.length === 0) {
-            plansGrid.innerHTML = `
-                <div class="plan-card" style="grid-column: 1 / -1; text-align: center; padding: 4rem 2rem;">
-                    <p style="color: #666; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em;">
-                        No plans found. Add some renovation ideas to get started.
-                    </p>
-                </div>
-            `;
-            return;
-        }
-    
+    if (filteredPlans.length === 0) {
+        plansGrid.innerHTML = '';
+        return;
+    }
     plansGrid.innerHTML = filteredPlans.map(plan => {
         const imageHtml = plan.image_url ? 
             `<img src="${escapeHtml(plan.image_url)}" alt="${escapeHtml(plan.title || 'Plan image')}" class="plan-image" loading="lazy" onerror="this.style.display='none'">` : 

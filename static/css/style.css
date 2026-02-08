@@ -77,6 +77,97 @@ header h1 {
     font-weight: 500;
 }
 
+.photo-carousel-section {
+    margin-bottom: 4rem;
+}
+
+.photo-carousel-desc {
+    font-size: 0.875rem;
+    color: rgba(0, 0, 0, 0.7);
+    margin-bottom: 1rem;
+}
+
+/* Custom photo carousel */
+.custom-carousel {
+    position: relative;
+    max-width: 720px;
+    margin: 0 auto;
+    border: 1px solid var(--black);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.carousel-track {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    background: #f5f5f5;
+}
+
+.carousel-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.carousel-slide.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.carousel-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.carousel-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--black);
+    background: var(--white);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.carousel-btn:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.carousel-prev { left: 0.5rem; }
+.carousel-next { right: 0.5rem; }
+
+.carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.carousel-dots button {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid var(--black);
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.carousel-dots button.active {
+    background: var(--black);
+}
+
 .exterior-section {
     margin-bottom: 4rem;
 }
@@ -92,12 +183,18 @@ header h1 {
 
 .hero-image {
     width: 100%;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .hero-image.plans-two {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 @media (max-width: 640px) {
@@ -109,6 +206,7 @@ header h1 {
 .homepage-image {
     width: 100%;
     height: auto;
+    max-height: 72vh;
     display: block;
     border: 1px solid var(--black);
     object-fit: contain;
@@ -327,6 +425,133 @@ header h1 {
     letter-spacing: 0.05em;
     font-weight: 500;
     transition: all var(--transition);
+}
+
+/* Products section – tile grid */
+.products-section {
+    margin-top: 4rem;
+    padding-top: 3rem;
+    border-top: 1px solid var(--black);
+}
+
+.products-section .exterior-label {
+    margin-bottom: 1.5rem;
+}
+
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 2rem 1.5rem;
+}
+
+@media (min-width: 900px) {
+    .products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+.product-tile {
+    background: var(--white);
+    border: 1px solid var(--gray-medium);
+    border-top: 2px solid var(--black);
+    transition: border-color var(--transition), box-shadow var(--transition);
+    overflow: hidden;
+}
+
+.product-tile:hover {
+    border-color: var(--black);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.product-tile-link {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    text-decoration: none;
+    color: inherit;
+}
+
+.product-tile-image-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--gray-light);
+    overflow: hidden;
+}
+
+.product-tile-image-wrap::before {
+    content: '';
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: var(--gray-light);
+    z-index: 0;
+}
+
+.product-tile-image {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform var(--transition);
+}
+
+.product-tile:hover .product-tile-image {
+    transform: scale(1.03);
+}
+
+.product-tile-image-wrap.product-tile-image--failed .product-tile-image {
+    opacity: 0;
+}
+
+.product-tile-image-wrap.product-tile-image--failed::after,
+.product-tile-image-wrap:not(:has(img))::after {
+    content: 'No image';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: var(--gray-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    z-index: 0;
+}
+
+.product-tile-info {
+    padding: 1.25rem 1.25rem 1.5rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.product-tile-website {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray-dark);
+    font-weight: 600;
+}
+
+.product-tile-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--black);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.product-tile-price {
+    font-size: 0.875rem;
+    color: var(--gray-dark);
+    font-weight: 500;
 }
 
 .tag:hover {

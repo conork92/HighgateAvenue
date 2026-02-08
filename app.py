@@ -31,6 +31,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # Supabase configuration (for database)
+# Use the anon/public API key from Project Settings → API in Supabase dashboard, NOT the Postgres connection string.
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY') or os.getenv('SUPABASE_ANON_KEY')
 
@@ -200,6 +201,42 @@ DESIGN_SECTIONS = {
 # Main "All" page excludes exterior (exterior has its own tab only)
 SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k != 'exterior'}
 
+# Map design section_id to product room filter (for Products section on that page). None = show all.
+SECTION_TO_PRODUCT_ROOM = {
+    'kitchen': 'Kitchen',
+    'living-room': 'Living Room',
+    'hallway': 'Hallway',
+    'stairs': 'Stairways',
+    'entrance': 'Hallway',
+    'master-bedroom': 'Bedroom 1',
+    'en-suite': 'Bathroom 1',
+    'nursery': 'Bedroom 2',
+    'study': 'Other',
+    'garden': 'Other',
+    'summer-house': 'Other',
+    'exterior': 'Other',
+    'floor-plans': None,
+}
+
+# Photo gallery carousel image URLs (Google Photos album)
+PHOTO_GALLERY_IMAGES = [
+    'https://lh3.googleusercontent.com/pw/AP1GczOaS680Rqz3FFkCFAvoHVOWt9pBt-5VVum6ImwMnUq5pAOg4nd0C3URSoMeOGIcTebrDBBMTDWLlVdXXAX7r86EUI7MHFelVYFleB2ej2kIKPpBDwH1=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczNT33XahF_QttIYcsIqdeTYRyQj8Syja8L4QL2F6h4qoJzq7Ox7ViZNSjc8vmCWgeNPA3QKM2QvZEJ5hLq-MRToOARebPpB1LBkkZRjO8te16g6mU0J=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczN4v63RiKGJ3X9v2U3IrXBJEPenMPEP8ZIyFD2ga0bP4i59ntqpIH0ueMuITtxzom_e7FmwUCmP0RO5Jz09cozEMBAioCTP1lcZsEvFgjqZRRJVZxnP=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczPyGfODvUz0Y0S-cJH7sD0osx2lqZ9cCFk09gP8BRR40DXaUQDnI_D4RE9efF2dtMLV4vP--s44gxN-Ukm2y5PHO-hwL5oaTG-UjtS238RxWiHO_hyi=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczPMf8KKoJEV5yBx68SS87TlTT8y6smz5UgVuuhb_wiXJF3FLy5C1D28oZvGz37wr45rUEliorV8Xm8x6-BiqP3xXImbtzWlYOwSjJaqg1qpBiy4eYbG=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczPUW3klwn3u2QlIB3KUKSWGXqKqwHVCML-5EbvdbCkGIVpvjZJuleVQRqM6A3FRvgVL3HYHqLwuDzYNYJSqwfRYI3w-pVIF30E1xUEJXGPLwd3MgG3V=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczPK0RfNQW5ELsMwczKkdHQ6mFJ3igANZ7AE7W6kIsT1Waemp_LoLy5LQibfmfiuuzet9axod0CegzvbFpQLEFYVUM9nNEPUmL6U5Q8AWSy2x0Bcpgsm=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczM4mI6ykjXP2s_VjOD89aThT4cegBli2uXiLIGvdaE_Txuabgk1BtZrTthPEY7-hBRCCbexOzWvKU--Tnt8i-mK7Oa2xDLhbYxs4tEprpfD0PEGDGfr=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczN16hmix--Jmh507geajjgVajUkMiGWsI2RBWirLKqqUAMGDMzAIPGCTMkDscmnrgYrNL7pITRyrIir8ecVeSmOKgpxgDmXXnnVh1GUVJgK7PFHWVZr=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczMSo50P_s1z8BchGYEqNA5ln-L2U0zLMDgLJOVXzFbL0yk8pktMrTDP94Ost4XhOR0zph6uh2MO2px9za3kOJ3HwnxWv1ZfC3bNhL3wxYGtRfyU7VeR=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczOK6WuKPb9f5YX0oyDfMB8zZ3E1Za2vZjKbvHDHQzIwfDrcil2g2VaSywyDC0tqz4ycQhLntMlx8VNGYnqFBph_Y7RdFuOCiX4sA0EsVnXelCA6zq3u=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczM6bS2Xne34-6tWII2FMtB-SnRJRcQ3JdEZzCUxQhS5OWMT_rto-AdIDXXwQ4II9OM0W5ZYhhVj3JwWbfqQ1p3Wuv4myzCPEz2zFJoT1yAv7bgvyD2c=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczNZqCcmbRYCcUwDxVo2RiTeTxZKzBcqUm4Cte0hxxYr_doQnb99nZdfOtjDemiR5fHROBXW4ZqNbwx6GlbtsoxIh5uHClPbFDSiVJZpvhDrpabt2DqU=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczNlqHj7tWigRYxq9FWJfhUobhqHjw2XHSdtZFzxBMfSpfMEj8hMz-JV609234JlKkJfgAPh79JQFj7GhpLzDBKIcCL3vqHi07BSuCpUQNOb4CJNng1D=w1920-h1080',
+    'https://lh3.googleusercontent.com/pw/AP1GczPNHiuCNjVAUU9q7uM-7BoGhdMPC5hXHLD0GdVFNf68hR1NIXYSNqi_x34QNYiFaYYv4Cjqtca4dxzJ2I20EpO4tUer48R_kTKV0eTyx94E3-7lyy6E=w1920-h1080',
+]
+
 @app.route('/')
 def index():
     """Render the main page with all design sections (exterior only on its own tab)."""
@@ -208,6 +245,8 @@ def index():
         sections=SECTIONS_FOR_INDEX,
         section_filter=None,
         all_sections=DESIGN_SECTIONS,
+        show_photo_gallery=False,
+        product_room_filter=None,
     )
 
 @app.route('/designs/')
@@ -221,11 +260,27 @@ def design_section(section_id):
     if section_id not in DESIGN_SECTIONS:
         abort(404)
     sections = {section_id: DESIGN_SECTIONS[section_id]}
+    product_room_filter = SECTION_TO_PRODUCT_ROOM.get(section_id)
     return render_template(
         'index.html',
         sections=sections,
         section_filter=section_id,
         all_sections=DESIGN_SECTIONS,
+        show_photo_gallery=False,
+        product_room_filter=product_room_filter,
+    )
+
+@app.route('/photo-gallery/')
+def photo_gallery():
+    """Photo gallery page with carousel (own tab)."""
+    return render_template(
+        'index.html',
+        sections={},
+        section_filter='photo-gallery',
+        all_sections=DESIGN_SECTIONS,
+        show_photo_gallery=True,
+        carousel_images=PHOTO_GALLERY_IMAGES,
+        product_room_filter=None,
     )
 
 @app.route('/api/image/<path:image_path>')
@@ -319,6 +374,79 @@ def delete_plan(plan_id):
         return jsonify({'message': 'Plan deleted successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# --- Products (e.g. Amazon links with image, price, category, room, tags) ---
+
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    """Get all products, optionally filtered by room or category."""
+    try:
+        if not supabase:
+            return jsonify([]), 200
+        room = request.args.get('room', '').strip()
+        category = request.args.get('category', '').strip()
+        query = supabase.table('ha_products').select('*').order('created_at', desc=True)
+        if room:
+            query = query.eq('room', room)
+        if category:
+            query = query.eq('category', category)
+        response = query.execute()
+        return jsonify(response.data), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/products', methods=['POST'])
+def create_product():
+    """Add a new product (link, image_url, price, title, category, room, tags)."""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        data = request.get_json() or {}
+        link = (data.get('link') or '').strip()
+        if not link:
+            return jsonify({'error': 'Link is required'}), 400
+        payload = {
+            'link': link,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'price': (data.get('price') or '').strip() or None,
+            'title': (data.get('title') or '').strip() or None,
+            'category': (data.get('category') or '').strip() or None,
+            'room': (data.get('room') or '').strip() or None,
+            'website_name': (data.get('website_name') or '').strip() or None,
+            'tags': data.get('tags') if isinstance(data.get('tags'), list) else [],
+        }
+        response = supabase.table('ha_products').insert(payload).execute()
+        return jsonify(response.data[0] if response.data else payload), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/products/preview')
+def product_preview():
+    """Fetch og:image and og:title from a URL (e.g. Amazon) for link preview."""
+    try:
+        url = request.args.get('url', '').strip()
+        if not url:
+            return jsonify({'error': 'url is required'}), 400
+        if not url.startswith(('http://', 'https://')):
+            return jsonify({'error': 'Invalid URL'}), 400
+        import requests
+        from bs4 import BeautifulSoup
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
+        r = requests.get(url, headers=headers, timeout=10)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, 'html.parser')
+        image_url = None
+        title = None
+        og_image = soup.find('meta', property='og:image')
+        if og_image and og_image.get('content'):
+            image_url = og_image['content'].strip()
+        og_title = soup.find('meta', property='og:title')
+        if og_title and og_title.get('content'):
+            title = og_title['content'].strip()
+        return jsonify({'image_url': image_url, 'title': title}), 200
+    except Exception as e:
+        app.logger.warning(f"Product preview failed for {url}: {e}")
+        return jsonify({'image_url': None, 'title': None, 'error': str(e)}), 200
 
 @app.route('/api/rooms', methods=['GET'])
 def get_rooms():
