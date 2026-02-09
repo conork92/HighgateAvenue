@@ -74,7 +74,9 @@ If you use **GitHub Actions** (see below), create a service account that can pus
 2. Name e.g. `github-deploy-highgate`
 3. Roles:
    - **Cloud Run Admin**
-   - **Storage Admin** (for pushing to Container Registry)
+   - **Storage Admin** (for pushing to Container Registry / gcr.io)
+   - **Artifact Registry Writer** (for pushing images)
+   - **Artifact Registry Create-on-push Writer** (so the first push can create the gcr.io repo)
    - **Service Account User** (so Cloud Build/Run can act as the default SA)
 4. Create a **JSON key**, download it.
 5. In **GitHub** → repo → **Settings** → **Secrets and variables** → **Actions**:
@@ -110,6 +112,28 @@ Every push/merge to `main` runs the workflow in `.github/workflows/deploy-gcp.ym
 3. Merge to `main` (or push to `main`). The **Actions** tab will show “Deploy to Google Cloud Run”; when it’s green, the site is updated.
 
 No Cloud Build trigger is required; everything runs in GitHub.
+
+**If you see `Permission 'artifactregistry.repositories.uploadArtifacts' denied`:**  
+Your service account needs **Artifact Registry Writer**. Add it (use your project ID and service account email):
+
+```bash
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:github-deploy-highgate@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+```
+
+Then re-run the failed workflow. You do **not** need to change the GitHub token or create a new key.
+
+**If you see `gcr.io repo does not exist. Creating on push requires the artifactregistry.repositories.createOnPush permission`:**  
+The first push needs permission to create the image repository. Grant the create-on-push role (use your project ID and service account email):
+
+```bash
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:github-deploy-highgate@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.createOnPushWriter"
+```
+
+Then re-run the failed workflow. After the first successful push, the repo exists and later pushes will work.
 
 ---
 

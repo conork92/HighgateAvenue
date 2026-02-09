@@ -288,7 +288,7 @@ SECTION_TO_PRODUCT_ROOM = {
     'dining-room': 'Dining Room',
     'hallway': 'Hallway',
     'stairs': 'Stairways',
-    'entrance': 'Hallway',
+    'entrance': 'Entrance',
     'master-bedroom': 'Bedroom',
     'en-suite': 'Bathroom',
     'nursery': 'Nursery',

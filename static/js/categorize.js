@@ -35,13 +35,13 @@ let selectedUploadFile = null;
 
 // Room options
 const ROOM_OPTIONS = [
-    '', 'Living Room', 'Kitchen', 'Dining Room', 'Bedroom', 'Bathroom', 'Hallway', 'Stairways',
-    'Garden', 'Summerhouse', 'Nursery', 'Study', 'Other'
+    '', 'Bathroom', 'Bedroom', 'Dining Room', 'Entrance', 'Garden', 'Hallway', 'Kitchen', 'Living Room',
+    'Nursery', 'Other', 'Stairways', 'Study', 'Summerhouse'
 ];
 
 // Category options
 const CATEGORY_OPTIONS = [
-    '', 'Furniture', 'Lighting', 'Decor', 'Kitchen', 'Bathroom', 'Storage', 'Other'
+    '', 'Bathroom', 'Decor', 'Furniture', 'Kitchen', 'Lighting', 'Other', 'Storage'
 ];
 
 // Initialize
