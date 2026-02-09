@@ -68,18 +68,71 @@ Store secrets in Secret Manager, then in Cloud Run add them as “Reference a se
 
 ### 4. (GitHub Actions only) Service account for deploy
 
-If you use **GitHub Actions** (see below), create a service account that can push images and deploy:
+If you use **GitHub Actions** (see below), you need a **Google Cloud service account JSON key** (not a token, not the Supabase anon key).
 
-1. **IAM & Admin** → **Service Accounts** → **Create**
+1. In GCP: **IAM & Admin** → **Service Accounts** → **Create**
 2. Name e.g. `github-deploy-highgate`
 3. Roles:
    - **Cloud Run Admin**
    - **Storage Admin** (for pushing to Container Registry)
    - **Service Account User** (so Cloud Build/Run can act as the default SA)
-4. Create a **JSON key**, download it.
-5. In **GitHub** → repo → **Settings** → **Secrets and variables** → **Actions**:
-   - `GCP_PROJECT_ID` = your GCP project ID
-   - `GCP_SA_KEY` = entire contents of the JSON key file
+4. Open the new service account → **Keys** → **Add key** → **Create new key** → **JSON** → **Create**. A `.json` file downloads.
+5. In **GitHub** → repo → **Settings** → **Secrets and variables** → **Actions** (repository secrets):
+   - `GCP_PROJECT_ID` = your GCP project ID (e.g. `boxd-408821`)
+   - `GCP_SA_KEY` = **the entire contents** of that JSON file (one line or multi-line is fine; include the whole file including `"private_key": "-----BEGIN PRIVATE KEY-----..."`).
+
+**Via CLI (same result):**
+
+Set your project and run:
+
+```bash
+export PROJECT_ID=boxd-408821   # e.g. boxd-408821
+export SA_NAME=github-deploy-highgate
+export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Create the service account
+gcloud iam service-accounts create $SA_NAME \
+  --display-name="GitHub deploy Highgate Avenue" \
+  --project=$PROJECT_ID
+
+# Grant roles
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/run.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/storage.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/iam.serviceAccountUser"
+
+# Create JSON key (save to current directory; add to .gitignore)
+gcloud iam service-accounts keys create ./github-deploy-key.json \
+  --iam-account=$SA_EMAIL \
+  --project=$PROJECT_ID
+```
+
+Add the secrets in GitHub:
+
+- **Option A (recommended – avoids paste/encoding issues):** Install [GitHub CLI](https://cli.github.com/) (`brew install gh`), then from the repo root:
+  ```bash
+  gh secret set GCP_PROJECT_ID --body "$PROJECT_ID"
+  gh secret set GCP_SA_KEY < github-deploy-key.json
+  ```
+  Then delete the key file: `rm github-deploy-key.json`.
+
+- **Option B (manual):** In GitHub → repo → **Settings** → **Secrets and variables** → **Actions**, add `GCP_PROJECT_ID` and `GCP_SA_KEY`. For `GCP_SA_KEY`, paste the **entire** contents of `github-deploy-key.json` as plain text (open in a text editor, copy all, paste). Use a plain-text editor; avoid pasting from some PDF/viewers that can inject non-JSON characters.
+
+**If you see "failed to parse service account key JSON" or "unexpected token ... is not valid JSON":**
+
+- The secret was likely corrupted by copy-paste (encoding, invisible characters, or truncated). Set it from the file instead: `gh secret set GCP_SA_KEY < github-deploy-key.json` (Option A above). If you no longer have the file, create a new key with `gcloud iam service-accounts keys create ./github-deploy-key.json --iam-account=$SA_EMAIL --project=$PROJECT_ID` and then run the `gh secret set` command.
+
+**If you see "no key provided to sign" or "failed to sign jwt using private key":**
+
+- `GCP_SA_KEY` must be the **service account JSON key file** from step 4, not the Supabase anon key and not an OAuth token.
+- The JSON must include a non-empty `private_key` field (starts with `-----BEGIN PRIVATE KEY-----`). If you redacted or emptied it, create a **new** key for the same service account and paste the full file again.
+- Paste the **entire** file: open the downloaded `.json` in a text editor, select all, copy, and paste into the secret value. Do not truncate or remove the middle of the key.
+- Create a **new** key if the old one was never saved correctly: Service account → Keys → Add key → Create new key → JSON, then update the `GCP_SA_KEY` secret with the new file contents.
 
 ---
 
