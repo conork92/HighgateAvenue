@@ -9,6 +9,14 @@ from werkzeug.utils import secure_filename
 from google.cloud import storage
 from google.oauth2 import service_account
 import json
+import requests
+import hmac
+import hashlib
+import base64
+from urllib.parse import quote
+from io import BytesIO
+import boto3
+from botocore.client import Config
 
 load_dotenv()
 
@@ -34,6 +42,11 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 # Use the anon/public API key from Project Settings → API in Supabase dashboard, NOT the Postgres connection string.
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY') or os.getenv('SUPABASE_ANON_KEY')
+# Service role key for storage operations (bypasses RLS)
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+# S3-compatible storage credentials
+SUPABASE_ACCESS_KEY_ID = os.getenv('SUPABASE_ACCESS_KEY_ID_BUCKET')
+SUPABASE_SECRET_ACCESS_KEY = os.getenv('SUPABASE_ACCESS_KEY_BUCKET')
 
 # GCP Storage configuration
 GCP_BUCKET_NAME = os.getenv('GCP_BUCKET_NAME', 'highgate-avenue-images')
@@ -43,13 +56,22 @@ GCP_CREDENTIALS_PATH = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')  # Path to cr
 
 # Initialize Supabase client (for database)
 supabase: Client = None
+supabase_storage: Client = None  # Client with service role for storage operations
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        # Create separate client for storage with service role key if available
+        if SUPABASE_SERVICE_ROLE_KEY:
+            supabase_storage = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        else:
+            # Fall back to regular key if service role not available
+            supabase_storage = supabase
+            app.logger.warning("SUPABASE_SERVICE_ROLE_KEY not set. Storage uploads may fail if RLS policies are restrictive.")
     except Exception as e:
         import logging
         logging.warning(f"Supabase client not available: {e}. DB features (plans, upload) will be disabled.")
         supabase = None
+        supabase_storage = None
 
 # Initialize GCP Storage client
 gcp_storage_client = None
@@ -101,6 +123,57 @@ init_gcp_storage()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def upload_to_supabase_storage_s3(file_content, file_path, content_type, bucket_name='image_hosting_bucket'):
+    """Upload file to Supabase Storage using S3-compatible API with access keys via boto3"""
+    if not SUPABASE_ACCESS_KEY_ID or not SUPABASE_SECRET_ACCESS_KEY:
+        raise ValueError("Supabase storage access keys not configured")
+    
+    # Extract project reference from URL
+    project_ref = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
+    
+    # S3-compatible endpoint format for Supabase
+    # Format: https://{project_ref}.storage.supabase.co/storage/v1/s3
+    endpoint_url = f"https://{project_ref}.storage.supabase.co/storage/v1/s3"
+    
+    # Create S3 client with Supabase endpoint
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=endpoint_url,
+        aws_access_key_id=SUPABASE_ACCESS_KEY_ID,
+        aws_secret_access_key=SUPABASE_SECRET_ACCESS_KEY,
+        config=Config(
+            signature_version='s3v4',
+            s3={
+                'addressing_style': 'path'
+            }
+        )
+    )
+    
+    # Upload file using boto3
+    # Use put_object for binary data
+    file_obj = BytesIO(file_content)
+    
+    try:
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=file_path,
+            Body=file_obj,
+            ContentType=content_type
+        )
+        
+        # Return a mock response object for compatibility
+        class MockResponse:
+            status_code = 200
+            text = "Upload successful"
+        
+        return MockResponse()
+    except Exception as e:
+        error_msg = str(e)
+        # Try to extract more details from boto3 exceptions
+        if hasattr(e, 'response'):
+            error_msg = f"{error_msg} - {e.response.get('Error', {}).get('Message', '')}"
+        raise Exception(f"Upload failed: {error_msg}")
 
 # Design sections: single source of truth for labels and images (used by / and /designs/<id>/)
 DESIGN_SECTIONS = {
@@ -208,12 +281,12 @@ SECTION_TO_PRODUCT_ROOM = {
     'hallway': 'Hallway',
     'stairs': 'Stairways',
     'entrance': 'Hallway',
-    'master-bedroom': 'Bedroom 1',
-    'en-suite': 'Bathroom 1',
-    'nursery': 'Bedroom 2',
-    'study': 'Other',
-    'garden': 'Other',
-    'summer-house': 'Other',
+    'master-bedroom': 'Bedroom',
+    'en-suite': 'Bathroom',
+    'nursery': 'Nursery',
+    'study': 'Study',
+    'garden': 'Garden',
+    'summer-house': 'Summerhouse',
     'exterior': 'Other',
     'floor-plans': None,
 }
@@ -483,6 +556,7 @@ def get_design_ideas():
             return jsonify({'error': 'Supabase not configured'}), 500
         
         room = request.args.get('room', '').strip()
+        uncategorized_only = request.args.get('uncategorized_only', '').lower() == 'true'
         limit = request.args.get('limit', type=int)
         offset = request.args.get('offset', type=int, default=0)
         
@@ -490,22 +564,45 @@ def get_design_ideas():
         
         if room:
             query = query.eq('room', room)
-        
-        # Apply pagination
-        if limit:
-            query = query.range(offset, offset + limit - 1)
-        
-        response = query.execute()
+            # Apply pagination for room-filtered queries
+            if limit:
+                query = query.range(offset, offset + limit - 1)
+            response = query.execute()
+            data = response.data or []
+        elif uncategorized_only:
+            # For uncategorized items, fetch ALL records first (no pagination on backend)
+            # Then filter and paginate client-side
+            response = query.execute()
+            all_data = response.data or []
+            # Filter uncategorized items
+            uncategorized_data = [item for item in all_data if not item.get('room') or item.get('room', '').strip() == '']
+            total_count = len(uncategorized_data)
+            # Apply client-side pagination
+            if limit:
+                data = uncategorized_data[offset:offset + limit]
+            else:
+                data = uncategorized_data
+        else:
+            # Apply pagination for regular queries
+            if limit:
+                query = query.range(offset, offset + limit - 1)
+            response = query.execute()
+            data = response.data or []
         
         # Get total count for pagination
-        count_query = supabase.table('ha_design_ideas')
-        if room:
-            count_query = count_query.eq('room', room)
-        count_response = count_query.select('id', count='exact').execute()
-        total_count = count_response.count if hasattr(count_response, 'count') else len(response.data)
+        if uncategorized_only:
+            # Already calculated above
+            pass
+        elif room:
+            count_query = supabase.table('ha_design_ideas').eq('room', room)
+            count_response = count_query.select('id', count='exact').execute()
+            total_count = count_response.count if hasattr(count_response, 'count') else len(data)
+        else:
+            count_response = supabase.table('ha_design_ideas').select('id', count='exact').execute()
+            total_count = count_response.count if hasattr(count_response, 'count') else len(data)
         
         return jsonify({
-            'data': response.data,
+            'data': data,
             'total': total_count,
             'limit': limit,
             'offset': offset
@@ -570,6 +667,165 @@ def update_design_idea(idea_id):
         return jsonify(response.data[0]), 200
     except Exception as e:
         app.logger.error(f"Error updating design idea {idea_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/design-ideas/upload', methods=['POST'])
+def upload_design_idea_image():
+    """Upload an image to Supabase Storage and create a design idea entry"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'File type not allowed. Use: PNG, JPG, JPEG, GIF, or WEBP'}), 400
+        
+        # Read file content
+        file_content = file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            return jsonify({'error': 'File too large. Maximum size is 10MB'}), 400
+        
+        # Generate unique filename
+        file_ext = file.filename.rsplit('.', 1)[1].lower()
+        
+        # Upload to Supabase Storage using S3-compatible API
+        bucket_name = 'image_hosting_bucket'
+        
+        if not SUPABASE_ACCESS_KEY_ID or not SUPABASE_SECRET_ACCESS_KEY:
+            return jsonify({'error': 'Supabase storage access keys not configured. Please set SUPABASE_ACCESS_KEY_ID_BUCKET and SUPABASE_ACCESS_KEY_BUCKET in .env'}), 500
+        
+        # Check if image_path already exists and generate unique filename if needed
+        max_attempts = 5
+        file_path = None
+        for attempt in range(max_attempts):
+            unique_filename = f"{uuid.uuid4()}.{file_ext}"
+            candidate_path = f"highgate_avenue/design_ideas/{unique_filename}"
+            
+            # Check if this path already exists in database
+            existing = supabase.table('ha_design_ideas').select('id').eq('image_path', candidate_path).execute()
+            if not existing.data:
+                file_path = candidate_path
+                break
+        
+        if not file_path:
+            return jsonify({'error': 'Failed to generate unique filename after multiple attempts'}), 500
+        
+        try:
+            # Upload file to Supabase Storage using S3-compatible API
+            content_type = file.content_type or f'image/{file_ext}'
+            upload_response = upload_to_supabase_storage_s3(
+                file_content,
+                file_path,
+                content_type,
+                bucket_name
+            )
+            
+            app.logger.info(f"Upload successful: {file_path}")
+            
+            # Get public URL - construct it manually based on Supabase URL structure
+            # Format: https://{project_ref}.supabase.co/storage/v1/object/public/{bucket}/{path}
+            supabase_project_ref = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
+            # URL encode the path segments but keep slashes
+            encoded_path = '/'.join([quote(segment, safe='') for segment in file_path.split('/')])
+            public_url = f"https://{supabase_project_ref}.supabase.co/storage/v1/object/public/{bucket_name}/{encoded_path}"
+            
+            app.logger.info(f"Public URL: {public_url}")
+            
+            # Create design idea entry in database
+            idea_data = {
+                'name': request.form.get('name', 'Untitled'),
+                'room': request.form.get('room', ''),
+                'category': request.form.get('category', ''),
+                'tags': request.form.get('tags', '').split(',') if request.form.get('tags') else [],
+                'image_path': file_path,
+                'public_url': public_url,
+                'liked': False,
+                'bok_likes': 0
+            }
+            
+            app.logger.info(f"Inserting idea_data: {idea_data}")
+            
+            try:
+                # Log what we're trying to insert
+                app.logger.info(f"Attempting to insert idea with public_url: {public_url}")
+                
+                db_response = supabase.table('ha_design_ideas').insert(idea_data).execute()
+                
+                app.logger.info(f"Database insert successful. Response: {db_response.data}")
+                
+                # Ensure public_url is in the response
+                result_idea = db_response.data[0] if db_response.data else idea_data
+                
+                # If public_url is missing from database response, add it
+                if 'public_url' not in result_idea or not result_idea.get('public_url'):
+                    app.logger.warning(f"public_url missing from database response, adding: {public_url}")
+                    result_idea['public_url'] = public_url
+                    # Try to update the database record with public_url
+                    try:
+                        supabase.table('ha_design_ideas').update({'public_url': public_url}).eq('id', result_idea['id']).execute()
+                        app.logger.info(f"Updated public_url for record {result_idea['id']}")
+                    except Exception as update_error:
+                        app.logger.error(f"Failed to update public_url: {update_error}")
+                
+                app.logger.info(f"Returning idea with public_url: {result_idea.get('public_url')}")
+                
+                return jsonify({
+                    'success': True,
+                    'idea': result_idea,
+                    'public_url': result_idea.get('public_url', public_url)
+                }), 201
+            except Exception as db_error:
+                error_str = str(db_error)
+                # Handle duplicate key error
+                if '23505' in error_str or 'duplicate key' in error_str.lower() or 'already exists' in error_str.lower():
+                    app.logger.warning(f"Duplicate image_path detected: {file_path}. Attempting to fetch existing record.")
+                    # Try to fetch the existing record
+                    existing = supabase.table('ha_design_ideas').select('*').eq('image_path', file_path).execute()
+                    if existing.data:
+                        existing_idea = existing.data[0]
+                        # Ensure public_url exists, construct if missing
+                        if 'public_url' not in existing_idea or not existing_idea.get('public_url'):
+                            supabase_project_ref = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
+                            encoded_path = '/'.join([quote(segment, safe='') for segment in file_path.split('/')])
+                            existing_idea['public_url'] = f"https://{supabase_project_ref}.supabase.co/storage/v1/object/public/{bucket_name}/{encoded_path}"
+                            # Update the record with public_url if missing
+                            try:
+                                supabase.table('ha_design_ideas').update({'public_url': existing_idea['public_url']}).eq('id', existing_idea['id']).execute()
+                            except:
+                                pass  # Don't fail if update doesn't work
+                        return jsonify({
+                            'success': True,
+                            'idea': existing_idea,
+                            'public_url': existing_idea.get('public_url', public_url),
+                            'message': 'Image already exists in database'
+                        }), 200
+                    else:
+                        return jsonify({'error': 'Duplicate key error but record not found'}), 500
+                else:
+                    raise
+            
+        except Exception as storage_error:
+            app.logger.error(f"Supabase Storage error: {str(storage_error)}")
+            error_msg = str(storage_error)
+            
+            # Provide helpful error message about RLS
+            if 'row-level security' in error_msg.lower() or 'unauthorized' in error_msg.lower():
+                return jsonify({
+                    'error': 'Storage upload failed due to permissions. Please either:\n1. Add SUPABASE_SERVICE_ROLE_KEY to your .env file, or\n2. Configure the storage bucket policies to allow public uploads.'
+                }), 500
+            
+            return jsonify({'error': f'Storage upload failed: {error_msg}'}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Upload error: {str(e)}")
         import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500

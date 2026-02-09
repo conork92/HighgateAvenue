@@ -17,10 +17,26 @@ const loading = document.getElementById('loading');
 const errorDiv = document.getElementById('error');
 const saveAllBtn = document.getElementById('saveAllBtn');
 
+// Upload elements
+const uploadImageBtn = document.getElementById('uploadImageBtn');
+const uploadImageModal = document.getElementById('uploadImageModal');
+const closeUploadModal = document.querySelector('.close-upload-modal');
+const uploadImageForm = document.getElementById('uploadImageForm');
+const uploadImageInput = document.getElementById('uploadImageInput');
+const uploadImageArea = document.getElementById('uploadImageArea');
+const uploadImagePreview = document.getElementById('uploadImagePreview');
+const previewUploadImage = document.getElementById('uploadPreviewImage');
+const removeUploadImageBtn = document.getElementById('removeUploadImage');
+const cancelUploadImageBtn = document.getElementById('cancelUploadImage');
+const uploadImageStatus = document.getElementById('uploadImageStatus');
+
+// Upload state
+let selectedUploadFile = null;
+
 // Room options
 const ROOM_OPTIONS = [
-    '', 'Living Room', 'Kitchen', 'Bedroom 1', 'Bedroom 2', 'Bedroom 3',
-    'Bathroom 1', 'Bathroom 2', 'Hallway', 'Stairways', 'Other'
+    '', 'Living Room', 'Kitchen', 'Bedroom', 'Bathroom', 'Hallway', 'Stairways',
+    'Garden', 'Summerhouse', 'Nursery', 'Study', 'Other'
 ];
 
 // Category options
@@ -34,7 +50,189 @@ document.addEventListener('DOMContentLoaded', () => {
     roomFilter.addEventListener('change', filterIdeas);
     categoryFilter.addEventListener('input', filterIdeas);
     saveAllBtn.addEventListener('click', saveAllChanges);
+    initUploadHandlers();
 });
+
+// Initialize upload handlers
+function initUploadHandlers() {
+    if (!uploadImageBtn || !uploadImageModal) return;
+    
+    // Open modal
+    uploadImageBtn.addEventListener('click', () => {
+        uploadImageModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    });
+
+    // Close modal
+    if (closeUploadModal) {
+        closeUploadModal.addEventListener('click', closeUploadImageModal);
+    }
+    if (cancelUploadImageBtn) {
+        cancelUploadImageBtn.addEventListener('click', closeUploadImageModal);
+    }
+    
+    // Close on outside click
+    uploadImageModal.addEventListener('click', (e) => {
+        if (e.target === uploadImageModal) {
+            closeUploadImageModal();
+        }
+    });
+
+    // File input change
+    if (uploadImageInput) {
+        uploadImageInput.addEventListener('change', handleUploadFileSelect);
+    }
+
+    // Upload area click
+    if (uploadImageArea) {
+        uploadImageArea.addEventListener('click', () => {
+            if (!uploadImagePreview.style.display || uploadImagePreview.style.display === 'none') {
+                uploadImageInput.click();
+            }
+        });
+    }
+
+    // Drag and drop
+    if (uploadImageArea) {
+        uploadImageArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadImageArea.classList.add('dragover');
+        });
+
+        uploadImageArea.addEventListener('dragleave', () => {
+            uploadImageArea.classList.remove('dragover');
+        });
+
+        uploadImageArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadImageArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleUploadFile(files[0]);
+            }
+        });
+    }
+
+    // Remove image
+    if (removeUploadImageBtn) {
+        removeUploadImageBtn.addEventListener('click', () => {
+            selectedUploadFile = null;
+            uploadImageInput.value = '';
+            uploadImagePreview.style.display = 'none';
+            document.querySelector('#uploadImageArea .upload-placeholder').style.display = 'block';
+        });
+    }
+
+    // Form submission
+    if (uploadImageForm) {
+        uploadImageForm.addEventListener('submit', handleUploadImage);
+    }
+}
+
+function handleUploadFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) {
+        handleUploadFile(file);
+    }
+}
+
+function handleUploadFile(file) {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        showUploadImageStatus('Please select an image file', 'error');
+        return;
+    }
+
+    // Validate file size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        showUploadImageStatus('File size must be less than 10MB', 'error');
+        return;
+    }
+
+    selectedUploadFile = file;
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewUploadImage.src = e.target.result;
+        uploadImagePreview.style.display = 'block';
+        document.querySelector('#uploadImageArea .upload-placeholder').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+function closeUploadImageModal() {
+    uploadImageModal.style.display = 'none';
+    document.body.style.overflow = '';
+    resetUploadImageForm();
+}
+
+function resetUploadImageForm() {
+    uploadImageForm.reset();
+    selectedUploadFile = null;
+    uploadImagePreview.style.display = 'none';
+    document.querySelector('#uploadImageArea .upload-placeholder').style.display = 'block';
+    uploadImageStatus.style.display = 'none';
+    uploadImageArea.classList.remove('dragover');
+}
+
+async function handleUploadImage(e) {
+    e.preventDefault();
+
+    if (!selectedUploadFile) {
+        showUploadImageStatus('Please select an image first', 'error');
+        return;
+    }
+
+    const submitBtn = document.getElementById('submitUploadImage');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Uploading...';
+
+    showUploadImageStatus('Uploading image...', 'loading');
+
+    try {
+        const formData = new FormData();
+        formData.append('image', selectedUploadFile);
+        formData.append('name', document.getElementById('uploadName').value);
+        formData.append('room', document.getElementById('uploadRoom').value);
+        formData.append('category', document.getElementById('uploadCategory').value);
+        formData.append('tags', document.getElementById('uploadTags').value);
+
+        const response = await fetch(`${API_BASE}/design-ideas/upload`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Upload failed');
+        }
+
+        showUploadImageStatus('Image uploaded successfully!', 'success');
+        
+        // Reload ideas after a short delay
+        setTimeout(() => {
+            loadDesignIdeas(true);
+            setTimeout(() => {
+                closeUploadImageModal();
+            }, 1500);
+        }, 1000);
+
+    } catch (error) {
+        console.error('Upload error:', error);
+        showUploadImageStatus(`Error: ${error.message}`, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Upload';
+    }
+}
+
+function showUploadImageStatus(message, type) {
+    uploadImageStatus.textContent = message;
+    uploadImageStatus.className = `upload-status ${type}`;
+    uploadImageStatus.style.display = 'block';
+}
 
 // Load design ideas from API
 async function loadDesignIdeas(resetPage = true) {
@@ -51,12 +249,14 @@ async function loadDesignIdeas(resetPage = true) {
         
         const params = new URLSearchParams({
             limit: pageSize.toString(),
-            offset: (currentPage * pageSize).toString()
+            offset: (currentPage * pageSize).toString(),
+            uncategorized_only: 'true'  // Only show uncategorized items (no room assigned)
         });
         
-        if (selectedRoom) {
-            params.append('room', selectedRoom);
-        }
+        // Don't filter by room on categorize page - we only want uncategorized items
+        // if (selectedRoom) {
+        //     params.append('room', selectedRoom);
+        // }
         
         const response = await fetch(`${API_BASE}/design-ideas?${params}`);
         
@@ -67,15 +267,59 @@ async function loadDesignIdeas(resetPage = true) {
         const result = await response.json();
         
         // Handle both old format (array) and new format (object with data)
+        let ideas = [];
         if (Array.isArray(result)) {
-            allIdeas = result;
+            ideas = result;
             totalIdeas = result.length;
         } else {
-            allIdeas = result.data || [];
-            totalIdeas = result.total || 0;
+            ideas = result.data || [];
+            // Use the total from backend (already filtered for uncategorized)
+            totalIdeas = result.total || ideas.length;
         }
         
+        // Backend already filters uncategorized items when uncategorized_only=true,
+        // but we still filter client-side as a safety measure
+        const uncategorizedIdeas = ideas.filter(idea => {
+            // An item is uncategorized if room is null, empty string, or undefined
+            return !idea.room || idea.room.trim() === '';
+        });
+        
+        // Deduplicate by image_path (keep the most recent one)
+        const seenPaths = new Map();
+        const deduplicated = [];
+        
+        for (const idea of uncategorizedIdeas) {
+            if (!idea.image_path) {
+                // Keep ideas without image_path
+                deduplicated.push(idea);
+                continue;
+            }
+            
+            if (seenPaths.has(idea.image_path)) {
+                // If we've seen this path, keep the one with the latest updated_at or created_at
+                const existing = seenPaths.get(idea.image_path);
+                const existingTime = new Date(existing.updated_at || existing.created_at || 0);
+                const currentTime = new Date(idea.updated_at || idea.created_at || 0);
+                if (currentTime > existingTime) {
+                    // Replace with newer one
+                    const index = deduplicated.findIndex(i => i.id === existing.id);
+                    if (index !== -1) {
+                        deduplicated[index] = idea;
+                        seenPaths.set(idea.image_path, idea);
+                    }
+                }
+                // Otherwise skip this duplicate
+            } else {
+                seenPaths.set(idea.image_path, idea);
+                deduplicated.push(idea);
+            }
+        }
+        
+        allIdeas = deduplicated;
         filteredIdeas = allIdeas;
+        
+        // Use backend total count (already accounts for uncategorized filtering)
+        // Don't override with deduplicated.length as backend already filtered
         
         renderIdeas();
         renderPagination();
