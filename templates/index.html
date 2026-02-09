@@ -242,13 +242,23 @@
             <div id="loading" class="loading">Loading ideas...</div>
             <div id="error" class="error" style="display: none;"></div>
 
-            <section class="products-section" id="productsSection" data-product-room="{{ product_room_filter or '' }}">
+            {% if product_room_filter is not none %}
+            <section class="products-section" id="productsSection" data-product-room="{{ product_room_filter }}">
                 <h2 class="exterior-label">Products</h2>
                 <div id="productsGrid" class="products-grid">
                     <!-- Products loaded by JS -->
                 </div>
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
+            {% else %}
+            <section class="products-section" id="productsSection" data-product-room="" data-hide-section="true" style="display: none;">
+                <h2 class="exterior-label">Products</h2>
+                <div id="productsGrid" class="products-grid">
+                    <!-- Products loaded by JS -->
+                </div>
+                <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
+            </section>
+            {% endif %}
         </main>
 
         <footer>

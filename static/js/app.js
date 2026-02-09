@@ -209,6 +209,13 @@ function initProducts() {
     const loadingEl = document.getElementById('productsLoading');
     if (!section || !grid) return;
 
+    // Check if section should be hidden (like floor-plans with no room filter)
+    const hideSection = section.getAttribute('data-hide-section') === 'true';
+    if (hideSection) {
+        section.style.display = 'none';
+        return;
+    }
+
     const productRoom = (section.getAttribute('data-product-room') || '').trim();
     loadProducts(productRoom, grid, loadingEl);
     initProductModal(section, grid, loadingEl);
