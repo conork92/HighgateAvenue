@@ -867,6 +867,220 @@ a:hover {
     opacity: 0.6;
 }
 
+/* Design Ideas by Room */
+.room-sections {
+    margin-bottom: 4rem;
+}
+
+.room-section {
+    margin-bottom: 4rem;
+}
+
+.room-section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--black);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--black);
+    letter-spacing: -0.01em;
+}
+
+.room-ideas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.room-idea-card {
+    background: var(--white);
+    border-top: 1px solid var(--gray-medium);
+    padding-top: 1rem;
+    transition: all var(--transition);
+}
+
+.room-idea-card:hover {
+    border-top-color: var(--black);
+}
+
+.room-idea-image {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    margin-bottom: 0.75rem;
+    background: var(--gray-light);
+}
+
+.room-idea-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.room-idea-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--black);
+    line-height: 1.3;
+}
+
+.room-idea-category {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-dark);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.room-idea-tags-section {
+    margin-bottom: 0.75rem;
+    position: relative;
+}
+
+.room-idea-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.room-tag {
+    padding: 0.25rem 0.5rem;
+    background: var(--gray-light);
+    color: var(--black);
+    font-size: 0.75rem;
+    border: 1px solid var(--gray-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.room-tags-placeholder {
+    font-size: 0.75rem;
+    color: var(--gray-dark);
+    font-style: italic;
+}
+
+.room-tags-edit-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: 0.25rem;
+    opacity: 0.6;
+    transition: opacity var(--transition);
+}
+
+.room-tags-edit-btn:hover {
+    opacity: 1;
+}
+
+.room-idea-tags-edit {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.room-tags-input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--black);
+    background: var(--white);
+    color: var(--black);
+    font-size: 0.75rem;
+    font-family: inherit;
+}
+
+.room-tags-input:focus {
+    outline: none;
+    background: var(--gray-light);
+}
+
+.room-tags-save,
+.room-tags-cancel {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: inherit;
+}
+
+.room-tags-save:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.room-tags-cancel:hover {
+    background: var(--gray-light);
+}
+
+.room-tags-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.room-idea-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--gray-medium);
+}
+
+.room-like-btn,
+.room-bok-likes-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+    justify-content: center;
+}
+
+.room-like-btn:hover,
+.room-bok-likes-btn:hover {
+    background: var(--black);
+    color: var(--white);
+}
+
+.room-like-btn.liked {
+    background: var(--black);
+    color: var(--white);
+}
+
+.room-like-btn.liked:hover {
+    background: var(--white);
+    color: var(--black);
+}
+
+.room-bok-likes-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.room-bok-count {
+    font-weight: 600;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .container {
@@ -913,4 +1127,80 @@ a:hover {
     .btn-submit {
         width: 100%;
     }
+}
+
+/* Image Modal - for full-size image viewing */
+.image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.95);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    animation: fadeInModal 0.2s ease;
+}
+
+@keyframes fadeInModal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.image-modal-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.image-modal-img {
+    max-width: 100%;
+    max-height: 85vh;
+    object-fit: contain;
+    border: 1px solid var(--gray-medium);
+}
+
+.image-modal-caption {
+    margin-top: 1rem;
+    color: var(--white);
+    font-size: 0.875rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.image-modal-close {
+    position: absolute;
+    top: -2.5rem;
+    right: 0;
+    font-size: 2rem;
+    font-weight: 300;
+    color: var(--white);
+    cursor: pointer;
+    line-height: 1;
+    transition: opacity var(--transition);
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-modal-close:hover {
+    opacity: 0.7;
+}
+
+.room-idea-image {
+    transition: transform var(--transition);
+}
+
+.room-idea-image:hover {
+    transform: scale(1.02);
+    opacity: 0.9;
 }

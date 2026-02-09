@@ -29,6 +29,7 @@
                 <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab {% if section_filter == sid %}design-tab--active{% endif %}">{{ s.label }}</a>
                 {% endfor %}
                 <a href="{{ url_for('photo_gallery') }}" class="design-tab {% if section_filter == 'photo-gallery' %}design-tab--active{% endif %}">Photo gallery</a>
+                <a href="{{ url_for('categorize') }}" class="design-tab {% if request.endpoint == 'categorize' %}design-tab--active{% endif %}">Categorize</a>
             </nav>
 
             <div class="filter-section">
@@ -217,6 +218,23 @@
                 </div>
             </div>
 
+            <!-- Design Ideas by Room -->
+            {% if product_room_filter is not none %}
+            <section id="designIdeasSection" style="display: none;" data-section-room="{{ product_room_filter }}">
+                <h2 class="exterior-label">Design Ideas by Room</h2>
+                <div id="designIdeasByRoom" class="room-sections">
+                    <!-- Room sections will be loaded here -->
+                </div>
+            </section>
+            {% else %}
+            <section id="designIdeasSection" style="display: none;" data-section-room="" data-hide-section="true">
+                <h2 class="exterior-label">Design Ideas by Room</h2>
+                <div id="designIdeasByRoom" class="room-sections">
+                    <!-- Room sections will be loaded here -->
+                </div>
+            </section>
+            {% endif %}
+
             <div id="plansGrid" class="plans-grid">
                 <!-- Plans will be loaded here -->
             </div>
@@ -224,13 +242,23 @@
             <div id="loading" class="loading">Loading ideas...</div>
             <div id="error" class="error" style="display: none;"></div>
 
-            <section class="products-section" id="productsSection" data-product-room="{{ product_room_filter or '' }}">
+            {% if product_room_filter is not none %}
+            <section class="products-section" id="productsSection" data-product-room="{{ product_room_filter }}">
                 <h2 class="exterior-label">Products</h2>
                 <div id="productsGrid" class="products-grid">
                     <!-- Products loaded by JS -->
                 </div>
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
+            {% else %}
+            <section class="products-section" id="productsSection" data-product-room="" data-hide-section="true" style="display: none;">
+                <h2 class="exterior-label">Products</h2>
+                <div id="productsGrid" class="products-grid">
+                    <!-- Products loaded by JS -->
+                </div>
+                <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
+            </section>
+            {% endif %}
         </main>
 
         <footer>
