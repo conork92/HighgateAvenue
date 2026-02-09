@@ -30,11 +30,177 @@ let selectedFile = null;
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadPlans();
+    loadDesignIdeas();
     roomFilter.addEventListener('change', filterPlans);
     initUploadHandlers();
     initPhotoCarousel();
     initProducts();
 });
+
+// Design Ideas state
+let allDesignIdeas = [];
+let designIdeasByRoom = {};
+
+// Load design ideas and group by room
+async function loadDesignIdeas() {
+    try {
+        const response = await fetch(`${API_BASE}/design-ideas?limit=1000`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Handle both old format (array) and new format (object with data)
+        if (Array.isArray(result)) {
+            allDesignIdeas = result;
+        } else {
+            allDesignIdeas = result.data || [];
+        }
+        
+        // Group by room
+        designIdeasByRoom = {};
+        allDesignIdeas.forEach(idea => {
+            const room = idea.room || 'Uncategorized';
+            if (!designIdeasByRoom[room]) {
+                designIdeasByRoom[room] = [];
+            }
+            designIdeasByRoom[room].push(idea);
+        });
+        
+        renderDesignIdeasByRoom();
+    } catch (error) {
+        console.error('Error loading design ideas:', error);
+        // Don't show error, just don't display design ideas section
+        const section = document.getElementById('designIdeasSection');
+        if (section) {
+            section.style.display = 'none';
+        }
+    }
+}
+
+// Render design ideas grouped by room
+function renderDesignIdeasByRoom() {
+    const section = document.getElementById('designIdeasSection');
+    const container = document.getElementById('designIdeasByRoom');
+    
+    if (!section || !container) return;
+    
+    // Get the room filter from the section's data attribute (set by current page/tab)
+    const sectionRoom = section.getAttribute('data-section-room') || '';
+    const hideSection = section.getAttribute('data-hide-section') === 'true';
+    
+    // If section should be hidden (like floor-plans with no room filter), hide it
+    if (hideSection) {
+        section.style.display = 'none';
+        return;
+    }
+    
+    // Also check the room filter dropdown
+    const selectedRoom = roomFilter ? roomFilter.value : '';
+    
+    // Use section room if available, otherwise use dropdown filter, otherwise show all
+    const roomToFilter = sectionRoom || selectedRoom;
+    
+    if (allDesignIdeas.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    
+    // If we have a specific room filter, only show that room
+    let roomsToShow;
+    if (roomToFilter) {
+        // Show only the room for this section/page
+        roomsToShow = [roomToFilter];
+        // Hide section if no ideas for this room
+        if (!designIdeasByRoom[roomToFilter] || designIdeasByRoom[roomToFilter].length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+    } else {
+        // Show all rooms (for "All" page or when no filter)
+        // But only if we're not on a specific section page
+        if (section.hasAttribute('data-section-room')) {
+            // If section has data attribute but it's empty, hide it
+            section.style.display = 'none';
+            return;
+        }
+        roomsToShow = Object.keys(designIdeasByRoom).sort();
+    }
+    
+    section.style.display = 'block';
+    
+    if (roomsToShow.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.innerHTML = roomsToShow.map(room => {
+        const ideas = designIdeasByRoom[room] || [];
+        if (ideas.length === 0) return '';
+        
+        return `
+            <div class="room-section">
+                <h3 class="room-section-title">${escapeHtml(room)}</h3>
+                <div class="room-ideas-grid">
+                    ${ideas.map(idea => {
+                        // Prioritize public_url, fall back to image_path
+                        let imageUrl = '';
+                        if (idea.public_url) {
+                            imageUrl = idea.public_url;
+                        } else if (idea.image_path) {
+                            imageUrl = idea.image_path.startsWith('http') ? idea.image_path : `/api/image/${idea.image_path}`;
+                        }
+                        const name = idea.name || 'Untitled';
+                        
+                        const tags = Array.isArray(idea.tags) ? idea.tags : (idea.tags ? idea.tags.split(',') : []);
+                        const liked = idea.liked || false;
+                        const bokLikes = idea.bok_likes || 0;
+                        const ideaId = idea.id;
+                        const tagsDisplay = tags.map(t => t.trim()).filter(t => t).join(', ');
+                        
+                        return `
+                            <div class="room-idea-card" data-id="${escapeHtml(String(ideaId))}">
+                                ${imageUrl ? `
+                                    <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)}" class="room-idea-image" loading="lazy" onerror="this.style.display='none'" onclick="showFullImage('${escapeHtml(imageUrl)}', '${escapeHtml(name)}')" style="cursor: pointer;">
+                                ` : ''}
+                                <div class="room-idea-info">
+                                    <p class="room-idea-name">${escapeHtml(name)}</p>
+                                    ${idea.category ? `<span class="room-idea-category">${escapeHtml(idea.category)}</span>` : ''}
+                                    <div class="room-idea-tags-section">
+                                        <div class="room-idea-tags-display" id="tags-display-${escapeHtml(String(ideaId))}">
+                                            ${tags.length > 0 ? `
+                                                <div class="room-idea-tags">
+                                                    ${tags.map(tag => `<span class="room-tag">${escapeHtml(tag.trim())}</span>`).join('')}
+                                                </div>
+                                            ` : '<span class="room-tags-placeholder">No tags</span>'}
+                                        </div>
+                                        <div class="room-idea-tags-edit" id="tags-edit-${escapeHtml(String(ideaId))}" style="display: none;">
+                                            <input type="text" class="room-tags-input" value="${escapeHtml(tagsDisplay)}" placeholder="tag1, tag2, tag3" data-id="${escapeHtml(String(ideaId))}">
+                                            <button class="room-tags-save" onclick="saveRoomIdeaTags('${escapeHtml(String(ideaId))}')">Save</button>
+                                            <button class="room-tags-cancel" onclick="cancelRoomIdeaTags('${escapeHtml(String(ideaId))}')">Cancel</button>
+                                        </div>
+                                        <button class="room-tags-edit-btn" onclick="editRoomIdeaTags('${escapeHtml(String(ideaId))}')" title="Edit tags">✏️</button>
+                                    </div>
+                                    <div class="room-idea-actions">
+                                        <button class="room-like-btn ${liked ? 'liked' : ''}" data-id="${escapeHtml(String(ideaId))}" data-liked="${liked}" onclick="toggleRoomIdeaLike('${escapeHtml(String(ideaId))}')">
+                                            <span>${liked ? '❤️' : '🤍'}</span>
+                                        </button>
+                                        <button class="room-bok-likes-btn" data-id="${escapeHtml(String(ideaId))}" onclick="incrementRoomIdeaBokLikes('${escapeHtml(String(ideaId))}')">
+                                            <span>👍</span> <span class="room-bok-count">${bokLikes}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 
 // Products: load and show only products for the current page (no dropdowns)
 function initProducts() {
@@ -258,6 +424,7 @@ function filterPlans() {
     }
     
     renderPlans();
+    renderDesignIdeasByRoom();
 }
 
 // Render plans to the grid
@@ -297,6 +464,259 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Show full-size image in modal
+function showFullImage(imageUrl, imageName) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.innerHTML = `
+        <div class="image-modal-content">
+            <span class="image-modal-close">&times;</span>
+            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(imageName)}" class="image-modal-img">
+            <p class="image-modal-caption">${escapeHtml(imageName)}</p>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    // Close on X click
+    modal.querySelector('.image-modal-close').addEventListener('click', () => {
+        closeImageModal(modal);
+    });
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeImageModal(modal);
+        }
+    });
+    
+    // Close on Escape key
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeImageModal(modal);
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+}
+
+function closeImageModal(modal) {
+    modal.style.opacity = '0';
+    setTimeout(() => {
+        if (document.body.contains(modal)) {
+            document.body.removeChild(modal);
+        }
+        document.body.style.overflow = '';
+    }, 200);
+}
+
+// Make showFullImage available globally
+window.showFullImage = showFullImage;
+
+// Toggle like for room idea
+async function toggleRoomIdeaLike(ideaId) {
+    const btn = document.querySelector(`.room-like-btn[data-id="${ideaId}"]`);
+    if (!btn) return;
+    
+    const currentLiked = btn.dataset.liked === 'true';
+    const newLiked = !currentLiked;
+    
+    // Optimistic update
+    btn.dataset.liked = newLiked;
+    btn.querySelector('span').textContent = newLiked ? '❤️' : '🤍';
+    btn.classList.toggle('liked', newLiked);
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE}/design-ideas/${ideaId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ liked: newLiked })
+        });
+        
+        let responseData;
+        try {
+            responseData = await response.json();
+        } catch (e) {
+            throw new Error(`Invalid response from server: ${response.status} ${response.statusText}`);
+        }
+        
+        if (!response.ok) {
+            throw new Error(responseData.error || 'Failed to update like status');
+        }
+        
+        // Update local state
+        const idea = allDesignIdeas.find(i => String(i.id) === String(ideaId));
+        if (idea) {
+            idea.liked = newLiked;
+        }
+        
+    } catch (error) {
+        console.error('Error toggling like:', error);
+        // Revert on error
+        btn.dataset.liked = currentLiked;
+        btn.querySelector('span').textContent = currentLiked ? '❤️' : '🤍';
+        btn.classList.toggle('liked', currentLiked);
+        alert(`Error updating like status: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// Increment bok likes for room idea
+async function incrementRoomIdeaBokLikes(ideaId) {
+    const btn = document.querySelector(`.room-bok-likes-btn[data-id="${ideaId}"]`);
+    const countEl = btn?.querySelector('.room-bok-count');
+    if (!btn || !countEl) return;
+    
+    const currentCount = parseInt(countEl.textContent) || 0;
+    const newCount = currentCount + 1;
+    
+    // Optimistic update
+    countEl.textContent = newCount;
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_BASE}/design-ideas/${ideaId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ bok_likes: newCount })
+        });
+        
+        let responseData;
+        try {
+            responseData = await response.json();
+        } catch (e) {
+            throw new Error(`Invalid response from server: ${response.status} ${response.statusText}`);
+        }
+        
+        if (!response.ok) {
+            throw new Error(responseData.error || 'Failed to update bok likes');
+        }
+        
+        // Update local state
+        const idea = allDesignIdeas.find(i => String(i.id) === String(ideaId));
+        if (idea) {
+            idea.bok_likes = newCount;
+        }
+        
+    } catch (error) {
+        console.error('Error incrementing bok likes:', error);
+        // Revert on error
+        countEl.textContent = currentCount;
+        alert(`Error updating bok likes: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// Edit tags for room idea
+function editRoomIdeaTags(ideaId) {
+    const displayEl = document.getElementById(`tags-display-${ideaId}`);
+    const editEl = document.getElementById(`tags-edit-${ideaId}`);
+    if (!displayEl || !editEl) return;
+    
+    displayEl.style.display = 'none';
+    editEl.style.display = 'flex';
+    editEl.querySelector('.room-tags-input').focus();
+}
+
+function cancelRoomIdeaTags(ideaId) {
+    const displayEl = document.getElementById(`tags-display-${ideaId}`);
+    const editEl = document.getElementById(`tags-edit-${ideaId}`);
+    if (!displayEl || !editEl) return;
+    
+    // Reset input value
+    const idea = allDesignIdeas.find(i => String(i.id) === String(ideaId));
+    if (idea) {
+        const tags = Array.isArray(idea.tags) ? idea.tags : (idea.tags ? idea.tags.split(',') : []);
+        const tagsDisplay = tags.map(t => t.trim()).filter(t => t).join(', ');
+        editEl.querySelector('.room-tags-input').value = tagsDisplay;
+    }
+    
+    displayEl.style.display = 'block';
+    editEl.style.display = 'none';
+}
+
+async function saveRoomIdeaTags(ideaId) {
+    const editEl = document.getElementById(`tags-edit-${ideaId}`);
+    const displayEl = document.getElementById(`tags-display-${ideaId}`);
+    if (!editEl || !displayEl) return;
+    
+    const input = editEl.querySelector('.room-tags-input');
+    const tagsValue = input.value.trim();
+    const tags = tagsValue ? tagsValue.split(',').map(t => t.trim()).filter(t => t) : [];
+    
+    const saveBtn = editEl.querySelector('.room-tags-save');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    
+    try {
+        const response = await fetch(`${API_BASE}/design-ideas/${ideaId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ tags: tags })
+        });
+        
+        let responseData;
+        try {
+            responseData = await response.json();
+        } catch (e) {
+            throw new Error(`Invalid response from server: ${response.status} ${response.statusText}`);
+        }
+        
+        if (!response.ok) {
+            throw new Error(responseData.error || 'Failed to save tags');
+        }
+        
+        // Update local state
+        const idea = allDesignIdeas.find(i => String(i.id) === String(ideaId));
+        if (idea) {
+            idea.tags = tags;
+        }
+        
+        // Update display
+        if (tags.length > 0) {
+            displayEl.innerHTML = `
+                <div class="room-idea-tags">
+                    ${tags.map(tag => `<span class="room-tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            `;
+        } else {
+            displayEl.innerHTML = '<span class="room-tags-placeholder">No tags</span>';
+        }
+        
+        displayEl.style.display = 'block';
+        editEl.style.display = 'none';
+        saveBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            saveBtn.textContent = 'Save';
+            saveBtn.disabled = false;
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Error saving tags:', error);
+        alert(`Error saving tags: ${error.message}`);
+        saveBtn.textContent = 'Save';
+        saveBtn.disabled = false;
+    }
+}
+
+// Make functions available globally
+window.toggleRoomIdeaLike = toggleRoomIdeaLike;
+window.incrementRoomIdeaBokLikes = incrementRoomIdeaBokLikes;
+window.editRoomIdeaTags = editRoomIdeaTags;
+window.cancelRoomIdeaTags = cancelRoomIdeaTags;
+window.saveRoomIdeaTags = saveRoomIdeaTags;
 
 // Initialize upload handlers
 function initUploadHandlers() {

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, abort
+from flask import Flask, render_template, jsonify, request, redirect, url_for, abort, send_from_directory
 from flask_cors import CORS
 import os
 import uuid
@@ -237,6 +237,11 @@ PHOTO_GALLERY_IMAGES = [
     'https://lh3.googleusercontent.com/pw/AP1GczPNHiuCNjVAUU9q7uM-7BoGhdMPC5hXHLD0GdVFNf68hR1NIXYSNqi_x34QNYiFaYYv4Cjqtca4dxzJ2I20EpO4tUer48R_kTKV0eTyx94E3-7lyy6E=w1920-h1080',
 ]
 
+# Serve favicon
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 @app.route('/')
 def index():
     """Render the main page with all design sections (exterior only on its own tab)."""
@@ -247,6 +252,14 @@ def index():
         all_sections=DESIGN_SECTIONS,
         show_photo_gallery=False,
         product_room_filter=None,
+    )
+
+@app.route('/categorize/')
+def categorize():
+    """Categorization page for assigning rooms to design ideas"""
+    return render_template(
+        'categorize.html',
+        all_sections=DESIGN_SECTIONS,
     )
 
 @app.route('/designs/')
@@ -458,6 +471,148 @@ def get_rooms():
         response = supabase.table('rooms').select('*').order('name').execute()
         return jsonify(response.data), 200
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- Design Ideas (ha_design_ideas table) ---
+
+@app.route('/api/design-ideas', methods=['GET'])
+def get_design_ideas():
+    """Get all design ideas, optionally filtered by room"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        room = request.args.get('room', '').strip()
+        limit = request.args.get('limit', type=int)
+        offset = request.args.get('offset', type=int, default=0)
+        
+        query = supabase.table('ha_design_ideas').select('*').order('created_at', desc=True)
+        
+        if room:
+            query = query.eq('room', room)
+        
+        # Apply pagination
+        if limit:
+            query = query.range(offset, offset + limit - 1)
+        
+        response = query.execute()
+        
+        # Get total count for pagination
+        count_query = supabase.table('ha_design_ideas')
+        if room:
+            count_query = count_query.eq('room', room)
+        count_response = count_query.select('id', count='exact').execute()
+        total_count = count_response.count if hasattr(count_response, 'count') else len(response.data)
+        
+        return jsonify({
+            'data': response.data,
+            'total': total_count,
+            'limit': limit,
+            'offset': offset
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching design ideas: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/design-ideas/<idea_id>', methods=['PUT'])
+def update_design_idea(idea_id):
+    """Update a design idea (room, category, tags, etc.) - accepts UUID or integer ID"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        data = request.get_json() or {}
+        app.logger.info(f"Updating design idea {idea_id} with data: {data}")
+        
+        # Build update payload with only provided fields
+        update_data = {}
+        if 'room' in data:
+            update_data['room'] = data['room'].strip() if data['room'] else None
+        if 'category' in data:
+            update_data['category'] = data['category'].strip() if data['category'] else None
+        if 'tags' in data:
+            # Handle both array and comma-separated string
+            if isinstance(data['tags'], list):
+                update_data['tags'] = data['tags']
+            elif isinstance(data['tags'], str):
+                update_data['tags'] = [tag.strip() for tag in data['tags'].split(',') if tag.strip()]
+            else:
+                update_data['tags'] = []
+        if 'name' in data:
+            update_data['name'] = data['name'].strip() if data['name'] else None
+        if 'liked' in data:
+            update_data['liked'] = bool(data['liked'])
+        if 'bok_likes' in data:
+            try:
+                bok_likes_val = data['bok_likes']
+                if bok_likes_val is None:
+                    update_data['bok_likes'] = 0
+                else:
+                    update_data['bok_likes'] = int(bok_likes_val)
+            except (ValueError, TypeError) as e:
+                app.logger.warning(f"Invalid bok_likes value: {data.get('bok_likes')}, defaulting to 0")
+                update_data['bok_likes'] = 0
+        
+        if not update_data:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        update_data['updated_at'] = datetime.utcnow().isoformat()
+        
+        app.logger.info(f"Update payload: {update_data}")
+        
+        # Use the idea_id as-is (could be UUID string or integer)
+        response = supabase.table('ha_design_ideas').update(update_data).eq('id', idea_id).execute()
+        
+        if not response.data:
+            return jsonify({'error': f'Design idea not found: {idea_id}'}), 404
+        
+        app.logger.info(f"Successfully updated design idea {idea_id}")
+        return jsonify(response.data[0]), 200
+    except Exception as e:
+        app.logger.error(f"Error updating design idea {idea_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/design-ideas/batch-update', methods=['PUT'])
+def batch_update_design_ideas():
+    """Update multiple design ideas at once"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        data = request.get_json() or {}
+        updates = data.get('updates', [])
+        
+        if not updates:
+            return jsonify({'error': 'No updates provided'}), 400
+        
+        results = []
+        for update in updates:
+            idea_id = update.get('id')
+            if not idea_id:
+                continue
+            
+            update_data = {}
+            if 'room' in update:
+                update_data['room'] = update['room'].strip() if update['room'] else None
+            if 'category' in update:
+                update_data['category'] = update['category'].strip() if update['category'] else None
+            if 'tags' in update:
+                if isinstance(update['tags'], list):
+                    update_data['tags'] = update['tags']
+                elif isinstance(update['tags'], str):
+                    update_data['tags'] = [tag.strip() for tag in update['tags'].split(',') if tag.strip()]
+            
+            update_data['updated_at'] = datetime.utcnow().isoformat()
+            
+            response = supabase.table('ha_design_ideas').update(update_data).eq('id', idea_id).execute()
+            if response.data:
+                results.append(response.data[0])
+        
+        return jsonify({'updated': len(results), 'results': results}), 200
+    except Exception as e:
+        app.logger.error(f"Error batch updating design ideas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])
