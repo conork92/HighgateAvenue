@@ -227,6 +227,13 @@ DESIGN_SECTIONS = {
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Kitchen and living area'},
         ],
     },
+    'dining-room': {
+        'label': 'Dining Room',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/dining_room/dining_room.jpg', 'alt': 'Dining room'},
+        ],
+    },
     'master-bedroom': {
         'label': 'Master bedroom',
         'layout': 'single',
@@ -278,6 +285,7 @@ SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k != 'exterior
 SECTION_TO_PRODUCT_ROOM = {
     'kitchen': 'Kitchen',
     'living-room': 'Living Room',
+    'dining-room': 'Dining Room',
     'hallway': 'Hallway',
     'stairs': 'Stairways',
     'entrance': 'Hallway',

@@ -35,7 +35,7 @@ let selectedUploadFile = null;
 
 // Room options
 const ROOM_OPTIONS = [
-    '', 'Living Room', 'Kitchen', 'Bedroom', 'Bathroom', 'Hallway', 'Stairways',
+    '', 'Living Room', 'Kitchen', 'Dining Room', 'Bedroom', 'Bathroom', 'Hallway', 'Stairways',
     'Garden', 'Summerhouse', 'Nursery', 'Study', 'Other'
 ];
 

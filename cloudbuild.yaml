@@ -1,0 +1,46 @@
+# Google Cloud Build: build image and deploy to Cloud Run on push to main.
+# Connect this repo in Cloud Build and create a trigger for branch main.
+# See DEPLOY_GCP.md for one-time setup.
+
+substitutions:
+  _REGION: europe-west1
+  _SERVICE_NAME: highgate-avenue
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # Build the container image (uses gcr.io - no extra repo setup)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:latest'
+      - '.'
+
+  # Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:latest']
+
+  # Deploy to Cloud Run (set env vars in Cloud Run console or first deploy)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
+  - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:latest'
