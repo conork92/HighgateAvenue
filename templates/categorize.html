@@ -26,9 +26,17 @@
         <main>
             <nav class="design-tabs" aria-label="Design sections">
                 <a href="{{ url_for('index') }}" class="design-tab">All</a>
-                {% for sid, s in all_sections.items() %}
-                <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab">{{ s.label }}</a>
-                {% endfor %}
+                {% if sections_order %}
+                    {% for sid in sections_order %}
+                        {% if sid in all_sections %}
+                        <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab">{{ all_sections[sid].label }}</a>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {% for sid, s in all_sections.items() %}
+                    <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab">{{ s.label }}</a>
+                    {% endfor %}
+                {% endif %}
                 <a href="{{ url_for('photo_gallery') }}" class="design-tab">Photo gallery</a>
                 <a href="{{ url_for('categorize') }}" class="design-tab design-tab--active">Categorize</a>
             </nav>

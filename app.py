@@ -177,33 +177,11 @@ def upload_to_supabase_storage_s3(file_content, file_path, content_type, bucket_
 
 # Design sections: single source of truth for labels and images (used by / and /designs/<id>/)
 DESIGN_SECTIONS = {
-    'exterior': {
-        'label': 'Exterior',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/Outside.png', 'alt': 'Highgate Avenue Exterior'},
-        ],
-    },
-    'floor-plans': {
-        'label': 'Floor plans',
-        'layout': 'double',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/old_floor_plan.PNG', 'alt': 'Original floor plan'},
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/floor_plan_clear.PNG', 'alt': 'New floor plan'},
-        ],
-    },
     'entrance': {
         'label': 'Entrance',
         'layout': 'single',
         'images': [
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/entrance/entrance_hall_2.JPG', 'alt': 'Entrance hall'},
-        ],
-    },
-    'stairs': {
-        'label': 'Stairs into entrance',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Stairs into entrance'},
         ],
     },
     'hallway': {
@@ -213,25 +191,11 @@ DESIGN_SECTIONS = {
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/hallway/hallway.PNG', 'alt': 'Hallway'},
         ],
     },
-    'living-room': {
-        'label': 'Living Room',
+    'bathroom': {
+        'label': 'Bathroom',
         'layout': 'single',
         'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/living_room/living_room.jpg', 'alt': 'Living room'},
-        ],
-    },
-    'kitchen': {
-        'label': 'Kitchen',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Kitchen and living area'},
-        ],
-    },
-    'dining-room': {
-        'label': 'Dining Room',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/dining_room/dining_room.jpg', 'alt': 'Dining room'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/bathroom/IMG_5212.PNG', 'alt': 'Bathroom'},
         ],
     },
     'master-bedroom': {
@@ -262,6 +226,27 @@ DESIGN_SECTIONS = {
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/study/study_1.jpg', 'alt': 'Study'},
         ],
     },
+    'living-room': {
+        'label': 'Living Room',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/living_room/living_room.jpg', 'alt': 'Living room'},
+        ],
+    },
+    'kitchen': {
+        'label': 'Kitchen',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Kitchen and living area'},
+        ],
+    },
+    'dining-room': {
+        'label': 'Dining Room',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/dining_room/dining_room.jpg', 'alt': 'Dining room'},
+        ],
+    },
     'garden': {
         'label': 'Garden',
         'layout': 'single',
@@ -276,10 +261,51 @@ DESIGN_SECTIONS = {
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/summer_house/summer_house.PNG', 'alt': 'Summer house'},
         ],
     },
+    'exterior': {
+        'label': 'Exterior',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/Outside.png', 'alt': 'Highgate Avenue Exterior'},
+        ],
+    },
+    'stairs': {
+        'label': 'Stairs into entrance',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Stairs into entrance'},
+        ],
+    },
+    'floor-plans': {
+        'label': 'Floor plans',
+        'layout': 'double',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/old_floor_plan.PNG', 'alt': 'Original floor plan'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/floor_plan_clear.PNG', 'alt': 'New floor plan'},
+        ],
+    },
 }
 
-# Main "All" page excludes exterior (exterior has its own tab only)
-SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k != 'exterior'}
+# Order for displaying tabs (matches user's desired order)
+DESIGN_SECTIONS_ORDER = [
+    'entrance',
+    'hallway',
+    'bathroom',
+    'master-bedroom',
+    'en-suite',
+    'nursery',
+    'study',
+    'living-room',
+    'kitchen',
+    'dining-room',
+    'garden',
+    'summer-house',
+    'exterior',
+    'stairs',
+    'floor-plans',
+]
+
+# Main "All" page excludes exterior and bathroom (they have their own tabs)
+SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k not in ['exterior', 'bathroom']}
 
 # Map design section_id to product room filter (for Products section on that page). None = show all.
 SECTION_TO_PRODUCT_ROOM = {
@@ -290,7 +316,8 @@ SECTION_TO_PRODUCT_ROOM = {
     'stairs': 'Stairways',
     'entrance': 'Entrance',
     'master-bedroom': 'Bedroom',
-    'en-suite': 'Bathroom',
+    'bathroom': 'Bathroom',  # Bathroom tab shows all bathroom-related items
+    'en-suite': 'Bathroom',  # En suite also shows bathroom items
     'nursery': 'Nursery',
     'study': 'Study',
     'garden': 'Garden',
@@ -331,6 +358,7 @@ def index():
         sections=SECTIONS_FOR_INDEX,
         section_filter=None,
         all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
         product_room_filter=None,
     )
@@ -341,6 +369,7 @@ def categorize():
     return render_template(
         'categorize.html',
         all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
     )
 
 @app.route('/designs/')
@@ -360,6 +389,7 @@ def design_section(section_id):
         sections=sections,
         section_filter=section_id,
         all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
         product_room_filter=product_room_filter,
     )
@@ -372,6 +402,7 @@ def photo_gallery():
         sections={},
         section_filter='photo-gallery',
         all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=True,
         carousel_images=PHOTO_GALLERY_IMAGES,
         product_room_filter=None,
@@ -481,7 +512,11 @@ def get_products():
         category = request.args.get('category', '').strip()
         query = supabase.table('ha_products').select('*').order('created_at', desc=True)
         if room:
-            query = query.eq('room', room)
+            # Special handling for Bathroom - include Bathroom, Bathroom 1, Bathroom 2, etc.
+            if room == 'Bathroom':
+                query = query.ilike('room', 'Bathroom%')
+            else:
+                query = query.eq('room', room)
         if category:
             query = query.eq('category', category)
         response = query.execute()
@@ -571,12 +606,28 @@ def get_design_ideas():
         query = supabase.table('ha_design_ideas').select('*').order('created_at', desc=True)
         
         if room:
-            query = query.eq('room', room)
-            # Apply pagination for room-filtered queries
-            if limit:
-                query = query.range(offset, offset + limit - 1)
-            response = query.execute()
-            data = response.data or []
+            # Special handling for Bathroom - include Bathroom, Bathroom 1, Bathroom 2, etc.
+            if room == 'Bathroom':
+                # Use ilike pattern matching to get all bathroom variants
+                response = query.ilike('room', 'Bathroom%').execute()
+                all_bathroom_data = response.data or []
+                total_count = len(all_bathroom_data)
+                # Apply pagination client-side for bathroom filter
+                if limit:
+                    data = all_bathroom_data[offset:offset + limit]
+                else:
+                    data = all_bathroom_data
+            else:
+                query = query.eq('room', room)
+                # Apply pagination for room-filtered queries
+                if limit:
+                    query = query.range(offset, offset + limit - 1)
+                response = query.execute()
+                data = response.data or []
+                # Get total count for pagination
+                count_query = supabase.table('ha_design_ideas').eq('room', room)
+                count_response = count_query.select('id', count='exact').execute()
+                total_count = count_response.count if hasattr(count_response, 'count') else len(data)
         elif uncategorized_only:
             # For uncategorized items, fetch ALL records first (no pagination on backend)
             # Then filter and paginate client-side
@@ -602,9 +653,13 @@ def get_design_ideas():
             # Already calculated above
             pass
         elif room:
-            count_query = supabase.table('ha_design_ideas').eq('room', room)
-            count_response = count_query.select('id', count='exact').execute()
-            total_count = count_response.count if hasattr(count_response, 'count') else len(data)
+            if room == 'Bathroom':
+                # Total count already calculated above for bathroom filter
+                pass
+            else:
+                count_query = supabase.table('ha_design_ideas').eq('room', room)
+                count_response = count_query.select('id', count='exact').execute()
+                total_count = count_response.count if hasattr(count_response, 'count') else len(data)
         else:
             count_response = supabase.table('ha_design_ideas').select('id', count='exact').execute()
             total_count = count_response.count if hasattr(count_response, 'count') else len(data)

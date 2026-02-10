@@ -25,9 +25,17 @@
         <main>
             <nav class="design-tabs" aria-label="Design sections">
                 <a href="{{ url_for('index') }}" class="design-tab {% if not section_filter %}design-tab--active{% endif %}">All</a>
-                {% for sid, s in all_sections.items() %}
-                <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab {% if section_filter == sid %}design-tab--active{% endif %}">{{ s.label }}</a>
-                {% endfor %}
+                {% if sections_order %}
+                    {% for sid in sections_order %}
+                        {% if sid in all_sections %}
+                        <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab {% if section_filter == sid %}design-tab--active{% endif %}">{{ all_sections[sid].label }}</a>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {% for sid, s in all_sections.items() %}
+                    <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab {% if section_filter == sid %}design-tab--active{% endif %}">{{ s.label }}</a>
+                    {% endfor %}
+                {% endif %}
                 <a href="{{ url_for('photo_gallery') }}" class="design-tab {% if section_filter == 'photo-gallery' %}design-tab--active{% endif %}">Photo gallery</a>
                 <a href="{{ url_for('categorize') }}" class="design-tab {% if request.endpoint == 'categorize' %}design-tab--active{% endif %}">Categorize</a>
             </nav>
