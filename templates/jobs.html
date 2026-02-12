@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Highgate Avenue - Jobs List</title>
+    <style>
+        /* Critical inline CSS to override cached styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { background: #ffffff !important; color: #000000 !important; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/jobs.css') }}?v=20260207">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Highgate Avenue</h1>
+            <p class="subtitle">Jobs & Tasks</p>
+        </header>
+
+        <main>
+            <!-- Top Navigation Bar for Jobs -->
+            <nav class="jobs-top-nav">
+                <div class="jobs-top-nav-left">
+                    <a href="{{ url_for('index') }}" class="jobs-nav-link">← Back to Designs</a>
+                </div>
+                <div class="jobs-top-nav-right">
+                    <button id="addJobBtn" class="add-job-btn">
+                        <span class="add-job-icon">+</span>
+                        <span class="add-job-text">Add Job</span>
+                    </button>
+                </div>
+            </nav>
+
+            <div class="jobs-controls-section">
+                <div class="jobs-controls">
+                    <div class="filter-group">
+                        <label for="assignedFilter">Filter by Assigned:</label>
+                        <select id="assignedFilter" class="filter-select">
+                            <option value="">All People</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="doneFilter">Status:</label>
+                        <select id="doneFilter" class="filter-select">
+                            <option value="">All</option>
+                            <option value="false">Pending</option>
+                            <option value="true">Done</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="countryFilter">Country:</label>
+                        <select id="countryFilter" class="filter-select">
+                            <option value="">All Countries</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Job Modal -->
+            <div id="jobModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close-job-modal">&times;</span>
+                    <h2 id="jobModalTitle">Add New Job</h2>
+                    
+                    <form id="jobForm">
+                        <div class="form-group">
+                            <label for="jobName">Job Name *</label>
+                            <input type="text" id="jobName" name="name" placeholder="e.g., Paint living room" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobAssigned">Assigned To</label>
+                            <input type="text" id="jobAssigned" name="assigned" placeholder="e.g., John, Sarah">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobDateDue">Date Due</label>
+                            <input type="date" id="jobDateDue" name="date_due">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobCountry">Country</label>
+                            <input type="text" id="jobCountry" name="country" placeholder="e.g., UK, Ireland">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobTags">Tags (comma-separated)</label>
+                            <input type="text" id="jobTags" name="tags" placeholder="e.g., urgent, renovation, electrical">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="jobDone" name="done">
+                                <span>Mark as done</span>
+                            </label>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" id="cancelJob">Cancel</button>
+                            <button type="submit" class="btn-submit" id="submitJob">Save Job</button>
+                        </div>
+                    </form>
+
+                    <div id="jobStatus" class="upload-status" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div id="loading" class="loading">Loading jobs...</div>
+            <div id="error" class="error" style="display: none;"></div>
+
+            <div id="jobsList" class="jobs-list">
+                <!-- Jobs will be loaded here -->
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Highgate Avenue</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/jobs.js') }}"></script>
+</body>
+</html>

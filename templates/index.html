@@ -37,6 +37,7 @@
                     {% endfor %}
                 {% endif %}
                 <a href="{{ url_for('photo_gallery') }}" class="design-tab {% if section_filter == 'photo-gallery' %}design-tab--active{% endif %}">Photo gallery</a>
+                <a href="{{ url_for('jobs') }}" class="design-tab {% if request.endpoint == 'jobs' %}design-tab--active{% endif %}">Jobs</a>
                 <a href="{{ url_for('categorize') }}" class="design-tab {% if request.endpoint == 'categorize' %}design-tab--active{% endif %}">Categorize</a>
             </nav>
 

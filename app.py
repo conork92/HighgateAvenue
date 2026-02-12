@@ -372,6 +372,15 @@ def categorize():
         sections_order=DESIGN_SECTIONS_ORDER,
     )
 
+@app.route('/jobs/')
+def jobs():
+    """Jobs/tasks management page"""
+    return render_template(
+        'jobs.html',
+        all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
+    )
+
 @app.route('/designs/')
 def designs_index():
     """Redirect /designs/ to main page (all designs)."""
@@ -932,6 +941,115 @@ def batch_update_design_ideas():
         return jsonify({'updated': len(results), 'results': results}), 200
     except Exception as e:
         app.logger.error(f"Error batch updating design ideas: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# --- Jobs List (ha_jobs_list table) ---
+
+@app.route('/api/jobs', methods=['GET'])
+def get_jobs():
+    """Get all jobs, optionally filtered by assigned person, done status, or country."""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        assigned = request.args.get('assigned', '').strip()
+        done = request.args.get('done', '').strip()
+        country = request.args.get('country', '').strip()
+        
+        query = supabase.table('ha_jobs_list').select('*').order('date_due', desc=False).order('created_at', desc=True)
+        
+        if assigned:
+            query = query.eq('assigned', assigned)
+        if done:
+            done_bool = done.lower() == 'true'
+            query = query.eq('done', done_bool)
+        if country:
+            query = query.eq('country', country)
+        
+        response = query.execute()
+        return jsonify(response.data), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching jobs: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/jobs', methods=['POST'])
+def create_job():
+    """Create a new job/task."""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Job name is required'}), 400
+        
+        payload = {
+            'name': name,
+            'assigned': (data.get('assigned') or '').strip() or None,
+            'date_due': data.get('date_due') or None,
+            'done': bool(data.get('done', False)),
+            'country': (data.get('country') or '').strip() or None,
+            'tags': data.get('tags') if isinstance(data.get('tags'), list) else [],
+        }
+        
+        response = supabase.table('ha_jobs_list').insert(payload).execute()
+        return jsonify(response.data[0] if response.data else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating job: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/jobs/<job_id>', methods=['PUT'])
+def update_job(job_id):
+    """Update a job/task."""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        data = request.get_json() or {}
+        
+        update_data = {}
+        if 'name' in data:
+            update_data['name'] = data['name'].strip() if data['name'] else None
+        if 'assigned' in data:
+            update_data['assigned'] = data['assigned'].strip() if data['assigned'] else None
+        if 'date_due' in data:
+            update_data['date_due'] = data['date_due'] if data['date_due'] else None
+        if 'done' in data:
+            update_data['done'] = bool(data['done'])
+        if 'country' in data:
+            update_data['country'] = data['country'].strip() if data['country'] else None
+        if 'tags' in data:
+            if isinstance(data['tags'], list):
+                update_data['tags'] = data['tags']
+            elif isinstance(data['tags'], str):
+                update_data['tags'] = [tag.strip() for tag in data['tags'].split(',') if tag.strip()]
+            else:
+                update_data['tags'] = []
+        
+        update_data['updated_at'] = datetime.utcnow().isoformat()
+        
+        response = supabase.table('ha_jobs_list').update(update_data).eq('id', job_id).execute()
+        
+        if not response.data:
+            return jsonify({'error': f'Job not found: {job_id}'}), 404
+        
+        return jsonify(response.data[0]), 200
+    except Exception as e:
+        app.logger.error(f"Error updating job {job_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/jobs/<job_id>', methods=['DELETE'])
+def delete_job(job_id):
+    """Delete a job/task."""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Supabase not configured'}), 500
+        
+        supabase.table('ha_jobs_list').delete().eq('id', job_id).execute()
+        return jsonify({'message': 'Job deleted successfully'}), 200
+    except Exception as e:
+        app.logger.error(f"Error deleting job {job_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])
