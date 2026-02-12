@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue - Muswell Hill {{ room_label }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { background: #fff; color: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Muswell Hill – {{ room_label }}</h1>
+                    <p class="subtitle">Photos from your bucket</p>
+                </header>
+                <div id="muswellLoading" class="loading">Loading images...</div>
+                <div id="muswellError" class="error" style="display: none;"></div>
+                <div id="muswellGrid" class="plans-grid" style="display: none;">
+                    <!-- Filled by JS -->
+                </div>
+                <p id="muswellEmpty" class="subtitle" style="display: none; margin-top: 2rem;">No images in this folder yet. Add images to <code>gs://highgate-avenue-designs/{{ bucket_prefix }}/</code> in your bucket to see them here.</p>
+            </div>
+        </main>
+    </div>
+    <script>
+        (function() {
+            const roomSlug = {{ room_slug | tojson }};
+            const loading = document.getElementById('muswellLoading');
+            const errDiv = document.getElementById('muswellError');
+            const grid = document.getElementById('muswellGrid');
+            const empty = document.getElementById('muswellEmpty');
+            fetch('/api/muswell-hill-images/' + roomSlug)
+                .then(r => r.json())
+                .then(images => {
+                    loading.style.display = 'none';
+                    if (!images || images.length === 0) {
+                        empty.style.display = 'block';
+                        return;
+                    }
+                    grid.style.display = 'grid';
+                    grid.innerHTML = images.map(img => 
+                        '<div class="plan-card"><a href="' + img.url + '" target="_blank" rel="noopener">' +
+                        '<img src="' + img.url + '" alt="' + (img.name || '') + '" class="plan-image" loading="lazy" onerror="this.style.display=\'none\'">' +
+                        '<div class="plan-header"><span class="plan-room">' + (img.name || '') + '</span></div></a></div>'
+                    ).join('');
+                })
+                .catch(e => {
+                    loading.style.display = 'none';
+                    errDiv.style.display = 'block';
+                    errDiv.textContent = 'Failed to load images.';
+                });
+        })();
+    </script>
+</body>
+</html>
