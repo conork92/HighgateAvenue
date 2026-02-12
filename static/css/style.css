@@ -1030,7 +1030,8 @@ a:hover {
 
 .room-idea-actions {
     display: flex;
-    gap: 0.75rem;
+    align-items: stretch;
+    gap: 0.5rem;
     margin-top: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--gray-medium);
@@ -1051,9 +1052,9 @@ a:hover {
     font-family: inherit;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.25rem;
     flex: 1;
-    justify-content: center;
 }
 
 .room-like-btn:hover,
@@ -1079,6 +1080,33 @@ a:hover {
 
 .room-bok-count {
     font-weight: 600;
+}
+
+.room-remove-idea-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-width: 2.5rem;
+    min-height: 2.25rem;
+    background: var(--white);
+    color: var(--black);
+    border: 1px solid var(--black);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+.room-remove-idea-btn:hover {
+    background: #c62828;
+    color: var(--white);
+    border-color: #c62828;
+}
+.room-remove-idea-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Responsive */

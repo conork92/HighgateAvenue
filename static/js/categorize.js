@@ -422,6 +422,9 @@ function renderIdeas() {
                             <button class="bok-likes-btn" data-id="${idea.id}">
                                 <span>👍</span> Bok Likes: <span class="bok-count">${bokLikes}</span>
                             </button>
+                            <button type="button" class="remove-idea-btn" data-id="${idea.id}" title="Remove from view (hide this idea)">
+                                <span>✕</span> Remove
+                            </button>
                         </div>
                     </div>
                     <div class="idea-actions">
@@ -473,6 +476,11 @@ function attachEventListeners() {
     // Bok likes buttons
     document.querySelectorAll('.bok-likes-btn').forEach(btn => {
         btn.addEventListener('click', () => incrementBokLikes(btn.dataset.id));
+    });
+    
+    // Remove (X) buttons
+    document.querySelectorAll('.remove-idea-btn').forEach(btn => {
+        btn.addEventListener('click', () => removeIdea(btn.dataset.id));
     });
 }
 
@@ -568,6 +576,37 @@ async function incrementBokLikes(ideaId) {
         alert('Error updating bok likes');
     } finally {
         btn.disabled = false;
+    }
+}
+
+// Mark idea as removed (hide from view)
+async function removeIdea(ideaId) {
+    const card = document.querySelector(`.idea-card[data-id="${ideaId}"]`);
+    const btn = card?.querySelector('.remove-idea-btn');
+    if (!card || !btn) return;
+    
+    btn.disabled = true;
+    btn.textContent = 'Removing...';
+    try {
+        const response = await fetch(`${API_BASE}/design-ideas/${ideaId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ removed: true })
+        });
+        const responseData = await response.json();
+        if (!response.ok) {
+            throw new Error(responseData.error || 'Failed to remove idea');
+        }
+        allIdeas = allIdeas.filter(i => String(i.id) !== String(ideaId));
+        unsavedChanges.delete(String(ideaId));
+        card.remove();
+        updateSaveAllButton();
+    } catch (error) {
+        console.error('Error removing idea:', error);
+        alert(`Error: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>✕</span> Remove';
     }
 }
 
