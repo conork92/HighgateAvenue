@@ -660,8 +660,12 @@ def get_design_ideas():
         uncategorized_only = request.args.get('uncategorized_only', '').lower() == 'true'
         limit = request.args.get('limit', type=int)
         offset = request.args.get('offset', type=int, default=0)
+        include_removed = request.args.get('include_removed', '').lower() == 'true'
         
-        query = supabase.table('ha_design_ideas').select('*').order('created_at', desc=True)
+        query = supabase.table('ha_design_ideas').select('*')
+        if not include_removed:
+            query = query.eq('removed', False)
+        query = query.order('created_at', desc=True)
         
         if room:
             # Special handling for Bathroom - include Bathroom, Bathroom 1, Bathroom 2, etc.
@@ -684,6 +688,8 @@ def get_design_ideas():
                 data = response.data or []
                 # Get total count for pagination
                 count_query = supabase.table('ha_design_ideas').eq('room', room)
+                if not include_removed:
+                    count_query = count_query.eq('removed', False)
                 count_response = count_query.select('id', count='exact').execute()
                 total_count = count_response.count if hasattr(count_response, 'count') else len(data)
         elif uncategorized_only:
@@ -716,10 +722,15 @@ def get_design_ideas():
                 pass
             else:
                 count_query = supabase.table('ha_design_ideas').eq('room', room)
+                if not include_removed:
+                    count_query = count_query.eq('removed', False)
                 count_response = count_query.select('id', count='exact').execute()
                 total_count = count_response.count if hasattr(count_response, 'count') else len(data)
         else:
-            count_response = supabase.table('ha_design_ideas').select('id', count='exact').execute()
+            count_query = supabase.table('ha_design_ideas').select('id', count='exact')
+            if not include_removed:
+                count_query = count_query.eq('removed', False)
+            count_response = count_query.execute()
             total_count = count_response.count if hasattr(count_response, 'count') else len(data)
         
         return jsonify({
@@ -770,6 +781,8 @@ def update_design_idea(idea_id):
             except (ValueError, TypeError) as e:
                 app.logger.warning(f"Invalid bok_likes value: {data.get('bok_likes')}, defaulting to 0")
                 update_data['bok_likes'] = 0
+        if 'removed' in data:
+            update_data['removed'] = bool(data['removed'])
         
         if not update_data:
             return jsonify({'error': 'No fields to update'}), 400
@@ -869,7 +882,8 @@ def upload_design_idea_image():
                 'image_path': file_path,
                 'public_url': public_url,
                 'liked': False,
-                'bok_likes': 0
+                'bok_likes': 0,
+                'removed': False
             }
             
             app.logger.info(f"Inserting idea_data: {idea_data}")
@@ -980,6 +994,8 @@ def batch_update_design_ideas():
                     update_data['tags'] = update['tags']
                 elif isinstance(update['tags'], str):
                     update_data['tags'] = [tag.strip() for tag in update['tags'].split(',') if tag.strip()]
+            if 'removed' in update:
+                update_data['removed'] = bool(update['removed'])
             
             update_data['updated_at'] = datetime.utcnow().isoformat()
             

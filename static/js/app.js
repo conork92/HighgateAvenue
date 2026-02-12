@@ -190,6 +190,9 @@ function renderDesignIdeasByRoom() {
                                         <button class="room-bok-likes-btn" data-id="${escapeHtml(String(ideaId))}" onclick="incrementRoomIdeaBokLikes('${escapeHtml(String(ideaId))}')">
                                             <span>👍</span> <span class="room-bok-count">${bokLikes}</span>
                                         </button>
+                                        <button type="button" class="room-remove-idea-btn" data-id="${escapeHtml(String(ideaId))}" title="Remove from view" onclick="removeRoomIdea('${escapeHtml(String(ideaId))}')">
+                                            <span>✕</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -623,6 +626,34 @@ async function incrementRoomIdeaBokLikes(ideaId) {
         btn.disabled = false;
     }
 }
+
+// Remove room idea from view (mark as removed)
+async function removeRoomIdea(ideaId) {
+    const card = document.querySelector(`.room-idea-card[data-id="${ideaId}"]`);
+    const btn = card?.querySelector('.room-remove-idea-btn');
+    if (!card || !btn) return;
+    
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/design-ideas/${ideaId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ removed: true })
+        });
+        const responseData = await response.json();
+        if (!response.ok) {
+            throw new Error(responseData.error || 'Failed to remove idea');
+        }
+        allDesignIdeas = allDesignIdeas.filter(i => String(i.id) !== String(ideaId));
+        card.remove();
+    } catch (error) {
+        console.error('Error removing idea:', error);
+        alert(`Error: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+}
+window.removeRoomIdea = removeRoomIdea;
 
 // Edit tags for room idea
 function editRoomIdeaTags(ideaId) {
