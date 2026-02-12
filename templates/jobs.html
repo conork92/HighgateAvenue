@@ -15,8 +15,12 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jobs.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
 </head>
 <body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
     <div class="container">
         <header>
             <h1>Highgate Avenue</h1>
@@ -122,6 +126,8 @@
         <footer>
             <p>&copy; 2026 Highgate Avenue</p>
         </footer>
+    </div>
+        </main>
     </div>
 
     <script src="{{ url_for('static', filename='js/jobs.js') }}"></script>

@@ -1,0 +1,68 @@
+<nav class="sidebar" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-header">
+        <a href="{{ url_for('index') }}" class="sidebar-brand">Highgate Avenue</a>
+        <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button>
+    </div>
+    <ul class="sidebar-nav">
+        <li class="sidebar-parent {% if request.endpoint in ['index', 'design_section', 'photo_gallery', 'categorize'] %}expanded{% endif %}" id="sidebar-highgate">
+            <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="true" aria-controls="sidebar-highgate-sub">Highgate Avenue</span>
+            <ul class="sidebar-sub" id="sidebar-highgate-sub">
+                <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' and not section_filter %}active{% endif %}">All</a></li>
+                {% if sections_order is defined and all_sections is defined %}
+                    {% for sid in sections_order %}
+                        {% if sid in all_sections %}
+                        <li><a href="{{ url_for('design_section', section_id=sid) }}" class="{% if section_filter is defined and section_filter == sid %}active{% endif %}">{{ all_sections[sid].label }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {% for sid, s in (all_sections or {}).items() %}
+                        <li><a href="{{ url_for('design_section', section_id=sid) }}" class="{% if section_filter is defined and section_filter == sid %}active{% endif %}">{{ s.label }}</a></li>
+                    {% endfor %}
+                {% endif %}
+                <li><a href="{{ url_for('photo_gallery') }}" class="{% if section_filter is defined and section_filter == 'photo-gallery' %}active{% endif %}">Photo gallery</a></li>
+                <li><a href="{{ url_for('categorize') }}" class="{% if request.endpoint == 'categorize' %}active{% endif %}">Categorize</a></li>
+            </ul>
+        </li>
+        <li class="sidebar-parent {% if request.endpoint == 'muswell_hill_room' %}expanded{% endif %}" id="sidebar-muswell">
+            <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="false" aria-controls="sidebar-muswell-sub">Muswell Hill</span>
+            <ul class="sidebar-sub" id="sidebar-muswell-sub">
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='front-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'front-room') %}active{% endif %}">Front Room</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='kitchen') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'kitchen') %}active{% endif %}">Kitchen</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='bathroom') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'bathroom') %}active{% endif %}">Bathroom</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='living-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'living-room') %}active{% endif %}">Living Room</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='nursery') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'nursery') %}active{% endif %}">Nursery</a></li>
+            </ul>
+        </li>
+        <li>
+            <a href="{{ url_for('jobs') }}" class="{% if request.endpoint == 'jobs' %}active{% endif %}">Jobs</a>
+        </li>
+    </ul>
+</nav>
+<button type="button" class="sidebar-open" id="sidebarOpen" aria-label="Open sidebar" title="Open sidebar" style="display: none;">›</button>
+<script>
+(function() {
+    var layout = document.querySelector('.app-layout');
+    var sidebar = document.getElementById('sidebar');
+    var toggle = document.getElementById('sidebarToggle');
+    var openBtn = document.getElementById('sidebarOpen');
+    if (!layout || !sidebar) return;
+
+    function isCollapsed() { return layout.classList.contains('sidebar-collapsed'); }
+    function setCollapsed(collapsed) {
+        layout.classList.toggle('sidebar-collapsed', collapsed);
+        if (toggle) { toggle.setAttribute('aria-label', collapsed ? 'Open sidebar' : 'Collapse sidebar'); toggle.title = collapsed ? 'Open sidebar' : 'Collapse sidebar'; toggle.textContent = collapsed ? '›' : '‹'; }
+        if (openBtn) openBtn.style.display = collapsed ? 'block' : 'none';
+        try { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+    }
+    if (toggle) toggle.addEventListener('click', function() { setCollapsed(!isCollapsed()); });
+    if (openBtn) openBtn.addEventListener('click', function() { setCollapsed(false); });
+    try { if (localStorage.getItem('sidebarCollapsed') === '1') setCollapsed(true); } catch (e) {}
+
+    [].forEach.call(document.querySelectorAll('.sidebar-parent-label'), function(label) {
+        label.addEventListener('click', function(e) {
+            var parent = label.closest('.sidebar-parent');
+            if (parent) parent.classList.toggle('expanded');
+        });
+    });
+})();
+</script>

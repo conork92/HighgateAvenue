@@ -381,6 +381,32 @@ def jobs():
         sections_order=DESIGN_SECTIONS_ORDER,
     )
 
+# Muswell Hill: room slugs and GCS prefix (bucket highgate-avenue-designs)
+MUSWELL_HILL_ROOMS = {
+    'front-room': {'label': 'Front Room', 'prefix': 'muswell-hill/front_room'},
+    'kitchen': {'label': 'Kitchen', 'prefix': 'muswell-hill/kitchen'},
+    'bathroom': {'label': 'Bathroom', 'prefix': 'muswell-hill/bathroom'},
+    'living-room': {'label': 'Living Room', 'prefix': 'muswell-hill/living_room'},
+    'nursery': {'label': 'Nursery', 'prefix': 'muswell-hill/nursery'},
+}
+MUSWELL_HILL_BUCKET = 'highgate-avenue-designs'
+
+@app.route('/muswell-hill/<room_slug>/')
+def muswell_hill_room(room_slug):
+    """Muswell Hill room page: images from GCS bucket."""
+    if room_slug not in MUSWELL_HILL_ROOMS:
+        abort(404)
+    room_info = MUSWELL_HILL_ROOMS[room_slug]
+    return render_template(
+        'muswell_hill_room.html',
+        room_slug=room_slug,
+        room_label=room_info['label'],
+        bucket_prefix=room_info['prefix'],
+        muswell_room=room_slug,
+        all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
+    )
+
 @app.route('/designs/')
 def designs_index():
     """Redirect /designs/ to main page (all designs)."""
@@ -416,6 +442,29 @@ def photo_gallery():
         carousel_images=PHOTO_GALLERY_IMAGES,
         product_room_filter=None,
     )
+
+@app.route('/api/muswell-hill-images/<room_slug>')
+def get_muswell_hill_images(room_slug):
+    """List image URLs for a Muswell Hill room from GCS bucket."""
+    if room_slug not in MUSWELL_HILL_ROOMS:
+        return jsonify([]), 200
+    try:
+        if not gcp_storage_client:
+            return jsonify([]), 200
+        prefix = MUSWELL_HILL_ROOMS[room_slug]['prefix']
+        bucket = gcp_storage_client.bucket(MUSWELL_HILL_BUCKET)
+        blobs = list(bucket.list_blobs(prefix=prefix))
+        base_url = f"https://storage.googleapis.com/{MUSWELL_HILL_BUCKET}"
+        images = []
+        for b in blobs:
+            if b.name.endswith('/'):
+                continue
+            name = b.name.split('/')[-1]
+            images.append({'name': name, 'url': f"{base_url}/{b.name}"})
+        return jsonify(images), 200
+    except Exception as e:
+        app.logger.error(f"Error listing Muswell Hill images: {e}")
+        return jsonify([]), 200
 
 @app.route('/api/image/<path:image_path>')
 def serve_gcp_image(image_path):
