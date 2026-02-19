@@ -9,14 +9,6 @@ from werkzeug.utils import secure_filename
 from google.cloud import storage
 from google.oauth2 import service_account
 import json
-import requests
-import hmac
-import hashlib
-import base64
-from urllib.parse import quote
-from io import BytesIO
-import boto3
-from botocore.client import Config
 
 load_dotenv()
 
@@ -42,11 +34,6 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 # Use the anon/public API key from Project Settings → API in Supabase dashboard, NOT the Postgres connection string.
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY') or os.getenv('SUPABASE_ANON_KEY')
-# Service role key for storage operations (bypasses RLS)
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-# S3-compatible storage credentials
-SUPABASE_ACCESS_KEY_ID = os.getenv('SUPABASE_ACCESS_KEY_ID_BUCKET')
-SUPABASE_SECRET_ACCESS_KEY = os.getenv('SUPABASE_ACCESS_KEY_BUCKET')
 
 # GCP Storage configuration
 GCP_BUCKET_NAME = os.getenv('GCP_BUCKET_NAME', 'highgate-avenue-images')
@@ -56,22 +43,13 @@ GCP_CREDENTIALS_PATH = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')  # Path to cr
 
 # Initialize Supabase client (for database)
 supabase: Client = None
-supabase_storage: Client = None  # Client with service role for storage operations
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        # Create separate client for storage with service role key if available
-        if SUPABASE_SERVICE_ROLE_KEY:
-            supabase_storage = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-        else:
-            # Fall back to regular key if service role not available
-            supabase_storage = supabase
-            app.logger.warning("SUPABASE_SERVICE_ROLE_KEY not set. Storage uploads may fail if RLS policies are restrictive.")
     except Exception as e:
         import logging
         logging.warning(f"Supabase client not available: {e}. DB features (plans, upload) will be disabled.")
         supabase = None
-        supabase_storage = None
 
 # Initialize GCP Storage client
 gcp_storage_client = None
@@ -124,143 +102,8 @@ init_gcp_storage()
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def upload_to_supabase_storage_s3(file_content, file_path, content_type, bucket_name='image_hosting_bucket'):
-    """Upload file to Supabase Storage using S3-compatible API with access keys via boto3"""
-    if not SUPABASE_ACCESS_KEY_ID or not SUPABASE_SECRET_ACCESS_KEY:
-        raise ValueError("Supabase storage access keys not configured")
-    
-    # Extract project reference from URL
-    project_ref = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
-    
-    # S3-compatible endpoint format for Supabase
-    # Format: https://{project_ref}.storage.supabase.co/storage/v1/s3
-    endpoint_url = f"https://{project_ref}.storage.supabase.co/storage/v1/s3"
-    
-    # Create S3 client with Supabase endpoint
-    s3_client = boto3.client(
-        's3',
-        endpoint_url=endpoint_url,
-        aws_access_key_id=SUPABASE_ACCESS_KEY_ID,
-        aws_secret_access_key=SUPABASE_SECRET_ACCESS_KEY,
-        config=Config(
-            signature_version='s3v4',
-            s3={
-                'addressing_style': 'path'
-            }
-        )
-    )
-    
-    # Upload file using boto3
-    # Use put_object for binary data
-    file_obj = BytesIO(file_content)
-    
-    try:
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key=file_path,
-            Body=file_obj,
-            ContentType=content_type
-        )
-        
-        # Return a mock response object for compatibility
-        class MockResponse:
-            status_code = 200
-            text = "Upload successful"
-        
-        return MockResponse()
-    except Exception as e:
-        error_msg = str(e)
-        # Try to extract more details from boto3 exceptions
-        if hasattr(e, 'response'):
-            error_msg = f"{error_msg} - {e.response.get('Error', {}).get('Message', '')}"
-        raise Exception(f"Upload failed: {error_msg}")
-
 # Design sections: single source of truth for labels and images (used by / and /designs/<id>/)
 DESIGN_SECTIONS = {
-    'entrance': {
-        'label': 'Entrance',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/entrance/entrance_hall_2.JPG', 'alt': 'Entrance hall'},
-        ],
-    },
-    'hallway': {
-        'label': 'Hallway',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/hallway/hallway.PNG', 'alt': 'Hallway'},
-        ],
-    },
-    'bathroom': {
-        'label': 'Bathroom',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/bathroom/IMG_5212.PNG', 'alt': 'Bathroom'},
-        ],
-    },
-    'master-bedroom': {
-        'label': 'Master bedroom',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/main_bedroom/master_bedroom.PNG', 'alt': 'Master bedroom'},
-        ],
-    },
-    'en-suite': {
-        'label': 'En suite',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/en_suite/ensuite_idea.PNG', 'alt': 'En suite bathroom'},
-        ],
-    },
-    'nursery': {
-        'label': 'Nursery',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/nursery/nursery.jpg', 'alt': 'Nursery'},
-        ],
-    },
-    'study': {
-        'label': 'Study',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/study/study_1.jpg', 'alt': 'Study'},
-        ],
-    },
-    'living-room': {
-        'label': 'Living Room',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/living_room/living_room.jpg', 'alt': 'Living room'},
-        ],
-    },
-    'kitchen': {
-        'label': 'Kitchen',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Kitchen and living area'},
-        ],
-    },
-    'dining-room': {
-        'label': 'Dining Room',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/dining_room/dining_room.jpg', 'alt': 'Dining room'},
-        ],
-    },
-    'garden': {
-        'label': 'Garden',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/garden/garden.PNG', 'alt': 'Garden'},
-        ],
-    },
-    'summer-house': {
-        'label': 'Summer house',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/summer_house/summer_house.PNG', 'alt': 'Summer house'},
-        ],
-    },
     'exterior': {
         'label': 'Exterior',
         'layout': 'single',
@@ -268,60 +111,129 @@ DESIGN_SECTIONS = {
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/Outside.png', 'alt': 'Highgate Avenue Exterior'},
         ],
     },
-    'stairs': {
-        'label': 'Stairs into entrance',
-        'layout': 'single',
-        'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Stairs into entrance'},
-        ],
-    },
     'floor-plans': {
         'label': 'Floor plans',
         'layout': 'double',
         'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/old_floor_plan.PNG', 'alt': 'Original floor plan'},
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/floor_plan_clear.PNG', 'alt': 'New floor plan'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/old_floor_plan.PNG', 'alt': 'Highgate Avenue original floor plan'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/floor_plan_clear.PNG', 'alt': 'Highgate Avenue new floor plan'},
+        ],
+    },
+    'entrance': {
+        'label': 'Entrance',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/entrance/entrance_hall_2.JPG', 'alt': 'Highgate Avenue entrance hall'},
+        ],
+    },
+    'stairs': {
+        'label': 'Stairs into entrance',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Highgate Avenue stairs into entrance'},
+        ],
+    },
+    'hallway': {
+        'label': 'Hallway',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/hallway/hallway.PNG', 'alt': 'Highgate Avenue hallway'},
+        ],
+    },
+    'living-room': {
+        'label': 'Living Room',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/living_room/living_room.jpg', 'alt': 'Highgate Avenue living room'},
+        ],
+    },
+    'kitchen': {
+        'label': 'Kitchen',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Highgate Avenue kitchen and living area'},
+        ],
+    },
+    'master-bedroom': {
+        'label': 'Master bedroom',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/main_bedroom/master_bedroom.PNG', 'alt': 'Highgate Avenue master bedroom'},
+        ],
+    },
+    'en-suite': {
+        'label': 'En suite',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/en_suite/ensuite_idea.PNG', 'alt': 'Highgate Avenue en suite bathroom'},
+        ],
+    },
+    'nursery': {
+        'label': 'Nursery',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/nursery/nursery.jpg', 'alt': 'Highgate Avenue nursery'},
+        ],
+    },
+    'study': {
+        'label': 'Study',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/study/study_1.jpg', 'alt': 'Highgate Avenue study'},
+        ],
+    },
+    'garden': {
+        'label': 'Garden',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/garden/garden.PNG', 'alt': 'Highgate Avenue garden'},
+        ],
+    },
+    'summer-house': {
+        'label': 'Summer house',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/summer_house/summer_house.PNG', 'alt': 'Highgate Avenue summer house'},
         ],
     },
 }
 
-# Order for displaying tabs (matches user's desired order)
-DESIGN_SECTIONS_ORDER = [
-    'entrance',
-    'hallway',
-    'bathroom',
-    'master-bedroom',
-    'en-suite',
-    'nursery',
-    'study',
-    'living-room',
-    'kitchen',
-    'dining-room',
-    'garden',
-    'summer-house',
-    'exterior',
-    'stairs',
-    'floor-plans',
-]
+# Main "All" page excludes exterior (exterior has its own tab only)
+SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k != 'exterior'}
 
-# Main "All" page excludes exterior and bathroom (they have their own tabs)
-SECTIONS_FOR_INDEX = {k: v for k, v in DESIGN_SECTIONS.items() if k not in ['exterior', 'bathroom']}
+# Muswell Hill: room slug -> section. Use 'bucket' + 'bucket_prefix' to load from GCS; use 'images' for static URLs.
+MWH_BUCKET_DESIGNS = 'highgate-avenue-designs'
+MWH_136_PLANS_BUCKET = 'mwh_136_plans'
+
+MWH_ROOMS = {
+    'bathroom': {
+        'label': 'Bathroom',
+        'layout': 'single',
+        'images': [
+            {'url': 'https://storage.googleapis.com/mwh_136_plans/rooms/bathroom/Screenshot%202026-02-19%20at%2013.11.56.png', 'alt': 'Muswell Hill bathroom'},
+        ],
+    },
+    'living-room': {
+        'label': 'Living Room',
+        'layout': 'single',
+        'bucket': MWH_136_PLANS_BUCKET,
+        'bucket_prefix': 'rooms/living_room',  # gs://mwh_136_plans/rooms/living_room/
+    },
+}
 
 # Map design section_id to product room filter (for Products section on that page). None = show all.
 SECTION_TO_PRODUCT_ROOM = {
     'kitchen': 'Kitchen',
     'living-room': 'Living Room',
-    'dining-room': 'Dining Room',
     'hallway': 'Hallway',
     'stairs': 'Stairways',
-    'entrance': 'Entrance',
-    'master-bedroom': 'Bedroom',
-    'bathroom': 'Bathroom',  # Bathroom tab shows all bathroom-related items
-    'en-suite': 'Bathroom',  # En suite also shows bathroom items
-    'nursery': 'Nursery',
-    'study': 'Study',
-    'garden': 'Garden',
-    'summer-house': 'Summerhouse',
+    'entrance': 'Hallway',
+    'master-bedroom': 'Bedroom 1',
+    'en-suite': 'Bathroom 1',
+    'nursery': 'Bedroom 2',
+    'study': 'Other',
+    'garden': 'Other',
+    'summer-house': 'Other',
     'exterior': 'Other',
     'floor-plans': None,
 }
@@ -358,7 +270,6 @@ def index():
         sections=SECTIONS_FOR_INDEX,
         section_filter=None,
         all_sections=DESIGN_SECTIONS,
-        sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
         product_room_filter=None,
     )
@@ -369,42 +280,6 @@ def categorize():
     return render_template(
         'categorize.html',
         all_sections=DESIGN_SECTIONS,
-        sections_order=DESIGN_SECTIONS_ORDER,
-    )
-
-@app.route('/jobs/')
-def jobs():
-    """Jobs/tasks management page"""
-    return render_template(
-        'jobs.html',
-        all_sections=DESIGN_SECTIONS,
-        sections_order=DESIGN_SECTIONS_ORDER,
-    )
-
-# Muswell Hill: room slugs and GCS prefix (bucket highgate-avenue-designs)
-MUSWELL_HILL_ROOMS = {
-    'front-room': {'label': 'Front Room', 'prefix': 'muswell-hill/front_room'},
-    'kitchen': {'label': 'Kitchen', 'prefix': 'muswell-hill/kitchen'},
-    'bathroom': {'label': 'Bathroom', 'prefix': 'muswell-hill/bathroom'},
-    'living-room': {'label': 'Living Room', 'prefix': 'muswell-hill/living_room'},
-    'nursery': {'label': 'Nursery', 'prefix': 'muswell-hill/nursery'},
-}
-MUSWELL_HILL_BUCKET = 'highgate-avenue-designs'
-
-@app.route('/muswell-hill/<room_slug>/')
-def muswell_hill_room(room_slug):
-    """Muswell Hill room page: images from GCS bucket."""
-    if room_slug not in MUSWELL_HILL_ROOMS:
-        abort(404)
-    room_info = MUSWELL_HILL_ROOMS[room_slug]
-    return render_template(
-        'muswell_hill_room.html',
-        room_slug=room_slug,
-        room_label=room_info['label'],
-        bucket_prefix=room_info['prefix'],
-        muswell_room=room_slug,
-        all_sections=DESIGN_SECTIONS,
-        sections_order=DESIGN_SECTIONS_ORDER,
     )
 
 @app.route('/designs/')
@@ -424,9 +299,58 @@ def design_section(section_id):
         sections=sections,
         section_filter=section_id,
         all_sections=DESIGN_SECTIONS,
-        sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
         product_room_filter=product_room_filter,
+    )
+
+@app.route('/muswell-hill/')
+def muswell_hill_index():
+    """Muswell Hill plans index: list of room links."""
+    return render_template(
+        'muswell_hill.html',
+        room_slug=None,
+        room=None,
+        all_rooms=MWH_ROOMS,
+    )
+
+def _mwh_bucket_images(bucket_name, prefix):
+    """List image blobs in the given GCS bucket under prefix; return list of {url, alt} and gs path."""
+    if not gcp_storage_client:
+        return [], None
+    bucket = gcp_storage_client.bucket(bucket_name)
+    blobs = list(bucket.list_blobs(prefix=prefix))
+    image_ext = frozenset({'.png', '.jpg', '.jpeg', '.gif', '.webp'})
+    out = []
+    for b in blobs:
+        if b.name.endswith('/') or not any(b.name.lower().endswith(ext) for ext in image_ext):
+            continue
+        url = f"https://storage.googleapis.com/{bucket_name}/{b.name}"
+        name = b.name.rsplit('/', 1)[-1] if '/' in b.name else b.name
+        out.append({'url': url, 'alt': name})
+    gs_path = f"gs://{bucket_name}/{prefix.rstrip('/')}/"
+    return out, gs_path
+
+
+@app.route('/muswell-hill/<room_slug>/')
+def muswell_hill_room(room_slug):
+    """Muswell Hill single room: show image(s) from static list or from GCS bucket prefix."""
+    if room_slug not in MWH_ROOMS:
+        abort(404)
+    room = MWH_ROOMS[room_slug]
+    room_images = None
+    bucket_gs_path = None
+    if room.get('bucket_prefix'):
+        bucket_name = room.get('bucket', MWH_BUCKET_DESIGNS)
+        room_images, bucket_gs_path = _mwh_bucket_images(bucket_name, room['bucket_prefix'])
+    else:
+        room_images = room.get('images') or []
+    return render_template(
+        'muswell_hill.html',
+        room_slug=room_slug,
+        room=room,
+        all_rooms=MWH_ROOMS,
+        room_images=room_images,
+        bucket_gs_path=bucket_gs_path,
     )
 
 @app.route('/photo-gallery/')
@@ -437,34 +361,15 @@ def photo_gallery():
         sections={},
         section_filter='photo-gallery',
         all_sections=DESIGN_SECTIONS,
-        sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=True,
         carousel_images=PHOTO_GALLERY_IMAGES,
         product_room_filter=None,
     )
 
-@app.route('/api/muswell-hill-images/<room_slug>')
-def get_muswell_hill_images(room_slug):
-    """List image URLs for a Muswell Hill room from GCS bucket."""
-    if room_slug not in MUSWELL_HILL_ROOMS:
-        return jsonify([]), 200
-    try:
-        if not gcp_storage_client:
-            return jsonify([]), 200
-        prefix = MUSWELL_HILL_ROOMS[room_slug]['prefix']
-        bucket = gcp_storage_client.bucket(MUSWELL_HILL_BUCKET)
-        blobs = list(bucket.list_blobs(prefix=prefix))
-        base_url = f"https://storage.googleapis.com/{MUSWELL_HILL_BUCKET}"
-        images = []
-        for b in blobs:
-            if b.name.endswith('/'):
-                continue
-            name = b.name.split('/')[-1]
-            images.append({'name': name, 'url': f"{base_url}/{b.name}"})
-        return jsonify(images), 200
-    except Exception as e:
-        app.logger.error(f"Error listing Muswell Hill images: {e}")
-        return jsonify([]), 200
+@app.route('/jobs/')
+def jobs():
+    """Jobs list page."""
+    return render_template('jobs.html')
 
 @app.route('/api/image/<path:image_path>')
 def serve_gcp_image(image_path):
@@ -570,11 +475,7 @@ def get_products():
         category = request.args.get('category', '').strip()
         query = supabase.table('ha_products').select('*').order('created_at', desc=True)
         if room:
-            # Special handling for Bathroom - include Bathroom, Bathroom 1, Bathroom 2, etc.
-            if room == 'Bathroom':
-                query = query.ilike('room', 'Bathroom%')
-            else:
-                query = query.eq('room', room)
+            query = query.eq('room', room)
         if category:
             query = query.eq('category', category)
         response = query.execute()
@@ -657,73 +558,29 @@ def get_design_ideas():
             return jsonify({'error': 'Supabase not configured'}), 500
         
         room = request.args.get('room', '').strip()
-        uncategorized_only = request.args.get('uncategorized_only', '').lower() == 'true'
         limit = request.args.get('limit', type=int)
         offset = request.args.get('offset', type=int, default=0)
         
         query = supabase.table('ha_design_ideas').select('*').order('created_at', desc=True)
         
         if room:
-            # Special handling for Bathroom - include Bathroom, Bathroom 1, Bathroom 2, etc.
-            if room == 'Bathroom':
-                # Use ilike pattern matching to get all bathroom variants
-                response = query.ilike('room', 'Bathroom%').execute()
-                all_bathroom_data = response.data or []
-                total_count = len(all_bathroom_data)
-                # Apply pagination client-side for bathroom filter
-                if limit:
-                    data = all_bathroom_data[offset:offset + limit]
-                else:
-                    data = all_bathroom_data
-            else:
-                query = query.eq('room', room)
-                # Apply pagination for room-filtered queries
-                if limit:
-                    query = query.range(offset, offset + limit - 1)
-                response = query.execute()
-                data = response.data or []
-                # Get total count for pagination
-                count_query = supabase.table('ha_design_ideas').eq('room', room)
-                count_response = count_query.select('id', count='exact').execute()
-                total_count = count_response.count if hasattr(count_response, 'count') else len(data)
-        elif uncategorized_only:
-            # For uncategorized items, fetch ALL records first (no pagination on backend)
-            # Then filter and paginate client-side
-            response = query.execute()
-            all_data = response.data or []
-            # Filter uncategorized items
-            uncategorized_data = [item for item in all_data if not item.get('room') or item.get('room', '').strip() == '']
-            total_count = len(uncategorized_data)
-            # Apply client-side pagination
-            if limit:
-                data = uncategorized_data[offset:offset + limit]
-            else:
-                data = uncategorized_data
-        else:
-            # Apply pagination for regular queries
-            if limit:
-                query = query.range(offset, offset + limit - 1)
-            response = query.execute()
-            data = response.data or []
+            query = query.eq('room', room)
+        
+        # Apply pagination
+        if limit:
+            query = query.range(offset, offset + limit - 1)
+        
+        response = query.execute()
         
         # Get total count for pagination
-        if uncategorized_only:
-            # Already calculated above
-            pass
-        elif room:
-            if room == 'Bathroom':
-                # Total count already calculated above for bathroom filter
-                pass
-            else:
-                count_query = supabase.table('ha_design_ideas').eq('room', room)
-                count_response = count_query.select('id', count='exact').execute()
-                total_count = count_response.count if hasattr(count_response, 'count') else len(data)
-        else:
-            count_response = supabase.table('ha_design_ideas').select('id', count='exact').execute()
-            total_count = count_response.count if hasattr(count_response, 'count') else len(data)
+        count_query = supabase.table('ha_design_ideas')
+        if room:
+            count_query = count_query.eq('room', room)
+        count_response = count_query.select('id', count='exact').execute()
+        total_count = count_response.count if hasattr(count_response, 'count') else len(response.data)
         
         return jsonify({
-            'data': data,
+            'data': response.data,
             'total': total_count,
             'limit': limit,
             'offset': offset
@@ -792,165 +649,6 @@ def update_design_idea(idea_id):
         app.logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/design-ideas/upload', methods=['POST'])
-def upload_design_idea_image():
-    """Upload an image to Supabase Storage and create a design idea entry"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Supabase not configured'}), 500
-        
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
-        
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'File type not allowed. Use: PNG, JPG, JPEG, GIF, or WEBP'}), 400
-        
-        # Read file content
-        file_content = file.read()
-        if len(file_content) > MAX_FILE_SIZE:
-            return jsonify({'error': 'File too large. Maximum size is 10MB'}), 400
-        
-        # Generate unique filename
-        file_ext = file.filename.rsplit('.', 1)[1].lower()
-        
-        # Upload to Supabase Storage using S3-compatible API
-        bucket_name = 'image_hosting_bucket'
-        
-        if not SUPABASE_ACCESS_KEY_ID or not SUPABASE_SECRET_ACCESS_KEY:
-            return jsonify({'error': 'Supabase storage access keys not configured. Please set SUPABASE_ACCESS_KEY_ID_BUCKET and SUPABASE_ACCESS_KEY_BUCKET in .env'}), 500
-        
-        # Check if image_path already exists and generate unique filename if needed
-        max_attempts = 5
-        file_path = None
-        for attempt in range(max_attempts):
-            unique_filename = f"{uuid.uuid4()}.{file_ext}"
-            candidate_path = f"highgate_avenue/design_ideas/{unique_filename}"
-            
-            # Check if this path already exists in database
-            existing = supabase.table('ha_design_ideas').select('id').eq('image_path', candidate_path).execute()
-            if not existing.data:
-                file_path = candidate_path
-                break
-        
-        if not file_path:
-            return jsonify({'error': 'Failed to generate unique filename after multiple attempts'}), 500
-        
-        try:
-            # Upload file to Supabase Storage using S3-compatible API
-            content_type = file.content_type or f'image/{file_ext}'
-            upload_response = upload_to_supabase_storage_s3(
-                file_content,
-                file_path,
-                content_type,
-                bucket_name
-            )
-            
-            app.logger.info(f"Upload successful: {file_path}")
-            
-            # Get public URL - construct it manually based on Supabase URL structure
-            # Format: https://{project_ref}.supabase.co/storage/v1/object/public/{bucket}/{path}
-            supabase_project_ref = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
-            # URL encode the path segments but keep slashes
-            encoded_path = '/'.join([quote(segment, safe='') for segment in file_path.split('/')])
-            public_url = f"https://{supabase_project_ref}.supabase.co/storage/v1/object/public/{bucket_name}/{encoded_path}"
-            
-            app.logger.info(f"Public URL: {public_url}")
-            
-            # Create design idea entry in database
-            idea_data = {
-                'name': request.form.get('name', 'Untitled'),
-                'room': request.form.get('room', ''),
-                'category': request.form.get('category', ''),
-                'tags': request.form.get('tags', '').split(',') if request.form.get('tags') else [],
-                'image_path': file_path,
-                'public_url': public_url,
-                'liked': False,
-                'bok_likes': 0
-            }
-            
-            app.logger.info(f"Inserting idea_data: {idea_data}")
-            
-            try:
-                # Log what we're trying to insert
-                app.logger.info(f"Attempting to insert idea with public_url: {public_url}")
-                
-                db_response = supabase.table('ha_design_ideas').insert(idea_data).execute()
-                
-                app.logger.info(f"Database insert successful. Response: {db_response.data}")
-                
-                # Ensure public_url is in the response
-                result_idea = db_response.data[0] if db_response.data else idea_data
-                
-                # If public_url is missing from database response, add it
-                if 'public_url' not in result_idea or not result_idea.get('public_url'):
-                    app.logger.warning(f"public_url missing from database response, adding: {public_url}")
-                    result_idea['public_url'] = public_url
-                    # Try to update the database record with public_url
-                    try:
-                        supabase.table('ha_design_ideas').update({'public_url': public_url}).eq('id', result_idea['id']).execute()
-                        app.logger.info(f"Updated public_url for record {result_idea['id']}")
-                    except Exception as update_error:
-                        app.logger.error(f"Failed to update public_url: {update_error}")
-                
-                app.logger.info(f"Returning idea with public_url: {result_idea.get('public_url')}")
-                
-                return jsonify({
-                    'success': True,
-                    'idea': result_idea,
-                    'public_url': result_idea.get('public_url', public_url)
-                }), 201
-            except Exception as db_error:
-                error_str = str(db_error)
-                # Handle duplicate key error
-                if '23505' in error_str or 'duplicate key' in error_str.lower() or 'already exists' in error_str.lower():
-                    app.logger.warning(f"Duplicate image_path detected: {file_path}. Attempting to fetch existing record.")
-                    # Try to fetch the existing record
-                    existing = supabase.table('ha_design_ideas').select('*').eq('image_path', file_path).execute()
-                    if existing.data:
-                        existing_idea = existing.data[0]
-                        # Ensure public_url exists, construct if missing
-                        if 'public_url' not in existing_idea or not existing_idea.get('public_url'):
-                            supabase_project_ref = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
-                            encoded_path = '/'.join([quote(segment, safe='') for segment in file_path.split('/')])
-                            existing_idea['public_url'] = f"https://{supabase_project_ref}.supabase.co/storage/v1/object/public/{bucket_name}/{encoded_path}"
-                            # Update the record with public_url if missing
-                            try:
-                                supabase.table('ha_design_ideas').update({'public_url': existing_idea['public_url']}).eq('id', existing_idea['id']).execute()
-                            except:
-                                pass  # Don't fail if update doesn't work
-                        return jsonify({
-                            'success': True,
-                            'idea': existing_idea,
-                            'public_url': existing_idea.get('public_url', public_url),
-                            'message': 'Image already exists in database'
-                        }), 200
-                    else:
-                        return jsonify({'error': 'Duplicate key error but record not found'}), 500
-                else:
-                    raise
-            
-        except Exception as storage_error:
-            app.logger.error(f"Supabase Storage error: {str(storage_error)}")
-            error_msg = str(storage_error)
-            
-            # Provide helpful error message about RLS
-            if 'row-level security' in error_msg.lower() or 'unauthorized' in error_msg.lower():
-                return jsonify({
-                    'error': 'Storage upload failed due to permissions. Please either:\n1. Add SUPABASE_SERVICE_ROLE_KEY to your .env file, or\n2. Configure the storage bucket policies to allow public uploads.'
-                }), 500
-            
-            return jsonify({'error': f'Storage upload failed: {error_msg}'}), 500
-        
-    except Exception as e:
-        app.logger.error(f"Upload error: {str(e)}")
-        import traceback
-        app.logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/design-ideas/batch-update', methods=['PUT'])
 def batch_update_design_ideas():
     """Update multiple design ideas at once"""
@@ -990,115 +688,6 @@ def batch_update_design_ideas():
         return jsonify({'updated': len(results), 'results': results}), 200
     except Exception as e:
         app.logger.error(f"Error batch updating design ideas: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-# --- Jobs List (ha_jobs_list table) ---
-
-@app.route('/api/jobs', methods=['GET'])
-def get_jobs():
-    """Get all jobs, optionally filtered by assigned person, done status, or country."""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Supabase not configured'}), 500
-        
-        assigned = request.args.get('assigned', '').strip()
-        done = request.args.get('done', '').strip()
-        country = request.args.get('country', '').strip()
-        
-        query = supabase.table('ha_jobs_list').select('*').order('date_due', desc=False).order('created_at', desc=True)
-        
-        if assigned:
-            query = query.eq('assigned', assigned)
-        if done:
-            done_bool = done.lower() == 'true'
-            query = query.eq('done', done_bool)
-        if country:
-            query = query.eq('country', country)
-        
-        response = query.execute()
-        return jsonify(response.data), 200
-    except Exception as e:
-        app.logger.error(f"Error fetching jobs: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jobs', methods=['POST'])
-def create_job():
-    """Create a new job/task."""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Supabase not configured'}), 500
-        
-        data = request.get_json() or {}
-        name = (data.get('name') or '').strip()
-        if not name:
-            return jsonify({'error': 'Job name is required'}), 400
-        
-        payload = {
-            'name': name,
-            'assigned': (data.get('assigned') or '').strip() or None,
-            'date_due': data.get('date_due') or None,
-            'done': bool(data.get('done', False)),
-            'country': (data.get('country') or '').strip() or None,
-            'tags': data.get('tags') if isinstance(data.get('tags'), list) else [],
-        }
-        
-        response = supabase.table('ha_jobs_list').insert(payload).execute()
-        return jsonify(response.data[0] if response.data else payload), 201
-    except Exception as e:
-        app.logger.error(f"Error creating job: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jobs/<job_id>', methods=['PUT'])
-def update_job(job_id):
-    """Update a job/task."""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Supabase not configured'}), 500
-        
-        data = request.get_json() or {}
-        
-        update_data = {}
-        if 'name' in data:
-            update_data['name'] = data['name'].strip() if data['name'] else None
-        if 'assigned' in data:
-            update_data['assigned'] = data['assigned'].strip() if data['assigned'] else None
-        if 'date_due' in data:
-            update_data['date_due'] = data['date_due'] if data['date_due'] else None
-        if 'done' in data:
-            update_data['done'] = bool(data['done'])
-        if 'country' in data:
-            update_data['country'] = data['country'].strip() if data['country'] else None
-        if 'tags' in data:
-            if isinstance(data['tags'], list):
-                update_data['tags'] = data['tags']
-            elif isinstance(data['tags'], str):
-                update_data['tags'] = [tag.strip() for tag in data['tags'].split(',') if tag.strip()]
-            else:
-                update_data['tags'] = []
-        
-        update_data['updated_at'] = datetime.utcnow().isoformat()
-        
-        response = supabase.table('ha_jobs_list').update(update_data).eq('id', job_id).execute()
-        
-        if not response.data:
-            return jsonify({'error': f'Job not found: {job_id}'}), 404
-        
-        return jsonify(response.data[0]), 200
-    except Exception as e:
-        app.logger.error(f"Error updating job {job_id}: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jobs/<job_id>', methods=['DELETE'])
-def delete_job(job_id):
-    """Delete a job/task."""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Supabase not configured'}), 500
-        
-        supabase.table('ha_jobs_list').delete().eq('id', job_id).execute()
-        return jsonify({'message': 'Job deleted successfully'}), 200
-    except Exception as e:
-        app.logger.error(f"Error deleting job {job_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])

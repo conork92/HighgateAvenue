@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Muswell Hill{% if room %} – {{ room.label }}{% endif %} – Plans</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { background: #ffffff !important; color: #000000 !important; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260206">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+    <div class="container">
+        <header>
+            <h1>Muswell Hill</h1>
+            <p class="subtitle">Plans – mwh_136</p>
+        </header>
+
+        <nav class="design-tabs" aria-label="Room sections">
+            <a href="{{ url_for('muswell_hill_index') }}" class="design-tab {% if not room_slug %}design-tab--active{% endif %}">Rooms</a>
+            {% for slug, r in all_rooms.items() %}
+            <a href="{{ url_for('muswell_hill_room', room_slug=slug) }}" class="design-tab {% if room_slug == slug %}design-tab--active{% endif %}">{{ r.label }}</a>
+            {% endfor %}
+            <a href="{{ url_for('index') }}" class="design-tab">← Highgate Avenue</a>
+        </nav>
+
+        {% if room %}
+        <section class="exterior-section" id="section-{{ room_slug }}">
+            <h2 class="exterior-label">{{ room.label }}</h2>
+            {% if bucket_gs_path %}
+            <p class="photo-carousel-desc">Photos from your bucket</p>
+            {% endif %}
+            {% if room_images %}
+            <div class="hero-image {% if room.layout == 'double' %}plans-two{% endif %}">
+                {% for img in room_images %}
+                <img src="{{ img.url }}" alt="{{ img.alt }}" class="homepage-image" referrerpolicy="no-referrer">
+                {% endfor %}
+            </div>
+            {% elif bucket_gs_path %}
+            <p class="mwh-empty-bucket">No images in this folder yet. Add images to <code>{{ bucket_gs_path }}</code> in your bucket to see them here.</p>
+            {% endif %}
+        </section>
+        {% else %}
+        <section class="exterior-section">
+            <h2 class="exterior-label">Rooms</h2>
+            <p>Select a room above to view its plan image.</p>
+            <ul style="margin-top: 1rem; list-style: none;">
+                {% for slug, r in all_rooms.items() %}
+                <li style="margin-bottom: 0.5rem;"><a href="{{ url_for('muswell_hill_room', room_slug=slug) }}">{{ r.label }}</a></li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    </div>
+        </main>
+    </div>
+</body>
+</html>

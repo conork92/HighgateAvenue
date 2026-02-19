@@ -15,12 +15,8 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260206">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/categorize.css') }}?v=20260206">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
 </head>
 <body>
-    <div class="app-layout">
-        {% include '_sidebar.html' %}
-        <main class="main-with-sidebar">
     <div class="container">
         <header>
             <h1>Highgate Avenue</h1>
@@ -30,19 +26,10 @@
         <main>
             <nav class="design-tabs" aria-label="Design sections">
                 <a href="{{ url_for('index') }}" class="design-tab">All</a>
-                {% if sections_order %}
-                    {% for sid in sections_order %}
-                        {% if sid in all_sections %}
-                        <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab">{{ all_sections[sid].label }}</a>
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    {% for sid, s in all_sections.items() %}
-                    <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab">{{ s.label }}</a>
-                    {% endfor %}
-                {% endif %}
+                {% for sid, s in all_sections.items() %}
+                <a href="{{ url_for('design_section', section_id=sid) }}" class="design-tab">{{ s.label }}</a>
+                {% endfor %}
                 <a href="{{ url_for('photo_gallery') }}" class="design-tab">Photo gallery</a>
-                <a href="{{ url_for('jobs') }}" class="design-tab">Jobs</a>
                 <a href="{{ url_for('categorize') }}" class="design-tab design-tab--active">Categorize</a>
             </nav>
 
@@ -51,19 +38,16 @@
                     <label for="roomFilterCategorize">Filter by Room:</label>
                     <select id="roomFilterCategorize" class="filter-select">
                         <option value="">All Rooms</option>
-                        <option value="Bathroom">Bathroom</option>
-                        <option value="Bedroom">Bedroom</option>
-                        <option value="Dining Room">Dining Room</option>
-                        <option value="Entrance">Entrance</option>
-                        <option value="Garden">Garden</option>
-                        <option value="Hallway">Hallway</option>
-                        <option value="Kitchen">Kitchen</option>
                         <option value="Living Room">Living Room</option>
-                        <option value="Nursery">Nursery</option>
-                        <option value="Other">Other</option>
+                        <option value="Kitchen">Kitchen</option>
+                        <option value="Bedroom 1">Bedroom 1</option>
+                        <option value="Bedroom 2">Bedroom 2</option>
+                        <option value="Bedroom 3">Bedroom 3</option>
+                        <option value="Bathroom 1">Bathroom 1</option>
+                        <option value="Bathroom 2">Bathroom 2</option>
+                        <option value="Hallway">Hallway</option>
                         <option value="Stairways">Stairways</option>
-                        <option value="Study">Study</option>
-                        <option value="Summerhouse">Summerhouse</option>
+                        <option value="Other">Other</option>
                         <option value="">Uncategorized</option>
                     </select>
                 </div>
@@ -71,77 +55,7 @@
                     <label for="categoryFilter">Filter by Category:</label>
                     <input type="text" id="categoryFilter" class="filter-select" placeholder="Type to filter by category">
                 </div>
-                <button id="uploadImageBtn" class="upload-btn">+ Upload Image</button>
                 <button id="saveAllBtn" class="upload-btn">Save All Changes</button>
-            </div>
-
-            <!-- Upload Image Modal -->
-            <div id="uploadImageModal" class="modal" style="display: none;">
-                <div class="modal-content">
-                    <span class="close-upload-modal">&times;</span>
-                    <h2>Upload New Image</h2>
-                    
-                    <form id="uploadImageForm" enctype="multipart/form-data">
-                        <div class="upload-area" id="uploadImageArea">
-                            <input type="file" id="uploadImageInput" accept="image/*" style="display: none;">
-                            <div class="upload-placeholder">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
-                                <p>Drag & drop an image here, or click to select</p>
-                                <p class="upload-hint">PNG, JPG, GIF, WEBP (max 10MB)</p>
-                            </div>
-                            <div class="upload-preview" id="uploadImagePreview" style="display: none;">
-                                <img id="uploadPreviewImage" src="" alt="Preview">
-                                <button type="button" class="remove-image" id="removeUploadImage">Remove</button>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="uploadName">Name</label>
-                            <input type="text" id="uploadName" name="name" placeholder="Image name" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="uploadRoom">Room (optional)</label>
-                            <select id="uploadRoom" name="room">
-                                <option value="">Uncategorized</option>
-                                <option value="Bathroom">Bathroom</option>
-                                <option value="Bedroom">Bedroom</option>
-                                <option value="Dining Room">Dining Room</option>
-                                <option value="Entrance">Entrance</option>
-                                <option value="Garden">Garden</option>
-                                <option value="Hallway">Hallway</option>
-                                <option value="Kitchen">Kitchen</option>
-                                <option value="Living Room">Living Room</option>
-                                <option value="Nursery">Nursery</option>
-                                <option value="Other">Other</option>
-                                <option value="Stairways">Stairways</option>
-                                <option value="Study">Study</option>
-                                <option value="Summerhouse">Summerhouse</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="uploadCategory">Category (optional)</label>
-                            <input type="text" id="uploadCategory" name="category" placeholder="e.g., Furniture, Lighting">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="uploadTags">Tags (optional, comma-separated)</label>
-                            <input type="text" id="uploadTags" name="tags" placeholder="tag1, tag2, tag3">
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="button" class="btn-cancel" id="cancelUploadImage">Cancel</button>
-                            <button type="submit" class="btn-submit" id="submitUploadImage">Upload</button>
-                        </div>
-                    </form>
-
-                    <div id="uploadImageStatus" class="upload-status" style="display: none;"></div>
-                </div>
             </div>
 
             <div id="loading" class="loading">Loading design ideas...</div>
@@ -155,8 +69,6 @@
         <footer>
             <p>&copy; 2026 Highgate Avenue</p>
         </footer>
-    </div>
-        </main>
     </div>
 
     <script src="{{ url_for('static', filename='js/categorize.js') }}"></script>
