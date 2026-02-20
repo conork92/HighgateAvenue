@@ -400,6 +400,101 @@ def jobs():
         sections_order=DESIGN_SECTIONS_ORDER,
     )
 
+
+@app.route('/api/jobs', methods=['GET'], strict_slashes=False)
+def get_jobs():
+    """List all jobs from ha_jobs_list."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        r = supabase.table('ha_jobs_list').select('*').execute()
+        data = r.data or []
+        # Sort by created_at descending (newest first)
+        data.sort(key=lambda row: (row.get('created_at') or ''), reverse=True)
+        return jsonify(data), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching jobs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/jobs', methods=['POST'], strict_slashes=False)
+def create_job():
+    """Create a new job."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        payload = {
+            'name': name,
+            'assigned': (data.get('assigned') or '').strip() or None,
+            'date_due': data.get('date_due') or None,
+            'done': bool(data.get('done', False)),
+            'country': (data.get('country') or '').strip() or None,
+            'tags': data.get('tags') if isinstance(data.get('tags'), list) else [],
+        }
+        r = supabase.table('ha_jobs_list').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating job: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/jobs/<int:job_id>', methods=['PUT'])
+def update_job(job_id):
+    """Update a job by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        update_data = {}
+        if 'name' in data:
+            name = (data.get('name') or '').strip()
+            if not name:
+                return jsonify({'error': 'Name cannot be empty'}), 400
+            update_data['name'] = name
+        if 'assigned' in data:
+            update_data['assigned'] = (data.get('assigned') or '').strip() or None
+        if 'date_due' in data:
+            update_data['date_due'] = data.get('date_due') or None
+        if 'done' in data:
+            update_data['done'] = bool(data.get('done', False))
+        if 'country' in data:
+            update_data['country'] = (data.get('country') or '').strip() or None
+        if 'tags' in data:
+            if isinstance(data['tags'], list):
+                update_data['tags'] = data['tags']
+            elif isinstance(data['tags'], str):
+                update_data['tags'] = [t.strip() for t in data['tags'].split(',') if t.strip()]
+            else:
+                update_data['tags'] = []
+        if not update_data:
+            return jsonify({'error': 'No fields to update'}), 400
+        update_data['updated_at'] = datetime.utcnow().isoformat()
+        r = supabase.table('ha_jobs_list').update(update_data).eq('id', job_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else {}), 200
+    except Exception as e:
+        app.logger.error(f"Error updating job: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/jobs/<int:job_id>', methods=['DELETE'])
+def delete_job(job_id):
+    """Delete a job by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_jobs_list').delete().eq('id', job_id).execute()
+        return '', 204
+    except Exception as e:
+        app.logger.error(f"Error deleting job: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # --------- NEW: MUSWELL HILL "DESIGN SECTION" PAGES/EQUIVALENT ---------
 
 @app.route('/muswell-hill/designs/')
