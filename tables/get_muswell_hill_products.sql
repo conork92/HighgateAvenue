@@ -8,9 +8,8 @@ stable
 as $$
   SELECT p.*
   FROM ha_products p
-  WHERE p.tags && ARRAY['mwh', 'msw', 'appliances', 'baby']
-     OR p.category ILIKE '%appliance%'
-     OR p.category ILIKE '%baby%'
+  WHERE p.is_mwh = true
+     OR 'mwh' = ANY(p.tags)
   ORDER BY p.created_at DESC;
 $$;
 

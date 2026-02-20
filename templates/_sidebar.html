@@ -12,8 +12,8 @@
         <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button>
     </div>
     <ul class="sidebar-nav">
-        <li class="sidebar-parent {% if request.endpoint in ['index', 'design_section', 'photo_gallery', 'categorize'] %}expanded{% endif %}" id="sidebar-highgate">
-            <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="true" aria-controls="sidebar-highgate-sub">Highgate Avenue</span>
+        <li class="sidebar-parent" id="sidebar-highgate">
+            <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="false" aria-controls="sidebar-highgate-sub">Highgate Avenue</span>
             <ul class="sidebar-sub" id="sidebar-highgate-sub">
                 <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' and not section_filter %}active{% endif %}">All</a></li>
                 {% if sections_order is defined and all_sections is defined %}
@@ -31,7 +31,7 @@
                 <li><a href="{{ url_for('categorize') }}" class="{% if request.endpoint == 'categorize' %}active{% endif %}">Categorize</a></li>
             </ul>
         </li>
-        <li class="sidebar-parent {% if request.endpoint == 'muswell_hill_room' or request.endpoint == 'muswell_hill_products' %}expanded{% endif %}" id="sidebar-muswell">
+        <li class="sidebar-parent" id="sidebar-muswell">
             <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="false" aria-controls="sidebar-muswell-sub">Muswell Hill</span>
             <ul class="sidebar-sub" id="sidebar-muswell-sub">
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='front-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'front-room') %}active{% endif %}">Front Room</a></li>
@@ -91,7 +91,11 @@
     [].forEach.call(document.querySelectorAll('.sidebar-parent-label'), function(label) {
         label.addEventListener('click', function(e) {
             var parent = label.closest('.sidebar-parent');
-            if (parent) parent.classList.toggle('expanded');
+            if (parent) {
+                parent.classList.toggle('expanded');
+                var expanded = parent.classList.contains('expanded');
+                label.setAttribute('aria-expanded', expanded);
+            }
         });
     });
 })();

@@ -212,13 +212,6 @@ function initProducts() {
     const loadingEl = document.getElementById('productsLoading');
     if (!section || !grid) return;
 
-    // Check if section should be hidden (like floor-plans with no room filter)
-    const hideSection = section.getAttribute('data-hide-section') === 'true';
-    if (hideSection) {
-        section.style.display = 'none';
-        return;
-    }
-
     const productRoom = (section.getAttribute('data-product-room') || '').trim();
     loadProducts(productRoom, grid, loadingEl);
     initProductModal(section, grid, loadingEl);
@@ -279,6 +272,8 @@ function initProductModal(section, grid, loadingEl) {
         if (!link) return;
         const tagsInput = (document.getElementById('productTags').value || '').trim();
         const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
+        const isMwhEl = document.getElementById('productIsMwh');
+        const isMwh = isMwhEl ? isMwhEl.checked : false;
         const payload = {
             link,
             title: (document.getElementById('productTitle').value || '').trim() || null,
@@ -287,7 +282,8 @@ function initProductModal(section, grid, loadingEl) {
             category: (document.getElementById('productCategory').value || '').trim() || null,
             room: (document.getElementById('productRoom').value || '').trim() || null,
             website_name: (document.getElementById('productWebsiteName').value || '').trim() || null,
-            tags
+            tags,
+            is_mwh: isMwh
         };
         const submitBtn = document.getElementById('submitProduct');
         submitBtn.disabled = true;

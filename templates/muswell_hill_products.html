@@ -7,6 +7,59 @@
     <title>Highgate Avenue - Muswell Hill Products</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    <style>
+        .mwh-product-card {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-height: 0;
+        }
+        .mwh-product-card .product-tile {
+            flex: 1;
+            min-height: 0;
+        }
+        .mwh-product-card.x-removed { opacity: 0.65; }
+        .mwh-product-flags {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            padding: 0.5rem 0 0;
+            flex-wrap: wrap;
+            align-items: center;
+            border-top: 1px solid rgba(0,0,0,0.08);
+        }
+        .mwh-product-flags label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .mwh-product-flags input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+        }
+        .mwh-section { margin-bottom: 2.5rem; }
+        .mwh-section:first-child { margin-top: 0; }
+        .mwh-section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #000;
+            color: #000;
+        }
+        .mwh-section-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.25rem;
+            align-items: start;
+        }
+    </style>
 </head>
 <body>
     <div class="app-layout">
@@ -15,11 +68,83 @@
             <div class="container">
                 <header>
                     <h1>Muswell Hill – Products</h1>
-                    <p class="subtitle">Products tagged <strong>mwh</strong>, <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or in category Appliances / Baby.</p>
+                    <p class="subtitle">MWH products only (is_mwh or tag <strong>mwh</strong>), grouped by category.</p>
+                    <button type="button" id="mwhAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
                 </header>
+            <!-- Add Product Modal -->
+            <div id="mwhProductModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close-modal close-mwh-product-modal" aria-label="Close">&times;</span>
+                    <h2>Add Product</h2>
+                    <form id="mwhProductForm">
+                        <div class="form-group">
+                            <label for="mwhProductLink">Product link (e.g. Amazon) *</label>
+                            <input type="url" id="mwhProductLink" name="link" placeholder="https://..." required>
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductWebsiteName">Website name</label>
+                            <input type="text" id="mwhProductWebsiteName" name="website_name" placeholder="e.g. Amazon, IKEA">
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductTitle">Title</label>
+                            <input type="text" id="mwhProductTitle" name="title" placeholder="Product name">
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductImageUrl">Image URL</label>
+                            <input type="url" id="mwhProductImageUrl" name="image_url" placeholder="Optional">
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductPrice">Price</label>
+                            <input type="text" id="mwhProductPrice" name="price" placeholder="e.g. £24.99">
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductCategory">Category</label>
+                            <select id="mwhProductCategory" name="category">
+                                <option value="">—</option>
+                                <option value="Appliance">Appliance</option>
+                                <option value="Art">Art</option>
+                                <option value="Baby">Baby</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Decor">Decor</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Lighting">Lighting</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductRoom">Room</label>
+                            <select id="mwhProductRoom" name="room">
+                                <option value="">—</option>
+                                <option value="Front Room">Front Room</option>
+                                <option value="Bedroom">Bedroom</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Nursery">Nursery</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductTags">Tags (comma-separated)</label>
+                            <input type="text" id="mwhProductTags" name="tags" placeholder="e.g. mwh">
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mwhProductIsMwh" name="is_mwh" value="1">
+                                <span>Is MWH (show on this page)</span>
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" id="mwhCancelProduct">Cancel</button>
+                            <button type="submit" class="btn-submit" id="mwhSubmitProduct">Add Product</button>
+                        </div>
+                    </form>
+                    <div id="mwhProductStatus" class="upload-status" style="display: none;"></div>
+                </div>
+            </div>
                 <div id="mwhProductsLoading" class="loading">Loading products...</div>
-                <div id="mwhProductsGrid" class="products-grid">
-                    <!-- Filled by JS -->
+                <div id="mwhProductsGrid">
+                    <!-- Filled by JS: sections with subheaders + product grids -->
                 </div>
             </div>
         </main>
@@ -35,36 +160,161 @@
                 if (p.link && p.link.includes('amazon')) return 'Amazon';
                 return '';
             }
+            function updateProductFlag(productId, field, value) {
+                fetch('/api/products/' + productId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [field]: value })
+                }).then(function(r) {
+                    if (!r.ok) console.error('Failed to update product', productId, field, value);
+                }).catch(function(e) { console.error(e); });
+            }
             const loading = document.getElementById('mwhProductsLoading');
             const grid = document.getElementById('mwhProductsGrid');
-            fetch('/api/muswell-hill-products')
-                .then(r => {
-                    if (!r.ok) {
-                        throw new Error('HTTP ' + r.status);
+            const modal = document.getElementById('mwhProductModal');
+            const form = document.getElementById('mwhProductForm');
+            const statusEl = document.getElementById('mwhProductStatus');
+
+            function getProductCategoryKey(p) {
+                var cat = (p.category || '').trim();
+                return cat || 'Uncategorised';
+            }
+            function renderCard(p) {
+                var hasImage = p.image_url && p.image_url.trim();
+                var imgHtml = hasImage ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title || 'Product') + '" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">' : '';
+                var title = escapeHtml(p.title || 'Product');
+                var rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+                var displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
+                var price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
+                var websiteDisplay = getWebsiteDisplay(p);
+                var websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
+                var link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+                        var bokLikes = !!p.bok_likes;
+                        var xRemove = !!p.x_remove;
+                        var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
+                        var id = p.id;
+                        return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-x-remove" data-id="' + id + '" ' + (xRemove ? 'checked' : '') + '> Remove</label></div></div>';
+            }
+            function renderProductList(list) {
+                if (list.length === 0) {
+                    grid.innerHTML = '<p class="subtitle">No MWH products yet. Add products with tag <strong>mwh</strong> or check Is MWH, and set a category to see them grouped.</p>';
+                    return;
+                }
+                var byCategory = {};
+                list.forEach(function(p) {
+                    var key = getProductCategoryKey(p);
+                    if (!byCategory[key]) byCategory[key] = [];
+                    byCategory[key].push(p);
+                });
+                var categoryOrder = Object.keys(byCategory).sort(function(a, b) {
+                    if (a === 'Uncategorised') return 1;
+                    if (b === 'Uncategorised') return -1;
+                    return a.localeCompare(b);
+                });
+                var html = '';
+                categoryOrder.forEach(function(cat) {
+                    var productsInSection = byCategory[cat];
+                    if (!productsInSection.length) return;
+                    html += '<div class="mwh-section"><h2 class="mwh-section-title">' + escapeHtml(cat) + '</h2><div class="mwh-section-grid">';
+                    productsInSection.forEach(function(p) { html += renderCard(p); });
+                    html += '</div></div>';
+                });
+                grid.innerHTML = html;
+                grid.querySelectorAll('.mwh-bok-likes').forEach(function(cb) {
+                    cb.addEventListener('change', function() { updateProductFlag(cb.dataset.id, 'bok_likes', cb.checked); });
+                });
+                grid.querySelectorAll('.mwh-x-remove').forEach(function(cb) {
+                    cb.addEventListener('change', function() {
+                        updateProductFlag(cb.dataset.id, 'x_remove', cb.checked);
+                        var card = cb.closest('.mwh-product-card');
+                        if (card) card.classList.toggle('x-removed', cb.checked);
+                    });
+                });
+            }
+
+            function openProductModal() {
+                if (modal) modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+            }
+            function closeProductModal() {
+                if (modal) modal.style.display = 'none';
+                document.body.style.overflow = '';
+                if (form) form.reset();
+                if (statusEl) statusEl.style.display = 'none';
+            }
+
+            if (document.getElementById('mwhAddProductBtn')) {
+                document.getElementById('mwhAddProductBtn').addEventListener('click', openProductModal);
+            }
+            if (document.querySelector('.close-mwh-product-modal')) {
+                document.querySelector('.close-mwh-product-modal').addEventListener('click', closeProductModal);
+            }
+            if (document.getElementById('mwhCancelProduct')) {
+                document.getElementById('mwhCancelProduct').addEventListener('click', closeProductModal);
+            }
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var link = (document.getElementById('mwhProductLink').value || '').trim();
+                    if (!link) {
+                        if (statusEl) { statusEl.textContent = 'Link is required.'; statusEl.style.display = 'block'; statusEl.className = 'upload-status error'; }
+                        return;
                     }
+                    var tagsStr = (document.getElementById('mwhProductTags').value || '').trim();
+                    var tags = tagsStr ? tagsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+                    var isMwhEl = document.getElementById('mwhProductIsMwh');
+                    var isMwh = isMwhEl ? isMwhEl.checked : false;
+                    var payload = {
+                        link: link,
+                        title: (document.getElementById('mwhProductTitle').value || '').trim() || null,
+                        image_url: (document.getElementById('mwhProductImageUrl').value || '').trim() || null,
+                        price: (document.getElementById('mwhProductPrice').value || '').trim() || null,
+                        category: (document.getElementById('mwhProductCategory').value || '').trim() || null,
+                        room: (document.getElementById('mwhProductRoom').value || '').trim() || null,
+                        website_name: (document.getElementById('mwhProductWebsiteName').value || '').trim() || null,
+                        tags: tags,
+                        is_mwh: isMwh
+                    };
+                    var submitBtn = document.getElementById('mwhSubmitProduct');
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Adding...'; statusEl.className = 'upload-status loading'; }
+                    fetch('/api/products', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }).then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+                    .then(function(result) {
+                        if (submitBtn) submitBtn.disabled = false;
+                        if (!result.ok) {
+                            if (statusEl) { statusEl.textContent = result.data && result.data.error ? result.data.error : 'Failed to add product'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                            return;
+                        }
+                        if (statusEl) { statusEl.textContent = 'Product added.'; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
+                        closeProductModal();
+                        loading.style.display = 'block';
+                        return fetch('/api/muswell-hill-products').then(function(r) { return r.json(); });
+                    }).then(function(products) {
+                        loading.style.display = 'none';
+                        if (Array.isArray(products)) renderProductList(products);
+                    }).catch(function(err) {
+                        if (submitBtn) submitBtn.disabled = false;
+                        if (statusEl) { statusEl.textContent = err.message || 'Error'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                    });
+                });
+            }
+
+            fetch('/api/muswell-hill-products')
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
                 })
-                .then(products => {
+                .then(function(products) {
                     loading.style.display = 'none';
-                    const list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
-                    grid.innerHTML = list.length === 0
-                        ? '<p class="subtitle">No products yet. Add products with tags <strong>mwh</strong>, <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or category Baby / Appliance.</p>'
-                        : list.map(p => {
-                            const hasImage = p.image_url && p.image_url.trim();
-                            const imgHtml = hasImage
-                                ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title || 'Product') + '" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">'
-                                : '';
-                            const title = escapeHtml(p.title || 'Product');
-                            const rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
-                            const displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
-                            const price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
-                            const websiteDisplay = getWebsiteDisplay(p);
-                            const websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
-                            const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
-                            return '<div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div>';
-                        }).join('');
+                    var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                    renderProductList(list);
                 })
-                .catch(e => {
+                .catch(function(e) {
                     loading.style.display = 'none';
                     grid.innerHTML = '<p class="error">Failed to load products.</p>';
                 });

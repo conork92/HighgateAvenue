@@ -12,10 +12,19 @@ create table if not exists ha_products (
   room text,
   website_name text,
   tags text[] default '{}',
+  bok_likes boolean not null default false,
+  x_remove boolean not null default false,
+  is_mwh boolean not null default false,
   created_at timestamptz default now()
 );
 
 comment on table ha_products is 'Products to buy (e.g. Amazon links) with image, price, category, room, website_name, tags';
+comment on column ha_products.bok_likes is 'Muswell Hill: book/likes flag';
+comment on column ha_products.x_remove is 'Muswell Hill: exclude/remove from consideration';
+comment on column ha_products.is_mwh is 'Muswell Hill: true when product is for MWH or has tag mwh';
 
--- If table already exists, add the column:
+-- If table already exists, add columns in Supabase SQL Editor:
 -- alter table ha_products add column if not exists website_name text;
+-- alter table ha_products add column if not exists bok_likes boolean not null default false;
+-- alter table ha_products add column if not exists x_remove boolean not null default false;
+-- alter table ha_products add column if not exists is_mwh boolean not null default false;

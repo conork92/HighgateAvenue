@@ -199,6 +199,7 @@
                             <select id="productCategory" name="category">
                                 <option value="">—</option>
                                 <option value="Appliance">Appliance</option>
+                                <option value="Art">Art</option>
                                 <option value="Baby">Baby</option>
                                 <option value="Bathroom">Bathroom</option>
                                 <option value="Decor">Decor</option>
@@ -237,7 +238,13 @@
                         </div>
                         <div class="form-group">
                             <label for="productTags">Tags (comma-separated)</label>
-                            <input type="text" id="productTags" name="tags" placeholder="e.g. modern, wooden, accent">
+                            <input type="text" id="productTags" name="tags" placeholder="e.g. modern, wooden, mwh">
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="productIsMwh" name="is_mwh" value="1">
+                                <span>Is MWH (show on Muswell Hill products page)</span>
+                            </label>
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn-cancel" id="cancelProduct">Cancel</button>
@@ -281,7 +288,7 @@
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
             {% else %}
-            <section class="products-section" id="productsSection" data-product-room="" data-hide-section="true" style="display: none;">
+            <section class="products-section" id="productsSection" data-product-room="">
                 <h2 class="exterior-label">Products</h2>
                 <div id="productsGrid" class="products-grid">
                     <!-- Products loaded by JS -->
