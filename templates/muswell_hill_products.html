@@ -41,6 +41,26 @@
             height: 1rem;
             flex-shrink: 0;
         }
+        .mwh-edit-product {
+            margin-left: auto;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--gray-dark, #666);
+            background: transparent;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .mwh-edit-product:hover {
+            border-color: #000;
+            color: #000;
+        }
+        .mwh-edit-product:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
         .mwh-section { margin-bottom: 2.5rem; }
         .mwh-section:first-child { margin-top: 0; }
         .mwh-section-title {
@@ -75,11 +95,12 @@
             <div id="mwhProductModal" class="modal" style="display: none;">
                 <div class="modal-content">
                     <span class="close-modal close-mwh-product-modal" aria-label="Close">&times;</span>
-                    <h2>Add Product</h2>
+                    <h2 id="mwhProductModalTitle">Add Product</h2>
                     <form id="mwhProductForm">
                         <div class="form-group">
-                            <label for="mwhProductLink">Product link (e.g. Amazon) *</label>
+                            <label for="mwhProductLink">Product link (e.g. Amazon, Gumtree) *</label>
                             <input type="url" id="mwhProductLink" name="link" placeholder="https://..." required>
+                            <button type="button" id="mwhFetchPreviewBtn" class="btn-fetch-preview" style="margin-top: 0.5rem;" title="Fill title, image, price and site from the link">Fetch from link</button>
                         </div>
                         <div class="form-group">
                             <label for="mwhProductWebsiteName">Website name</label>
@@ -138,6 +159,7 @@
                             <button type="button" class="btn-cancel" id="mwhCancelProduct">Cancel</button>
                             <button type="submit" class="btn-submit" id="mwhSubmitProduct">Add Product</button>
                         </div>
+                        <input type="hidden" id="mwhEditingProductId" value="">
                     </form>
                     <div id="mwhProductStatus" class="upload-status" style="display: none;"></div>
                 </div>
@@ -193,7 +215,7 @@
                         var xRemove = !!p.x_remove;
                         var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
                         var id = p.id;
-                        return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-x-remove" data-id="' + id + '" ' + (xRemove ? 'checked' : '') + '> Remove</label></div></div>';
+                        return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-x-remove" data-id="' + id + '" ' + (xRemove ? 'checked' : '') + '> Remove</label><button type="button" class="mwh-edit-product" data-id="' + id + '" title="Edit product">Edit</button></div></div>';
             }
             function renderProductList(list) {
                 if (list.length === 0) {
@@ -230,9 +252,42 @@
                         if (card) card.classList.toggle('x-removed', cb.checked);
                     });
                 });
+                grid.querySelectorAll('.mwh-edit-product').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var id = btn.getAttribute('data-id');
+                        if (!id) return;
+                        btn.disabled = true;
+                        fetch('/api/products/' + id)
+                            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+                            .then(function(result) {
+                                btn.disabled = false;
+                                if (!result.ok) return;
+                                var p = result.data;
+                                document.getElementById('mwhEditingProductId').value = id;
+                                document.getElementById('mwhProductModalTitle').textContent = 'Edit Product';
+                                document.getElementById('mwhSubmitProduct').textContent = 'Save changes';
+                                document.getElementById('mwhProductLink').value = p.link || '';
+                                document.getElementById('mwhProductWebsiteName').value = p.website_name || '';
+                                document.getElementById('mwhProductTitle').value = p.title || '';
+                                document.getElementById('mwhProductImageUrl').value = p.image_url || '';
+                                document.getElementById('mwhProductPrice').value = p.price || '';
+                                document.getElementById('mwhProductCategory').value = p.category || '';
+                                document.getElementById('mwhProductRoom').value = p.room || '';
+                                document.getElementById('mwhProductTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
+                                document.getElementById('mwhProductIsMwh').checked = !!p.is_mwh;
+                                if (modal) modal.style.display = 'flex';
+                                document.body.style.overflow = 'hidden';
+                                if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+                            })
+                            .catch(function() { btn.disabled = false; });
+                    });
+                });
             }
 
             function openProductModal() {
+                document.getElementById('mwhEditingProductId').value = '';
+                document.getElementById('mwhProductModalTitle').textContent = 'Add Product';
+                document.getElementById('mwhSubmitProduct').textContent = 'Add Product';
                 if (modal) modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
@@ -241,6 +296,9 @@
                 if (modal) modal.style.display = 'none';
                 document.body.style.overflow = '';
                 if (form) form.reset();
+                document.getElementById('mwhEditingProductId').value = '';
+                document.getElementById('mwhProductModalTitle').textContent = 'Add Product';
+                document.getElementById('mwhSubmitProduct').textContent = 'Add Product';
                 if (statusEl) statusEl.style.display = 'none';
             }
 
@@ -252,6 +310,33 @@
             }
             if (document.getElementById('mwhCancelProduct')) {
                 document.getElementById('mwhCancelProduct').addEventListener('click', closeProductModal);
+            }
+            var fetchPreviewBtn = document.getElementById('mwhFetchPreviewBtn');
+            var linkInput = document.getElementById('mwhProductLink');
+            if (fetchPreviewBtn && linkInput) {
+                fetchPreviewBtn.addEventListener('click', function() {
+                    var url = (linkInput.value || '').trim();
+                    if (!url) return;
+                    fetchPreviewBtn.disabled = true;
+                    fetchPreviewBtn.textContent = 'Fetching...';
+                    fetch('/api/products/preview?url=' + encodeURIComponent(url))
+                        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+                        .then(function(result) {
+                            fetchPreviewBtn.disabled = false;
+                            fetchPreviewBtn.textContent = 'Fetch from link';
+                            if (result.ok && result.data) {
+                                var d = result.data;
+                                if (d.title) document.getElementById('mwhProductTitle').value = d.title;
+                                if (d.image_url) document.getElementById('mwhProductImageUrl').value = d.image_url;
+                                if (d.website_name) document.getElementById('mwhProductWebsiteName').value = d.website_name;
+                                if (d.price) document.getElementById('mwhProductPrice').value = d.price;
+                            }
+                        })
+                        .catch(function() {
+                            fetchPreviewBtn.disabled = false;
+                            fetchPreviewBtn.textContent = 'Fetch from link';
+                        });
+                });
             }
             if (form) {
                 form.addEventListener('submit', function(e) {
@@ -277,20 +362,23 @@
                         is_mwh: isMwh
                     };
                     var submitBtn = document.getElementById('mwhSubmitProduct');
+                    var editId = (document.getElementById('mwhEditingProductId').value || '').trim();
                     if (submitBtn) submitBtn.disabled = true;
-                    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Adding...'; statusEl.className = 'upload-status loading'; }
-                    fetch('/api/products', {
-                        method: 'POST',
+                    if (statusEl) { statusEl.style.display = 'block'; statusEl.className = 'upload-status loading'; statusEl.textContent = editId ? 'Saving...' : 'Adding...'; }
+                    var url = editId ? '/api/products/' + editId : '/api/products';
+                    var method = editId ? 'PATCH' : 'POST';
+                    fetch(url, {
+                        method: method,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     }).then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
                     .then(function(result) {
                         if (submitBtn) submitBtn.disabled = false;
                         if (!result.ok) {
-                            if (statusEl) { statusEl.textContent = result.data && result.data.error ? result.data.error : 'Failed to add product'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                            if (statusEl) { statusEl.textContent = result.data && result.data.error ? result.data.error : (editId ? 'Failed to save.' : 'Failed to add product'); statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
                             return;
                         }
-                        if (statusEl) { statusEl.textContent = 'Product added.'; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
+                        if (statusEl) { statusEl.textContent = editId ? 'Saved.' : 'Product added.'; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
                         closeProductModal();
                         loading.style.display = 'block';
                         return fetch('/api/muswell-hill-products').then(function(r) { return r.json(); });

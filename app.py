@@ -13,9 +13,11 @@ import requests
 import hmac
 import hashlib
 import base64
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, unquote
 from io import BytesIO
+import re
 import boto3
+from bs4 import BeautifulSoup
 from botocore.client import Config
 
 load_dotenv()
@@ -90,12 +92,12 @@ def init_gcp_storage():
                         GCP_CREDENTIALS_JSON)
         else:
             credentials = None
-
+        
         if credentials:
             gcp_storage_client = storage.Client(credentials=credentials, project=GCP_PROJECT_ID)
         else:
             gcp_storage_client = storage.Client(project=GCP_PROJECT_ID)
-
+        
         gcp_bucket = gcp_storage_client.bucket(GCP_BUCKET_NAME)
         app.logger.info(f"GCP Storage initialized with bucket: {GCP_BUCKET_NAME}")
     except Exception as e:
@@ -589,6 +591,308 @@ def photo_gallery():
         product_room_filter=None,
     )
 
+def _title_from_url(url):
+    """Derive a readable product title from the URL path (e.g. Amazon /Product-Name/dp/...)."""
+    try:
+        parsed = urlparse(url)
+        path = (parsed.path or '').strip('/')
+        if not path:
+            return None
+        segments = [unquote(s) for s in path.split('/') if s]
+        # Amazon: .../Product-Name/dp/ASIN/... or /gp/product/...
+        if 'amazon' in (parsed.netloc or '').lower():
+            for i, seg in enumerate(segments):
+                if seg.lower() in ('dp', 'gp') and i > 0:
+                    # title is the segment before /dp/ or /gp/
+                    raw = segments[i - 1]
+                    # replace hyphens with spaces, collapse multiple spaces
+                    title = re.sub(r'[-_]+', ' ', raw).strip()
+                    title = re.sub(r'\s+', ' ', title)
+                    if len(title) > 3:
+                        return title[:200] if len(title) > 200 else title
+            # fallback: first path segment that looks like a name (not dp, ref, etc.)
+            for seg in segments:
+                if seg.lower() in ('dp', 'gp', 'ref', 's', 'pf'): continue
+                if re.match(r'^[A-Z0-9]{10,}$', seg): continue  # ASIN
+                raw = re.sub(r'[-_]+', ' ', unquote(seg)).strip()
+                if len(raw) > 2:
+                    return raw[:200]
+        # Gumtree: /p/category/slug/123456
+        if 'gumtree' in (parsed.netloc or '').lower() and len(segments) >= 2:
+            slug = segments[-2] if segments[-1].isdigit() else segments[-1]
+            raw = re.sub(r'[-_]+', ' ', unquote(slug)).strip()
+            if raw:
+                return raw[:200]
+        # IKEA: /gb/en/p/product-name-articleid/ - last segment is slug, often ends with article number
+        if 'ikea' in (parsed.netloc or '').lower() and segments:
+            for seg in reversed(segments):
+                if seg.isdigit() or seg.lower() in ('p', 'en', 'gb', 'gb-en'): continue
+                if '-' in seg:
+                    # strip trailing -articleNumber (e.g. -50571257)
+                    raw = re.sub(r'-\d{6,}$', '', seg)
+                    raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
+        # Habitat: /product/123 - no title in URL
+        if 'habitat' in (parsed.netloc or '').lower():
+            pass  # rely on og:title from fetch
+        # Generic: use last non-numeric segment
+        for seg in reversed(segments):
+            if seg.isdigit(): continue
+            raw = re.sub(r'[-_]+', ' ', unquote(seg)).strip()
+            if len(raw) > 1:
+                return raw[:200]
+        return segments[-1][:200] if segments else None
+    except Exception:
+        return None
+
+
+def _website_name_from_url(url):
+    """Get display name for the site from URL host."""
+    try:
+        host = urlparse(url).netloc or ''
+        host_lower = host.replace('www.', '').lower()
+        if 'amazon.' in host_lower:
+            return 'Amazon'
+        if 'gumtree' in host_lower:
+            return 'Gumtree'
+        if 'ikea' in host_lower:
+            return 'IKEA'
+        if 'habitat' in host_lower:
+            return 'Habitat'
+        if 'johnlewis' in host_lower:
+            return 'John Lewis'
+        part = host.split('.')[-2] if '.' in host else host
+        if part:
+            return part[:1].upper() + part[1:].lower()
+    except Exception:
+        pass
+    return None
+
+
+def _normalize_4rgos_image_url(img_url):
+    """Convert Habitat/Argos 4rgos.it image URLs to the high-quality /i/ format.
+    e.g. //media.4rgos.it/s/Argos/8866497_R_SET?... -> https://media.4rgos.it/i/Argos/8866497_R_Z001A?w=1500&h=1500&qlt=70&fmt=webp
+    """
+    if not img_url or 'media.4rgos.it' not in img_url:
+        return img_url
+    try:
+        # Normalize protocol
+        url = img_url.strip()
+        if url.startswith('//'):
+            url = 'https:' + url
+        parsed = urlparse(url)
+        path = (parsed.path or '').strip('/')
+        # Match /s/Argos/8866497_R_SET or /i/Argos/8866497_R_Z001A or similar
+        m = re.search(r'(?:s|i)/Argos/(\d+)(?:_[^/]+)?', path, re.I)
+        if not m:
+            return img_url
+        product_id = m.group(1)
+        return f'https://media.4rgos.it/i/Argos/{product_id}_R_Z001A?w=1500&h=1500&qlt=70&fmt=webp'
+    except Exception:
+        return img_url
+
+
+def _fetch_product_preview(url):
+    """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
+    if not url or not url.startswith(('http://', 'https://')):
+        return None
+    out = {}
+    # Always set website_name and URL-derived title so we have something even when fetch fails
+    out['website_name'] = _website_name_from_url(url)
+    url_title = _title_from_url(url)
+    if url_title:
+        out['title'] = url_title
+
+    def _do_fetch(user_agent=None):
+        headers = {
+            'User-Agent': user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-GB,en;q=0.9',
+        }
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        r.raise_for_status()
+        return BeautifulSoup(r.text, 'html.parser')
+
+    try:
+        soup = _do_fetch()
+    except Exception as e:
+        app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
+        # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
+        retry_domains = ('amazon', 'habitat', 'ikea')
+        if any(d in url.lower() for d in retry_domains):
+            try:
+                soup = _do_fetch(user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
+            except Exception as e2:
+                app.logger.warning(f"Product preview retry failed: {e2}")
+                return out if out.get('title') or out.get('website_name') else None
+        else:
+            return out if out.get('title') or out.get('website_name') else None
+
+    # Open Graph / generic meta
+    og_title = soup.find('meta', property='og:title')
+    if og_title and og_title.get('content'):
+        out['title'] = og_title['content'].strip()
+    og_image = soup.find('meta', property='og:image')
+    if og_image and og_image.get('content'):
+        raw_image = og_image['content'].strip()
+        out['image_url'] = _normalize_4rgos_image_url(raw_image) or raw_image
+
+    # Price: site-specific and fallback regex
+    price = None
+    if 'gumtree' in url.lower():
+        try:
+            for script in soup.find_all('script', type='application/ld+json'):
+                if script.string and '"price"' in script.string:
+                    data = json.loads(script.string)
+                    if isinstance(data, dict) and 'offers' in data:
+                        offers = data['offers']
+                        if isinstance(offers, dict) and 'price' in offers:
+                            price = str(offers.get('price', ''))
+                        elif isinstance(offers, list) and offers and 'price' in offers[0]:
+                            price = str(offers[0]['price'])
+                    if price:
+                        break
+            if not price:
+                text = soup.get_text()
+                m = re.search(r'£\s*[\d,]+(?:\.\d{2})?', text)
+                if m:
+                    price = m.group(0).strip()
+        except Exception:
+            pass
+    if not price and 'amazon' in url.lower():
+        try:
+            for script in soup.find_all('script', type='application/ld+json'):
+                if script.string and 'price' in script.string.lower():
+                    data = json.loads(script.string)
+                    if isinstance(data, dict) and data.get('@type') == 'Product' and 'offers' in data:
+                        off = data['offers']
+                        if isinstance(off, dict) and 'price' in off:
+                            price = str(off.get('price', ''))
+                        elif isinstance(off, list) and off and 'price' in off[0]:
+                            price = str(off[0]['price'])
+                    if price:
+                        break
+            if not price:
+                text = soup.get_text()
+                m = re.search(r'£\s*[\d,]+(?:\.\d{2})?', text)
+                if m:
+                    price = m.group(0).strip()
+        except Exception:
+            pass
+    # Habitat: JSON-LD Product/offers or £ regex
+    if not price and 'habitat' in url.lower():
+        try:
+            for script in soup.find_all('script', type='application/ld+json'):
+                if not script.string:
+                    continue
+                try:
+                    data = json.loads(script.string)
+                except Exception:
+                    continue
+                if isinstance(data, dict) and data.get('@type') == 'Product':
+                    off = data.get('offers')
+                    if isinstance(off, dict) and 'price' in off:
+                        pv = off.get('price')
+                        if pv is not None:
+                            price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                            break
+                    if isinstance(off, list) and off and 'price' in off[0]:
+                        pv = off[0].get('price')
+                        if pv is not None:
+                            price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                            break
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and item.get('@type') == 'Product' and 'offers' in item:
+                            off = item['offers']
+                            if isinstance(off, dict) and 'price' in off:
+                                pv = off.get('price')
+                                if pv is not None:
+                                    price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                                    break
+                if price:
+                    break
+            if not price:
+                text = soup.get_text()
+                m = re.search(r'£\s*[\d,]+(?:\.\d{2})?', text)
+                if m:
+                    price = m.group(0).strip()
+        except Exception:
+            pass
+    # IKEA: JSON-LD Product/offers or "Price £ 119" / £119 in page
+    if not price and 'ikea' in url.lower():
+        try:
+            for script in soup.find_all('script', type='application/ld+json'):
+                if not script.string:
+                    continue
+                try:
+                    data = json.loads(script.string)
+                except Exception:
+                    continue
+                if isinstance(data, dict) and data.get('@type') == 'Product':
+                    off = data.get('offers')
+                    if isinstance(off, dict) and 'price' in off:
+                        pv = off.get('price')
+                        if pv is not None:
+                            price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                            break
+                    if isinstance(off, list) and off and 'price' in off[0]:
+                        pv = off[0].get('price')
+                        if pv is not None:
+                            price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                            break
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and item.get('@type') == 'Product' and 'offers' in item:
+                            off = item['offers']
+                            if isinstance(off, dict) and 'price' in off:
+                                pv = off.get('price')
+                                if pv is not None:
+                                    price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                                    break
+                if price:
+                    break
+            if not price:
+                text = soup.get_text()
+                # IKEA often shows "Price £ 119" or "£119"
+                m = re.search(r'£\s*[\d,]+(?:\.\d{2})?', text)
+                if m:
+                    price = m.group(0).strip()
+        except Exception:
+            pass
+    if not price:
+        try:
+            text = soup.get_text()
+            m = re.search(r'[£$]\s*[\d,]+(?:\.\d{2})?', text)
+            if m:
+                price = m.group(0).strip()
+        except Exception:
+            pass
+    if price:
+        out['price'] = price
+
+    return out
+
+
+@app.route('/api/products/preview')
+def product_preview():
+    """GET ?url=... - fetch link and return title, image_url, website_name, price. Always returns 200 with at least URL-derived title/website_name when possible."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Invalid URL'}), 400
+    data = _fetch_product_preview(url)
+    if not data:
+        # Last resort: only from URL
+        data = {
+            'title': _title_from_url(url) or 'Product',
+            'website_name': _website_name_from_url(url),
+        }
+    return jsonify(data), 200
+
+
 @app.route('/api/products')
 def get_products():
     """List products from ha_products. Optional query: room=, tag=."""
@@ -651,20 +955,58 @@ def create_product():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/products/<int:product_id>')
+def get_product(product_id):
+    """Get a single product by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        r = supabase.table('ha_products').select('*').eq('id', product_id).execute()
+        rows = r.data or []
+        if not rows:
+            return jsonify({'error': 'Product not found'}), 404
+        return jsonify(rows[0]), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching product: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/products/<int:product_id>', methods=['PATCH'])
 def update_product(product_id):
-    """Update a product (e.g. bok_likes, x_remove for Muswell Hill)."""
+    """Update a product (full edit: link, title, image_url, price, category, room, website_name, tags, is_mwh; or flags bok_likes, x_remove)."""
     if not supabase:
         return jsonify({'error': 'Database not available'}), 503
     try:
         data = request.get_json() or {}
         update_data = {}
+        # Flags (Muswell Hill)
         if 'bok_likes' in data:
             update_data['bok_likes'] = bool(data['bok_likes'])
         if 'x_remove' in data:
             update_data['x_remove'] = bool(data['x_remove'])
         if 'is_mwh' in data:
             update_data['is_mwh'] = bool(data['is_mwh'])
+        # Full product fields
+        if 'link' in data and (data.get('link') or '').strip():
+            update_data['link'] = (data.get('link') or '').strip()
+        if 'title' in data:
+            update_data['title'] = (data.get('title') or '').strip() or None
+        if 'image_url' in data:
+            update_data['image_url'] = (data.get('image_url') or '').strip() or None
+        if 'price' in data:
+            update_data['price'] = (data.get('price') or '').strip() or None
+        if 'category' in data:
+            update_data['category'] = (data.get('category') or '').strip() or None
+        if 'room' in data:
+            update_data['room'] = (data.get('room') or '').strip() or None
+        if 'website_name' in data:
+            update_data['website_name'] = (data.get('website_name') or '').strip() or None
+        if 'tags' in data:
+            tags = data['tags']
+            if isinstance(tags, list):
+                update_data['tags'] = [str(t).strip() for t in tags if str(t).strip()]
+            else:
+                update_data['tags'] = [t.strip() for t in (tags or '').split(',') if t.strip()]
         if not update_data:
             return jsonify({'error': 'No fields to update'}), 400
         r = supabase.table('ha_products').update(update_data).eq('id', product_id).execute()

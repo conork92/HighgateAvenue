@@ -588,6 +588,33 @@ header h1 {
     font-weight: 500;
 }
 
+.product-tile-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.product-edit-btn {
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--gray-dark);
+    background: transparent;
+    border: 1px solid var(--gray-medium);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+    align-self: flex-start;
+}
+.product-edit-btn:hover {
+    border-color: var(--black);
+    color: var(--black);
+}
+.product-edit-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 .tag:hover {
     background: var(--black);
     color: var(--white);
@@ -864,6 +891,41 @@ footer {
 .btn-submit:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Fetch-from-URL button: secondary action next to link input */
+.btn-fetch-preview,
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--gray-darker);
+    background: var(--gray-light);
+    border: 1px solid var(--gray-medium);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+    letter-spacing: 0.02em;
+}
+.btn-fetch-preview:hover,
+.btn-secondary:hover {
+    background: var(--gray-medium);
+    border-color: var(--gray-dark);
+    color: var(--black);
+}
+.btn-fetch-preview:disabled,
+.btn-secondary:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+.btn-fetch-preview::before {
+    content: "↗";
+    font-size: 1em;
+    opacity: 0.85;
 }
 
 .btn-submit:disabled:hover {
