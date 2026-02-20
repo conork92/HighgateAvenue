@@ -1,4 +1,12 @@
+<!-- Mobile: top bar with menu button (visible only on small screens) -->
+<div class="mobile-header" id="mobileHeader" aria-hidden="true">
+    <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu" title="Open menu">☰</button>
+    <a href="{{ url_for('index') }}" class="sidebar-brand">Highgate Avenue</a>
+</div>
+<!-- Overlay to close drawer when tapping outside (mobile only) -->
+<div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 <nav class="sidebar" id="sidebar" aria-label="Main navigation">
+    <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu" title="Close menu">×</button>
     <div class="sidebar-header">
         <a href="{{ url_for('index') }}" class="sidebar-brand">Highgate Avenue</a>
         <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button>
@@ -46,6 +54,9 @@
     var sidebar = document.getElementById('sidebar');
     var toggle = document.getElementById('sidebarToggle');
     var openBtn = document.getElementById('sidebarOpen');
+    var mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    var sidebarOverlay = document.getElementById('sidebarOverlay');
+    var sidebarClose = document.getElementById('sidebarClose');
     if (!layout || !sidebar) return;
 
     function isCollapsed() { return layout.classList.contains('sidebar-collapsed'); }
@@ -55,9 +66,27 @@
         if (openBtn) openBtn.style.display = collapsed ? 'block' : 'none';
         try { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); } catch (e) {}
     }
+
+    function closeMobileMenu() {
+        layout.classList.remove('mobile-menu-open');
+        document.body.style.overflow = '';
+    }
+    function openMobileMenu() {
+        layout.classList.add('mobile-menu-open');
+        document.body.style.overflow = 'hidden';
+    }
+
     if (toggle) toggle.addEventListener('click', function() { setCollapsed(!isCollapsed()); });
     if (openBtn) openBtn.addEventListener('click', function() { setCollapsed(false); });
     try { if (localStorage.getItem('sidebarCollapsed') === '1') setCollapsed(true); } catch (e) {}
+
+    if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', openMobileMenu);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeMobileMenu);
+    if (sidebarClose) sidebarClose.addEventListener('click', closeMobileMenu);
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { closeMobileMenu(); });
+    });
 
     [].forEach.call(document.querySelectorAll('.sidebar-parent-label'), function(label) {
         label.addEventListener('click', function(e) {
