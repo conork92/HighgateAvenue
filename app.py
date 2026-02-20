@@ -451,7 +451,7 @@ def get_muswell_hill_images(room_slug):
     try:
         if not gcp_storage_client:
             return jsonify([]), 200
-        prefix = MUSWELL_HILL_ROOMS[room_slug]['prefix']
+        prefix = MUSWELL_HILL_ROOMS[room_slug]['prefix'].rstrip('/') + '/'
         bucket = gcp_storage_client.bucket(MUSWELL_HILL_BUCKET)
         blobs = list(bucket.list_blobs(prefix=prefix))
         base_url = f"https://storage.googleapis.com/{MUSWELL_HILL_BUCKET}"
@@ -460,7 +460,11 @@ def get_muswell_hill_images(room_slug):
             if b.name.endswith('/'):
                 continue
             name = b.name.split('/')[-1]
-            images.append({'name': name, 'url': f"{base_url}/{b.name}"})
+            # URL-encode path so filenames with spaces (e.g. "Screenshot 2026-02-19 at 13.17.05.png") work
+            encoded_path = quote(b.name, safe='/')
+            images.append({'name': name, 'url': f"{base_url}/{encoded_path}"})
+        if not images:
+            app.logger.info(f"Muswell Hill images: 0 blobs for prefix={prefix!r} bucket={MUSWELL_HILL_BUCKET!r}")
         return jsonify(images), 200
     except Exception as e:
         app.logger.error(f"Error listing Muswell Hill images: {e}")

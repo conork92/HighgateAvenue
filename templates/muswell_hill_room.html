@@ -46,7 +46,7 @@
             const errDiv = document.getElementById('muswellError');
             const grid = document.getElementById('muswellGrid');
             const empty = document.getElementById('muswellEmpty');
-            fetch('/api/muswell-hill-images/' + roomSlug)
+            fetch('/api/muswell-hill-images/' + roomSlug + '?v=' + Date.now())
                 .then(r => r.json())
                 .then(images => {
                     loading.style.display = 'none';
