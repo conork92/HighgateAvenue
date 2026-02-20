@@ -23,14 +23,15 @@
                 <li><a href="{{ url_for('categorize') }}" class="{% if request.endpoint == 'categorize' %}active{% endif %}">Categorize</a></li>
             </ul>
         </li>
-        <li class="sidebar-parent {% if request.endpoint == 'muswell_hill_room' %}expanded{% endif %}" id="sidebar-muswell">
+        <li class="sidebar-parent {% if request.endpoint == 'muswell_hill_room' or request.endpoint == 'muswell_hill_products' %}expanded{% endif %}" id="sidebar-muswell">
             <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="false" aria-controls="sidebar-muswell-sub">Muswell Hill</span>
             <ul class="sidebar-sub" id="sidebar-muswell-sub">
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='front-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'front-room') %}active{% endif %}">Front Room</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='kitchen') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'kitchen') %}active{% endif %}">Kitchen</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='bathroom') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'bathroom') %}active{% endif %}">Bathroom</a></li>
-                <li><a href="{{ url_for('muswell_hill_room', room_slug='living-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'living-room') %}active{% endif %}">Living Room</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='bedroom') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'bedroom') %}active{% endif %}">Bedroom</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='nursery') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'nursery') %}active{% endif %}">Nursery</a></li>
+                <li><a href="{{ url_for('muswell_hill_products') }}" class="{% if request.endpoint == 'muswell_hill_products' %}active{% endif %}">Products</a></li>
             </ul>
         </li>
         <li>

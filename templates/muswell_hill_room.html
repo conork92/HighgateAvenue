@@ -33,29 +33,42 @@
     <script>
         (function() {
             const roomSlug = {{ room_slug | tojson }};
+            const fallbackImages = {{ fallback_images | tojson }};
             const loading = document.getElementById('muswellLoading');
             const errDiv = document.getElementById('muswellError');
             const grid = document.getElementById('muswellGrid');
             const empty = document.getElementById('muswellEmpty');
+            function renderImages(images) {
+                if (!images || images.length === 0) return;
+                grid.style.display = 'grid';
+                grid.innerHTML = images.map(img =>
+                    '<div class="plan-card"><a href="' + img.url + '" target="_blank" rel="noopener">' +
+                    '<img src="' + img.url + '" alt="' + (img.name || '') + '" class="plan-image" loading="lazy" onerror="this.style.display=\'none\'">' +
+                    '<div class="plan-header"><span class="plan-room">' + (img.name || '') + '</span></div></a></div>'
+                ).join('');
+            }
             fetch('/api/muswell-hill-images/' + roomSlug)
                 .then(r => r.json())
                 .then(images => {
                     loading.style.display = 'none';
-                    if (!images || images.length === 0) {
-                        empty.style.display = 'block';
+                    if (images && images.length > 0) {
+                        renderImages(images);
                         return;
                     }
-                    grid.style.display = 'grid';
-                    grid.innerHTML = images.map(img => 
-                        '<div class="plan-card"><a href="' + img.url + '" target="_blank" rel="noopener">' +
-                        '<img src="' + img.url + '" alt="' + (img.name || '') + '" class="plan-image" loading="lazy" onerror="this.style.display=\'none\'">' +
-                        '<div class="plan-header"><span class="plan-room">' + (img.name || '') + '</span></div></a></div>'
-                    ).join('');
+                    if (fallbackImages && fallbackImages.length > 0) {
+                        renderImages(fallbackImages);
+                        return;
+                    }
+                    empty.style.display = 'block';
                 })
                 .catch(e => {
                     loading.style.display = 'none';
-                    errDiv.style.display = 'block';
-                    errDiv.textContent = 'Failed to load images.';
+                    if (fallbackImages && fallbackImages.length > 0) {
+                        renderImages(fallbackImages);
+                    } else {
+                        errDiv.style.display = 'block';
+                        errDiv.textContent = 'Failed to load images.';
+                    }
                 });
         })();
     </script>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue - Muswell Hill Products</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Muswell Hill – Products</h1>
+                    <p class="subtitle">Products tagged <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or in category Appliances / Baby.</p>
+                </header>
+                <div id="mwhProductsLoading" class="loading">Loading products...</div>
+                <div id="mwhProductsGrid" class="products-grid">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        (function() {
+            function escapeHtml(s) {
+                if (s == null) return '';
+                return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+            function getWebsiteDisplay(p) {
+                if (p.website_name && p.website_name.trim()) return p.website_name.trim();
+                if (p.link && p.link.includes('amazon')) return 'Amazon';
+                return '';
+            }
+            const loading = document.getElementById('mwhProductsLoading');
+            const grid = document.getElementById('mwhProductsGrid');
+            fetch('/api/muswell-hill-products')
+                .then(r => r.json())
+                .then(products => {
+                    loading.style.display = 'none';
+                    const list = Array.isArray(products) ? products : [];
+                    grid.innerHTML = list.length === 0
+                        ? '<p class="subtitle">No products yet. Add products with tags <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or category Baby / Appliance.</p>'
+                        : list.map(p => {
+                            const hasImage = p.image_url && p.image_url.trim();
+                            const imgHtml = hasImage
+                                ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title || 'Product') + '" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">'
+                                : '';
+                            const title = escapeHtml(p.title || 'Product');
+                            const rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+                            const displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
+                            const price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
+                            const websiteDisplay = getWebsiteDisplay(p);
+                            const websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
+                            const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+                            return '<div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div>';
+                        }).join('');
+                })
+                .catch(e => {
+                    loading.style.display = 'none';
+                    grid.innerHTML = '<p class="error">Failed to load products.</p>';
+                });
+        })();
+    </script>
+</body>
+</html>
