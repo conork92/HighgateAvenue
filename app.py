@@ -206,9 +206,10 @@ DESIGN_SECTIONS = {
     },
     'kitchen': {
         'label': 'Kitchen',
-        'layout': 'single',
+        'layout': 'double',
         'images': [
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/full_living_room_kitchen.JPG', 'alt': 'Kitchen and living area'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/kitchen/kitchen_ha7.png', 'alt': 'Kitchen'},
         ],
     },
     'dining-room': {
@@ -326,8 +327,7 @@ MUSWELL_HILL_DESIGN_SECTIONS = {
         'label': 'Kitchen',
         'layout': 'single',
         'images': [
-            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/muswell-hill/kitchen/Screenshot%202026-02-19%20at%2013.12.20.png', 'alt': 'Kitchen Main'},
-        ],
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/muswell-hill/kitchen/Screenshot%202026-02-19%20at%2013.12.20.png', 'alt': 'Kitchen Main'}      ],
     },
     'bathroom': {
         'label': 'Bathroom',
@@ -609,26 +609,89 @@ def get_products():
         return jsonify([]), 200
 
 
+@app.route('/api/products', methods=['POST'])
+def create_product():
+    """Create a new product in ha_products."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        link = (data.get('link') or '').strip()
+        if not link:
+            return jsonify({'error': 'Link is required'}), 400
+        tags = data.get('tags')
+        if isinstance(tags, list):
+            tags = [str(t).strip() for t in tags if str(t).strip()]
+        elif isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(',') if t.strip()]
+        else:
+            tags = []
+        tag_set_lower = { str(t).strip().lower() for t in tags }
+        is_mwh = data.get('is_mwh')
+        if is_mwh is None:
+            is_mwh = 'mwh' in tag_set_lower
+        else:
+            is_mwh = bool(is_mwh)
+        payload = {
+            'link': link,
+            'title': (data.get('title') or '').strip() or None,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'price': (data.get('price') or '').strip() or None,
+            'category': (data.get('category') or '').strip() or None,
+            'room': (data.get('room') or '').strip() or None,
+            'website_name': (data.get('website_name') or '').strip() or None,
+            'tags': tags,
+            'is_mwh': is_mwh,
+        }
+        r = supabase.table('ha_products').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating product: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/products/<int:product_id>', methods=['PATCH'])
+def update_product(product_id):
+    """Update a product (e.g. bok_likes, x_remove for Muswell Hill)."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        update_data = {}
+        if 'bok_likes' in data:
+            update_data['bok_likes'] = bool(data['bok_likes'])
+        if 'x_remove' in data:
+            update_data['x_remove'] = bool(data['x_remove'])
+        if 'is_mwh' in data:
+            update_data['is_mwh'] = bool(data['is_mwh'])
+        if not update_data:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_products').update(update_data).eq('id', product_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else update_data), 200
+    except Exception as e:
+        app.logger.error(f"Error updating product: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 def _muswell_hill_product_match(row):
-    """True if row matches Muswell Hill: tags contains mwh/msw/appliances/baby or category appliance/baby."""
+    """True if row is MWH only: is_mwh true or tags contains mwh."""
+    if row.get('is_mwh') is True:
+        return True
     tags = row.get('tags')
     if isinstance(tags, list):
         tag_set = { str(t).strip().lower() for t in tags }
-        if tag_set & {'mwh', 'msw', 'appliances', 'baby'}:
+        if 'mwh' in tag_set:
             return True
-    elif tags:
-        for t in ('mwh', 'msw', 'appliances', 'baby'):
-            if t in str(tags).lower():
-                return True
-    cat = (row.get('category') or '').lower()
-    if 'appliance' in cat or 'baby' in cat:
+    elif tags and 'mwh' in str(tags).lower():
         return True
     return False
 
 
 @app.route('/api/muswell-hill-products')
 def get_muswell_hill_products():
-    """Products for Muswell Hill: tags mwh, msw, appliances, baby or category appliance/baby."""
+    """Products for Muswell Hill: MWH only (is_mwh true or tag mwh). Display grouped by category on the page."""
     if not supabase:
         return jsonify([]), 200
     try:
@@ -704,12 +767,6 @@ def serve_gcp_image(image_path):
         app.logger.error(f"Error serving image: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# ---- everything else unchanged below ----
-# ... rest of API endpoints and app logic remains as in original code, unchanged for brevity ...
-# (copy from your original selection as needed)
-
-
-# (For brevity, this rewrite only includes the relevant new Muswell Hill design sections logic.)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
