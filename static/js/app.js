@@ -220,24 +220,81 @@ function initProducts() {
 function initProductModal(section, grid, loadingEl) {
     const addBtn = document.getElementById('addProductBtn');
     const modal = document.getElementById('productModal');
+    const modalTitle = document.getElementById('productModalTitle');
     const closeBtn = modal && modal.querySelector('.close-product-modal');
     const cancelBtn = document.getElementById('cancelProduct');
     const form = document.getElementById('productForm');
     const productStatus = document.getElementById('productStatus');
+    const submitBtn = document.getElementById('submitProduct');
     const fetchPreviewBtn = document.getElementById('fetchPreviewBtn');
     const productLinkInput = document.getElementById('productLink');
 
     if (!addBtn || !modal || !form) return;
 
+    let editingProductId = null;
+
+    function setAddMode() {
+        editingProductId = null;
+        if (modalTitle) modalTitle.textContent = 'Add Product';
+        if (submitBtn) submitBtn.textContent = 'Add Product';
+    }
+    function setEditMode() {
+        if (modalTitle) modalTitle.textContent = 'Edit Product';
+        if (submitBtn) submitBtn.textContent = 'Save changes';
+    }
+    function fillForm(p) {
+        document.getElementById('productLink').value = p.link || '';
+        document.getElementById('productWebsiteName').value = p.website_name || '';
+        document.getElementById('productTitle').value = p.title || '';
+        document.getElementById('productImageUrl').value = p.image_url || '';
+        document.getElementById('productPrice').value = p.price || '';
+        document.getElementById('productCategory').value = p.category || '';
+        document.getElementById('productRoom').value = p.room || '';
+        document.getElementById('productTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
+        const isMwh = document.getElementById('productIsMwh');
+        if (isMwh) isMwh.checked = !!p.is_mwh;
+    }
+
     addBtn.addEventListener('click', () => {
+        setAddMode();
+        form.reset();
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+        if (productStatus) productStatus.style.display = 'none';
     });
+
+    if (grid) {
+        grid.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.product-edit-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const id = btn.getAttribute('data-product-id');
+            if (!id) return;
+            btn.disabled = true;
+            try {
+                const r = await fetch(`${API_BASE}/products/${id}`);
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Failed to load product');
+                editingProductId = id;
+                setEditMode();
+                fillForm(data);
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                if (productStatus) productStatus.style.display = 'none';
+            } catch (err) {
+                if (productStatus) { productStatus.textContent = err.message || 'Error'; productStatus.className = 'upload-status error'; productStatus.style.display = 'block'; }
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
 
     function closeProductModal() {
         modal.style.display = 'none';
         document.body.style.overflow = '';
         form.reset();
+        editingProductId = null;
+        setAddMode();
         if (productStatus) productStatus.style.display = 'none';
     }
 
@@ -259,10 +316,12 @@ function initProductModal(section, grid, loadingEl) {
                 if (r.ok && data) {
                     if (data.title) document.getElementById('productTitle').value = data.title;
                     if (data.image_url) document.getElementById('productImageUrl').value = data.image_url;
+                    if (data.website_name) document.getElementById('productWebsiteName').value = data.website_name;
+                    if (data.price) document.getElementById('productPrice').value = data.price;
                 }
             } catch (e) { console.error(e); }
             fetchPreviewBtn.disabled = false;
-            fetchPreviewBtn.textContent = 'Fetch image & title from URL';
+            fetchPreviewBtn.textContent = 'Fetch from link';
         });
     }
 
@@ -285,21 +344,38 @@ function initProductModal(section, grid, loadingEl) {
             tags,
             is_mwh: isMwh
         };
-        const submitBtn = document.getElementById('submitProduct');
         submitBtn.disabled = true;
-        if (productStatus) { productStatus.style.display = 'block'; productStatus.textContent = 'Adding...'; productStatus.className = 'upload-status loading'; }
+        if (productStatus) { productStatus.style.display = 'block'; productStatus.className = 'upload-status loading'; }
         try {
-            const r = await fetch(`${API_BASE}/products`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await r.json();
-            if (!r.ok) throw new Error(data.error || 'Failed to add product');
-            if (productStatus) { productStatus.textContent = 'Product added.'; productStatus.className = 'upload-status success'; }
-            const roomFilter = (section.getAttribute('data-product-room') || '').trim();
-            loadProducts(roomFilter, grid, loadingEl);
-            setTimeout(closeProductModal, 1200);
+            if (editingProductId) {
+                productStatus.textContent = 'Saving...';
+                const r = await fetch(`${API_BASE}/products/${editingProductId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Failed to save product');
+                if (productStatus) { productStatus.textContent = 'Saved.'; productStatus.className = 'upload-status success'; }
+                const roomFilter = (section.getAttribute('data-product-room') || '').trim();
+                loadProducts(roomFilter, grid, loadingEl);
+                editingProductId = null;
+                setAddMode();
+                setTimeout(closeProductModal, 1200);
+            } else {
+                productStatus.textContent = 'Adding...';
+                const r = await fetch(`${API_BASE}/products`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Failed to add product');
+                if (productStatus) { productStatus.textContent = 'Product added.'; productStatus.className = 'upload-status success'; }
+                const roomFilter = (section.getAttribute('data-product-room') || '').trim();
+                loadProducts(roomFilter, grid, loadingEl);
+                setTimeout(closeProductModal, 1200);
+            }
         } catch (err) {
             if (productStatus) { productStatus.textContent = err.message || 'Error'; productStatus.className = 'upload-status error'; productStatus.style.display = 'block'; }
         } finally {
@@ -345,7 +421,7 @@ async function loadProducts(roomFilter, grid, loadingEl) {
                 const websiteDisplay = getProductWebsiteDisplay(p);
                 const websiteHtml = websiteDisplay ? `<span class="product-tile-website">${escapeHtml(websiteDisplay)}</span>` : '';
                 const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
-                return `<div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${price}</div></a></div>`;
+                return `<div class="product-tile-wrapper"><div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${price}</div></a></div><button type="button" class="product-edit-btn" data-product-id="${p.id}" title="Edit product">Edit</button></div>`;
             }).join('');
     } catch (e) {
         console.error('Error loading products:', e);

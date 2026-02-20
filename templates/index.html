@@ -167,16 +167,16 @@
                 </div>
             </div>
 
-            <!-- Add Product Modal -->
+            <!-- Add / Edit Product Modal -->
             <div id="productModal" class="modal" style="display: none;">
                 <div class="modal-content">
                     <span class="close-product-modal">&times;</span>
-                    <h2>Add Product</h2>
+                    <h2 id="productModalTitle">Add Product</h2>
                     <form id="productForm">
                         <div class="form-group">
                             <label for="productLink">Product link (e.g. Amazon) *</label>
                             <input type="url" id="productLink" name="link" placeholder="https://..." required>
-                            <button type="button" id="fetchPreviewBtn" class="btn-secondary">Fetch image &amp; title from URL</button>
+                            <button type="button" id="fetchPreviewBtn" class="btn-fetch-preview" title="Fill title, image, price and site from the link">Fetch from link</button>
                         </div>
                         <div class="form-group">
                             <label for="productWebsiteName">Website name</label>
