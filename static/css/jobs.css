@@ -259,6 +259,24 @@
     font-weight: 600;
 }
 
+.job-notes {
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    font-size: 0.875rem;
+}
+
+.job-notes .job-detail-label {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.job-notes-text {
+    color: var(--black);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .job-tags {
     display: flex;
     flex-wrap: wrap;
