@@ -1,10 +1,14 @@
+# syntax=docker/dockerfile:1
+# Use BuildKit for faster builds: DOCKER_BUILDKIT=1 (default in recent Docker)
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies. Cache mount speeds up repeated installs when requirements change.
+# If installs still feel slow: use `make start` (not `make rebuild`) so the pip layer is reused when only app code changes.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 120 -r requirements.txt
 
 # Copy application code
 COPY . .

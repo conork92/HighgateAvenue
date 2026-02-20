@@ -1,9 +1,21 @@
-Flask==3.0.0
-flask-cors==4.0.0
-supabase==2.0.0
-python-dotenv==1.0.0
-gunicorn==21.2.0
-google-cloud-storage==2.14.0
-requests==2.31.0
-beautifulsoup4==4.12.2
-boto3==1.34.0
+# Core app
+Flask>=3.0.0
+flask-cors>=4.0.0
+python-dotenv>=1.0.0
+gunicorn>=21.0.0
+
+# Supabase (DB + storage)
+supabase>=2.3.0,<3
+
+# Google Cloud Storage
+google-cloud-storage>=2.14.0
+
+# HTTP & parsing
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# Supabase S3-compatible storage
+boto3>=1.34.0,<2
+
+# Resolve google-auth vs other deps (google-auth requires rsa<5)
+rsa>=3.1.4,<5

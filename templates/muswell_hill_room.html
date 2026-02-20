@@ -27,6 +27,15 @@
                     <!-- Filled by JS -->
                 </div>
                 <p id="muswellEmpty" class="subtitle" style="display: none; margin-top: 2rem;">No images in this folder yet. Add images to <code>gs://highgate-avenue-designs/{{ bucket_prefix }}/</code> in your bucket to see them here.</p>
+
+                <section class="products-section" id="mwhProductsSection" style="margin-top: 2.5rem;">
+                    <h2 class="exterior-label">Products</h2>
+                    <p class="subtitle" style="margin-bottom: 1rem;">Products tagged with <strong>mwh</strong> for Muswell Hill.</p>
+                    <div id="mwhProductsGrid" class="products-grid">
+                        <!-- Filled by JS -->
+                    </div>
+                    <div id="mwhProductsLoading" class="loading" style="display: none;">Loading products...</div>
+                </section>
             </div>
         </main>
     </div>
@@ -57,6 +66,49 @@
                     errDiv.style.display = 'block';
                     errDiv.textContent = 'Failed to load images.';
                 });
+
+            // Muswell Hill products (tag: mwh)
+            (function() {
+                const grid = document.getElementById('mwhProductsGrid');
+                const loadingEl = document.getElementById('mwhProductsLoading');
+                if (!grid) return;
+                function escapeHtml(s) {
+                    if (s == null) return '';
+                    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                }
+                function getWebsiteDisplay(p) {
+                    if (p.website_name && p.website_name.trim()) return p.website_name.trim();
+                    try {
+                        const url = (p.link && p.link.trim()) ? p.link.trim() : '';
+                        if (!url) return '';
+                        const host = new URL(url).hostname || '';
+                        const base = host.replace(/^www\./i, '').split('.')[0] || host;
+                        return base ? base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() : '';
+                    } catch (e) { return ''; }
+                }
+                if (loadingEl) loadingEl.style.display = 'block';
+                fetch('/api/products?tag=mwh')
+                    .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load products')))
+                    .then(products => {
+                        const list = Array.isArray(products) ? products : [];
+                        grid.innerHTML = list.length === 0 ? '' : list.map(p => {
+                            const hasImage = p.image_url && p.image_url.trim();
+                            const imgHtml = hasImage
+                                ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title || 'Product') + '" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">'
+                                : '';
+                            const title = escapeHtml(p.title || 'Product');
+                            const rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+                            const displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
+                            const price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
+                            const websiteDisplay = getWebsiteDisplay(p);
+                            const websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
+                            const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+                            return '<div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div>';
+                        }).join('');
+                    })
+                    .catch(() => { grid.innerHTML = ''; })
+                    .finally(() => { if (loadingEl) loadingEl.style.display = 'none'; });
+            })();
         })();
     </script>
 </body>

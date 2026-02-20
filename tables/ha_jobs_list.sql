@@ -10,6 +10,7 @@ create table if not exists ha_jobs_list (
   done boolean not null default false,
   country text,
   tags text[] default '{}',
+  notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -22,6 +23,9 @@ create index if not exists idx_ha_jobs_list_date_due on ha_jobs_list(date_due);
 create index if not exists idx_ha_jobs_list_done on ha_jobs_list(done);
 create index if not exists idx_ha_jobs_list_country on ha_jobs_list(country);
 create index if not exists idx_ha_jobs_list_created_at on ha_jobs_list(created_at desc);
+
+-- If the table already exists without notes, add the column in Supabase SQL Editor:
+-- alter table ha_jobs_list add column if not exists notes text;
 
 -- Optional: enable RLS (Row Level Security) and add policies as needed
 -- alter table ha_jobs_list enable row level security;

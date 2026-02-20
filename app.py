@@ -386,7 +386,7 @@ MUSWELL_HILL_ROOMS = {
     'front-room': {'label': 'Front Room', 'prefix': 'muswell-hill/front_room'},
     'kitchen': {'label': 'Kitchen', 'prefix': 'muswell-hill/kitchen'},
     'bathroom': {'label': 'Bathroom', 'prefix': 'muswell-hill/bathroom'},
-    'living-room': {'label': 'Living Room', 'prefix': 'muswell-hill/living_room'},
+    'living-room': {'label': 'Bedroom', 'prefix': 'muswell-hill/bedroom'},
     'nursery': {'label': 'Nursery', 'prefix': 'muswell-hill/nursery'},
 }
 MUSWELL_HILL_BUCKET = 'highgate-avenue-designs'
@@ -562,12 +562,13 @@ def delete_plan(plan_id):
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    """Get all products, optionally filtered by room or category."""
+    """Get all products, optionally filtered by room, category, or tag (e.g. tag=mwh for Muswell Hill)."""
     try:
         if not supabase:
             return jsonify([]), 200
         room = request.args.get('room', '').strip()
         category = request.args.get('category', '').strip()
+        tag = request.args.get('tag', '').strip()
         query = supabase.table('ha_products').select('*').order('created_at', desc=True)
         if room:
             # Special handling for Bathroom - include Bathroom, Bathroom 1, Bathroom 2, etc.
@@ -577,6 +578,9 @@ def get_products():
                 query = query.eq('room', room)
         if category:
             query = query.eq('category', category)
+        if tag:
+            # Filter products whose tags array contains the given tag (e.g. mwh for Muswell Hill)
+            query = query.overlaps('tags', [tag])
         response = query.execute()
         return jsonify(response.data), 200
     except Exception as e:
@@ -1040,6 +1044,7 @@ def create_job():
             'done': bool(data.get('done', False)),
             'country': (data.get('country') or '').strip() or None,
             'tags': data.get('tags') if isinstance(data.get('tags'), list) else [],
+            'notes': (data.get('notes') or '').strip() or None,
         }
         
         response = supabase.table('ha_jobs_list').insert(payload).execute()
@@ -1075,6 +1080,8 @@ def update_job(job_id):
                 update_data['tags'] = [tag.strip() for tag in data['tags'].split(',') if tag.strip()]
             else:
                 update_data['tags'] = []
+        if 'notes' in data:
+            update_data['notes'] = (data['notes'] or '').strip() or None
         
         update_data['updated_at'] = datetime.utcnow().isoformat()
         

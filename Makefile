@@ -19,6 +19,15 @@ stop: ## Stop the application
 
 restart: stop start ## Restart the application
 
+rebuild: ## Force full rebuild of Docker image (use when app still shows old code/paths)
+	@echo "Stopping containers..."
+	docker-compose down
+	@echo "Rebuilding image from scratch (no cache)..."
+	docker-compose build --no-cache
+	@echo "Starting application..."
+	docker-compose up -d
+	@echo "Application is running at http://localhost:8001"
+
 build: ## Build the Docker image
 	@echo "Building Docker image..."
 	docker-compose build

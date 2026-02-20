@@ -29,7 +29,7 @@
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='front-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'front-room') %}active{% endif %}">Front Room</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='kitchen') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'kitchen') %}active{% endif %}">Kitchen</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='bathroom') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'bathroom') %}active{% endif %}">Bathroom</a></li>
-                <li><a href="{{ url_for('muswell_hill_room', room_slug='living-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'living-room') %}active{% endif %}">Living Room</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='living-room') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'living-room') %}active{% endif %}">Bedroom</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='nursery') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'nursery') %}active{% endif %}">Nursery</a></li>
             </ul>
         </li>

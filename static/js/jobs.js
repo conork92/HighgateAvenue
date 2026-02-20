@@ -186,6 +186,7 @@ function renderJobCard(job) {
                 </div>
                 ${job.country ? `<div class="job-detail"><span class="job-detail-label">Country:</span> <span class="job-detail-value">${escapeHtml(job.country)}</span></div>` : ''}
             </div>
+            ${job.notes ? `<div class="job-notes"><span class="job-detail-label">Notes:</span> <span class="job-notes-text">${escapeHtml(job.notes)}</span></div>` : ''}
             ${tagsHtml}
             <div class="job-actions">
                 <button class="job-edit-btn" data-job-id="${job.id}">Edit</button>
@@ -278,6 +279,7 @@ function openJobModal(job = null) {
         document.getElementById('jobDateDue').value = job.date_due || '';
         document.getElementById('jobCountry').value = job.country || '';
         document.getElementById('jobTags').value = job.tags ? job.tags.join(', ') : '';
+        document.getElementById('jobNotes').value = job.notes || '';
         document.getElementById('jobDone').checked = job.done || false;
     }
     
@@ -310,6 +312,7 @@ async function handleJobSubmit(e) {
         date_due: formData.get('date_due') || null,
         country: formData.get('country') || null,
         tags: tags,
+        notes: formData.get('notes') || null,
         done: formData.get('done') === 'on'
     };
     

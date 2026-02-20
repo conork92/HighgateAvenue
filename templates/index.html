@@ -13,7 +13,7 @@
         html, body { background: #ffffff !important; color: #000000 !important; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260206">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
 </head>
 <body>
@@ -89,7 +89,7 @@
                 <h2 class="exterior-label">{{ section.label }}</h2>
                 <div class="hero-image {% if section.layout == 'double' %}plans-two{% endif %}">
                     {% for img in section.images %}
-                    <img src="{{ img.url }}" alt="{{ img.alt }}" class="homepage-image" referrerpolicy="no-referrer">
+                    <img src="{{ img.url }}{% if '?' not in img.url %}?v=20260207{% endif %}" alt="{{ img.alt }}" class="homepage-image" referrerpolicy="no-referrer">
                     {% endfor %}
                 </div>
             </section>
