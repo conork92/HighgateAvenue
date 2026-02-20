@@ -15,7 +15,7 @@
             <div class="container">
                 <header>
                     <h1>Muswell Hill – Products</h1>
-                    <p class="subtitle">Products tagged <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or in category Appliances / Baby.</p>
+                    <p class="subtitle">Products tagged <strong>mwh</strong>, <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or in category Appliances / Baby.</p>
                 </header>
                 <div id="mwhProductsLoading" class="loading">Loading products...</div>
                 <div id="mwhProductsGrid" class="products-grid">
@@ -38,12 +38,17 @@
             const loading = document.getElementById('mwhProductsLoading');
             const grid = document.getElementById('mwhProductsGrid');
             fetch('/api/muswell-hill-products')
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) {
+                        throw new Error('HTTP ' + r.status);
+                    }
+                    return r.json();
+                })
                 .then(products => {
                     loading.style.display = 'none';
-                    const list = Array.isArray(products) ? products : [];
+                    const list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
                     grid.innerHTML = list.length === 0
-                        ? '<p class="subtitle">No products yet. Add products with tags <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or category Baby / Appliance.</p>'
+                        ? '<p class="subtitle">No products yet. Add products with tags <strong>mwh</strong>, <strong>msw</strong>, <strong>appliances</strong>, or <strong>baby</strong>, or category Baby / Appliance.</p>'
                         : list.map(p => {
                             const hasImage = p.image_url && p.image_url.trim();
                             const imgHtml = hasImage

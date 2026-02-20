@@ -434,6 +434,7 @@ def create_job():
             'done': bool(data.get('done', False)),
             'country': (data.get('country') or '').strip() or None,
             'tags': data.get('tags') if isinstance(data.get('tags'), list) else [],
+            'notes': (data.get('notes') or '').strip() or None,
         }
         r = supabase.table('ha_jobs_list').insert(payload).execute()
         rows = r.data or []
@@ -471,6 +472,8 @@ def update_job(job_id):
                 update_data['tags'] = [t.strip() for t in data['tags'].split(',') if t.strip()]
             else:
                 update_data['tags'] = []
+        if 'notes' in data:
+            update_data['notes'] = (data.get('notes') or '').strip() or None
         if not update_data:
             return jsonify({'error': 'No fields to update'}), 400
         update_data['updated_at'] = datetime.utcnow().isoformat()
@@ -606,33 +609,44 @@ def get_products():
         return jsonify([]), 200
 
 
+def _muswell_hill_product_match(row):
+    """True if row matches Muswell Hill: tags contains mwh/msw/appliances/baby or category appliance/baby."""
+    tags = row.get('tags')
+    if isinstance(tags, list):
+        tag_set = { str(t).strip().lower() for t in tags }
+        if tag_set & {'mwh', 'msw', 'appliances', 'baby'}:
+            return True
+    elif tags:
+        for t in ('mwh', 'msw', 'appliances', 'baby'):
+            if t in str(tags).lower():
+                return True
+    cat = (row.get('category') or '').lower()
+    if 'appliance' in cat or 'baby' in cat:
+        return True
+    return False
+
+
 @app.route('/api/muswell-hill-products')
 def get_muswell_hill_products():
-    """Products for Muswell Hill: tag msw, or appliances (tag/category), or baby (tag/category)."""
+    """Products for Muswell Hill: tags mwh, msw, appliances, baby or category appliance/baby."""
     if not supabase:
         return jsonify([]), 200
     try:
-        # Fetch products matching any: msw, appliances, baby (by tag or category)
-        seen_ids = set()
-        out = []
-        for tag_val in ['msw', 'appliances', 'baby']:
-            try:
-                r = supabase.table('ha_products').select('*').overlaps('tags', [tag_val]).order('created_at', desc=True).execute()
-                for row in (r.data or []):
-                    if row.get('id') not in seen_ids:
-                        seen_ids.add(row['id'])
-                        out.append(row)
-            except Exception:
-                pass
-        for pattern in ['%appliance%', '%baby%']:
-            try:
-                r = supabase.table('ha_products').select('*').ilike('category', pattern).order('created_at', desc=True).execute()
-                for row in (r.data or []):
-                    if row.get('id') not in seen_ids:
-                        seen_ids.add(row['id'])
-                        out.append(row)
-            except Exception:
-                pass
+        # 1) Try RPC that runs the exact SQL (run tables/get_muswell_hill_products.sql in Supabase once)
+        try:
+            r = supabase.rpc('get_muswell_hill_products').execute()
+            if r and getattr(r, 'data', None) is not None:
+                out = list(r.data) if isinstance(r.data, list) else []
+                return jsonify(out), 200
+        except Exception as e:
+            app.logger.info(f"Muswell Hill RPC not available: {e}, using fetch-all filter")
+        # 2) Fallback: fetch all products, filter in Python (same logic as your SQL)
+        r = supabase.table('ha_products').select('*').execute()
+        all_rows = (r.data or []) if (r and hasattr(r, 'data')) else []
+        if not isinstance(all_rows, list):
+            all_rows = []
+        out = [row for row in all_rows if _muswell_hill_product_match(row)]
+        out.sort(key=lambda row: (row.get('created_at') or ''), reverse=True)
         return jsonify(out), 200
     except Exception as e:
         app.logger.error(f"Error fetching Muswell Hill products: {e}")
@@ -693,6 +707,7 @@ def serve_gcp_image(image_path):
 # ---- everything else unchanged below ----
 # ... rest of API endpoints and app logic remains as in original code, unchanged for brevity ...
 # (copy from your original selection as needed)
+
 
 # (For brevity, this rewrite only includes the relevant new Muswell Hill design sections logic.)
 
