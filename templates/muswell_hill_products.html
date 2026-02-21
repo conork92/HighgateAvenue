@@ -21,18 +21,19 @@
         .mwh-product-card.x-removed { opacity: 0.65; }
         .mwh-product-flags {
             display: flex;
-            gap: 1rem;
+            gap: 0.6rem;
             margin-top: 0.5rem;
             padding: 0.5rem 0 0;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             align-items: center;
             border-top: 1px solid rgba(0,0,0,0.08);
+            overflow-x: auto;
         }
         .mwh-product-flags label {
             display: flex;
             align-items: center;
-            gap: 0.35rem;
-            font-size: 0.8rem;
+            gap: 0.25rem;
+            font-size: 0.75rem;
             cursor: pointer;
             white-space: nowrap;
         }
@@ -88,7 +89,7 @@
             <div class="container">
                 <header>
                     <h1>Muswell Hill – Products</h1>
-                    <p class="subtitle">MWH products only (is_mwh or tag <strong>mwh</strong>), grouped by category.</p>
+                    <p class="subtitle">MWH products only (is_mwh or tag <strong>mwh</strong>), grouped by category. Removed and bought items are hidden from the main sections.</p>
                     <button type="button" id="mwhAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
                 </header>
             <!-- Add Product Modal -->
@@ -211,19 +212,28 @@
                 var websiteDisplay = getWebsiteDisplay(p);
                 var websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
                 var link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
-                        var bokLikes = !!p.bok_likes;
-                        var xRemove = !!p.x_remove;
-                        var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
-                        var id = p.id;
-                        return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-x-remove" data-id="' + id + '" ' + (xRemove ? 'checked' : '') + '> Remove</label><button type="button" class="mwh-edit-product" data-id="' + id + '" title="Edit product">Edit</button></div></div>';
+                var bokLikes = !!p.bok_likes;
+                var xRemove = !!p.x_remove;
+                var bought = !!p.bought;
+                var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
+                var id = p.id;
+                return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label><label><input type="checkbox" class="mwh-x-remove" data-id="' + id + '" ' + (xRemove ? 'checked' : '') + '> Remove</label><button type="button" class="mwh-edit-product" data-id="' + id + '" title="Edit product">Edit</button></div></div>';
             }
             function renderProductList(list) {
                 if (list.length === 0) {
                     grid.innerHTML = '<p class="subtitle">No MWH products yet. Add products with tag <strong>mwh</strong> or check Is MWH, and set a category to see them grouped.</p>';
                     return;
                 }
+
+                var boughtItems = list.filter(function(p) { return !!p.bought; });
+                var activeItems = list.filter(function(p) { return !p.bought && !p.x_remove; });
+                if (activeItems.length === 0 && boughtItems.length === 0) {
+                    grid.innerHTML = '<p class="subtitle">No active products to show.</p>';
+                    return;
+                }
+
                 var byCategory = {};
-                list.forEach(function(p) {
+                activeItems.forEach(function(p) {
                     var key = getProductCategoryKey(p);
                     if (!byCategory[key]) byCategory[key] = [];
                     byCategory[key].push(p);
@@ -241,15 +251,37 @@
                     productsInSection.forEach(function(p) { html += renderCard(p); });
                     html += '</div></div>';
                 });
+                if (boughtItems.length) {
+                    html += '<div class="mwh-section"><h2 class="mwh-section-title">Bought</h2><div class="mwh-section-grid">';
+                    boughtItems.forEach(function(p) { html += renderCard(p); });
+                    html += '</div></div>';
+                }
                 grid.innerHTML = html;
                 grid.querySelectorAll('.mwh-bok-likes').forEach(function(cb) {
                     cb.addEventListener('change', function() { updateProductFlag(cb.dataset.id, 'bok_likes', cb.checked); });
                 });
+                grid.querySelectorAll('.mwh-bought').forEach(function(cb) {
+                    cb.addEventListener('change', function() {
+                        updateProductFlag(cb.dataset.id, 'bought', cb.checked);
+                        // Re-fetch and re-render so item moves between sections immediately
+                        fetch('/api/muswell-hill-products')
+                            .then(function(r) { return r.json(); })
+                            .then(function(products) {
+                                var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                                renderProductList(list);
+                            });
+                    });
+                });
                 grid.querySelectorAll('.mwh-x-remove').forEach(function(cb) {
                     cb.addEventListener('change', function() {
                         updateProductFlag(cb.dataset.id, 'x_remove', cb.checked);
-                        var card = cb.closest('.mwh-product-card');
-                        if (card) card.classList.toggle('x-removed', cb.checked);
+                        // Re-fetch and re-render so removed items are filtered out immediately
+                        fetch('/api/muswell-hill-products')
+                            .then(function(r) { return r.json(); })
+                            .then(function(products) {
+                                var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                                renderProductList(list);
+                            });
                     });
                 });
                 grid.querySelectorAll('.mwh-edit-product').forEach(function(btn) {
