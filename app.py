@@ -693,6 +693,73 @@ def _normalize_4rgos_image_url(img_url):
         return img_url
 
 
+def _normalize_image_url(img_url):
+    """Normalize image URLs (protocol-relative, site-specific transforms)."""
+    if not img_url:
+        return img_url
+    try:
+        out = str(img_url).strip()
+        if out.startswith('//'):
+            out = 'https:' + out
+        out = _normalize_4rgos_image_url(out) or out
+        return out
+    except Exception:
+        return img_url
+
+
+def _amazon_image_from_soup(soup):
+    """Best-effort extraction of Amazon product image URL."""
+    # Common metadata fallback first
+    meta_candidates = [
+        soup.find('meta', property='og:image:secure_url'),
+        soup.find('meta', attrs={'name': 'twitter:image'}),
+        soup.find('meta', attrs={'name': 'twitter:image:src'}),
+    ]
+    for tag in meta_candidates:
+        if tag and tag.get('content'):
+            return tag['content'].strip()
+
+    # Amazon product image element
+    landing = soup.find(id='landingImage')
+    if landing:
+        old_hires = (landing.get('data-old-hires') or '').strip()
+        if old_hires:
+            return old_hires
+
+        dynamic = (landing.get('data-a-dynamic-image') or '').strip()
+        if dynamic:
+            try:
+                parsed = json.loads(dynamic)
+                if isinstance(parsed, dict) and parsed:
+                    # choose the largest candidate by width*height when provided
+                    best_url = max(
+                        parsed.items(),
+                        key=lambda kv: (kv[1][0] * kv[1][1]) if isinstance(kv[1], list) and len(kv[1]) >= 2 else 0
+                    )[0]
+                    if best_url:
+                        return best_url
+            except Exception:
+                m = re.search(r'https://[^"\\]+', dynamic)
+                if m:
+                    return m.group(0)
+
+        src = (landing.get('src') or '').strip()
+        if src:
+            return src
+
+    # Additional fallback: any image with data-old-hires
+    img_with_old = soup.find('img', attrs={'data-old-hires': True})
+    if img_with_old:
+        old_hires = (img_with_old.get('data-old-hires') or '').strip()
+        if old_hires:
+            return old_hires
+        src = (img_with_old.get('src') or '').strip()
+        if src:
+            return src
+
+    return None
+
+
 def _fetch_product_preview(url):
     """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
     if not url or not url.startswith(('http://', 'https://')):
@@ -735,8 +802,48 @@ def _fetch_product_preview(url):
         out['title'] = og_title['content'].strip()
     og_image = soup.find('meta', property='og:image')
     if og_image and og_image.get('content'):
-        raw_image = og_image['content'].strip()
-        out['image_url'] = _normalize_4rgos_image_url(raw_image) or raw_image
+        out['image_url'] = _normalize_image_url(og_image['content'])
+
+    # Generic image fallback when og:image is missing
+    if not out.get('image_url'):
+        fallback_meta = (
+            soup.find('meta', property='og:image:secure_url')
+            or soup.find('meta', attrs={'name': 'twitter:image'})
+            or soup.find('meta', attrs={'name': 'twitter:image:src'})
+        )
+        if fallback_meta and fallback_meta.get('content'):
+            out['image_url'] = _normalize_image_url(fallback_meta['content'])
+
+    # Amazon-specific fallback for pages where og/twitter image is absent or blocked
+    host = (urlparse(url).netloc or '').lower()
+    if 'amazon.' in host and not out.get('image_url'):
+        amazon_image = _amazon_image_from_soup(soup)
+        if amazon_image:
+            out['image_url'] = _normalize_image_url(amazon_image)
+    # Some Amazon pages return a "continue shopping" shell for normal UAs.
+    # A social-crawler UA frequently exposes og:image reliably.
+    if 'amazon.' in host and not out.get('image_url'):
+        try:
+            social_soup = _do_fetch(
+                user_agent='facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+            )
+            social_og = social_soup.find('meta', property='og:image')
+            if social_og and social_og.get('content'):
+                out['image_url'] = _normalize_image_url(social_og['content'])
+            if not out.get('image_url'):
+                social_fallback = (
+                    social_soup.find('meta', property='og:image:secure_url')
+                    or social_soup.find('meta', attrs={'name': 'twitter:image'})
+                    or social_soup.find('meta', attrs={'name': 'twitter:image:src'})
+                )
+                if social_fallback and social_fallback.get('content'):
+                    out['image_url'] = _normalize_image_url(social_fallback['content'])
+            if not out.get('image_url'):
+                social_amazon_image = _amazon_image_from_soup(social_soup)
+                if social_amazon_image:
+                    out['image_url'] = _normalize_image_url(social_amazon_image)
+        except Exception:
+            pass
 
     # Price: site-specific and fallback regex
     price = None
@@ -875,6 +982,19 @@ def _fetch_product_preview(url):
     return out
 
 
+def _coerce_bool(value, default=False):
+    """Coerce common JSON boolean representations safely."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+    return default
+
+
 @app.route('/api/products/preview')
 def product_preview():
     """GET ?url=... - fetch link and return title, image_url, website_name, price. Always returns 200 with at least URL-derived title/website_name when possible."""
@@ -946,6 +1066,7 @@ def create_product():
             'website_name': (data.get('website_name') or '').strip() or None,
             'tags': tags,
             'is_mwh': is_mwh,
+            'bought': _coerce_bool(data.get('bought'), default=False),
         }
         r = supabase.table('ha_products').insert(payload).execute()
         rows = r.data or []
@@ -973,7 +1094,7 @@ def get_product(product_id):
 
 @app.route('/api/products/<int:product_id>', methods=['PATCH'])
 def update_product(product_id):
-    """Update a product (full edit: link, title, image_url, price, category, room, website_name, tags, is_mwh; or flags bok_likes, x_remove)."""
+    """Update a product (full edit: link, title, image_url, price, category, room, website_name, tags, is_mwh, bought; or flags bok_likes, x_remove)."""
     if not supabase:
         return jsonify({'error': 'Database not available'}), 503
     try:
@@ -986,6 +1107,8 @@ def update_product(product_id):
             update_data['x_remove'] = bool(data['x_remove'])
         if 'is_mwh' in data:
             update_data['is_mwh'] = bool(data['is_mwh'])
+        if 'bought' in data:
+            update_data['bought'] = _coerce_bool(data['bought'], default=False)
         # Full product fields
         if 'link' in data and (data.get('link') or '').strip():
             update_data['link'] = (data.get('link') or '').strip()
