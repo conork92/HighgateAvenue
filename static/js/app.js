@@ -163,7 +163,15 @@ function renderDesignIdeasByRoom() {
                         return `
                             <div class="room-idea-card" data-id="${escapeHtml(String(ideaId))}">
                                 ${imageUrl ? `
-                                    <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)}" class="room-idea-image" loading="lazy" onerror="this.style.display='none'" onclick="showFullImage('${escapeHtml(imageUrl)}', '${escapeHtml(name)}')" style="cursor: pointer;">
+                                    <div class="room-idea-image-wrapper">
+                                        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)}" class="room-idea-image" loading="lazy" onerror="this.style.display='none'" onclick="showFullImage('${escapeHtml(imageUrl)}', '${escapeHtml(name)}')" style="cursor: pointer;">
+                                        <button type="button" class="room-idea-remove-btn" data-id="${escapeHtml(String(ideaId))}" title="Remove from view" onclick="event.stopPropagation(); removeRoomIdea('${escapeHtml(String(ideaId))}')" aria-label="Remove">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                        <button type="button" class="room-idea-edit-btn" data-id="${escapeHtml(String(ideaId))}" title="Edit idea" onclick="event.stopPropagation(); window.location.href='/categorize/?focus=${escapeHtml(String(ideaId))}'" aria-label="Edit">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                        </button>
+                                    </div>
                                 ` : ''}
                                 <div class="room-idea-info">
                                     <p class="room-idea-name">${escapeHtml(name)}</p>
@@ -189,9 +197,6 @@ function renderDesignIdeasByRoom() {
                                         </button>
                                         <button class="room-bok-likes-btn" data-id="${escapeHtml(String(ideaId))}" onclick="incrementRoomIdeaBokLikes('${escapeHtml(String(ideaId))}')">
                                             <span>👍</span> <span class="room-bok-count">${bokLikes}</span>
-                                        </button>
-                                        <button type="button" class="room-remove-idea-btn" data-id="${escapeHtml(String(ideaId))}" title="Remove from view" onclick="removeRoomIdea('${escapeHtml(String(ideaId))}')">
-                                            <span>✕</span>
                                         </button>
                                     </div>
                                 </div>
@@ -265,26 +270,53 @@ function initProductModal(section, grid, loadingEl) {
 
     if (grid) {
         grid.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.product-edit-btn');
-            if (!btn) return;
-            e.preventDefault();
-            const id = btn.getAttribute('data-product-id');
-            if (!id) return;
-            btn.disabled = true;
-            try {
-                const r = await fetch(`${API_BASE}/products/${id}`);
-                const data = await r.json();
-                if (!r.ok) throw new Error(data.error || 'Failed to load product');
-                editingProductId = id;
-                setEditMode();
-                fillForm(data);
-                modal.style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-                if (productStatus) productStatus.style.display = 'none';
-            } catch (err) {
-                if (productStatus) { productStatus.textContent = err.message || 'Error'; productStatus.className = 'upload-status error'; productStatus.style.display = 'block'; }
-            } finally {
-                btn.disabled = false;
+            // Handle edit button
+            const editBtn = e.target.closest('.product-edit-btn');
+            if (editBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = editBtn.getAttribute('data-product-id');
+                if (!id) return;
+                editBtn.disabled = true;
+                try {
+                    const r = await fetch(`${API_BASE}/products/${id}`);
+                    const data = await r.json();
+                    if (!r.ok) throw new Error(data.error || 'Failed to load product');
+                    editingProductId = id;
+                    setEditMode();
+                    fillForm(data);
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    if (productStatus) productStatus.style.display = 'none';
+                } catch (err) {
+                    if (productStatus) { productStatus.textContent = err.message || 'Error'; productStatus.className = 'upload-status error'; productStatus.style.display = 'block'; }
+                } finally {
+                    editBtn.disabled = false;
+                }
+                return;
+            }
+            
+            // Handle delete button
+            const deleteBtn = e.target.closest('.product-delete-btn');
+            if (deleteBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = deleteBtn.getAttribute('data-product-id');
+                if (!id) return;
+                if (confirm('Are you sure you want to delete this product?')) {
+                    deleteBtn.disabled = true;
+                    try {
+                        const r = await fetch(`${API_BASE}/products/${id}`, { method: 'DELETE' });
+                        if (!r.ok) throw new Error('Failed to delete product');
+                        const roomFilter = (section.getAttribute('data-product-room') || '').trim();
+                        loadProducts(roomFilter, grid, loadingEl);
+                    } catch (err) {
+                        alert(err.message || 'Failed to delete product');
+                    } finally {
+                        deleteBtn.disabled = false;
+                    }
+                }
+                return;
             }
         });
     }
@@ -421,7 +453,9 @@ async function loadProducts(roomFilter, grid, loadingEl) {
                 const websiteDisplay = getProductWebsiteDisplay(p);
                 const websiteHtml = websiteDisplay ? `<span class="product-tile-website">${escapeHtml(websiteDisplay)}</span>` : '';
                 const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
-                return `<div class="product-tile-wrapper"><div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${price}</div></a></div><button type="button" class="product-edit-btn" data-product-id="${p.id}" title="Edit product">Edit</button></div>`;
+                const removeBtn = `<button type="button" class="product-delete-btn" data-product-id="${p.id}" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>`;
+                const editBtnIcon = `<button type="button" class="product-edit-btn" data-product-id="${p.id}" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>`;
+                return `<div class="product-tile-wrapper"><div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}${removeBtn}${editBtnIcon}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${price}</div></a></div></div>`;
             }).join('');
     } catch (e) {
         console.error('Error loading products:', e);
@@ -702,7 +736,7 @@ async function incrementRoomIdeaBokLikes(ideaId) {
 // Remove room idea from view (mark as removed)
 async function removeRoomIdea(ideaId) {
     const card = document.querySelector(`.room-idea-card[data-id="${ideaId}"]`);
-    const btn = card?.querySelector('.room-remove-idea-btn');
+    const btn = card?.querySelector('.room-idea-remove-btn');
     if (!card || !btn) return;
     
     btn.disabled = true;

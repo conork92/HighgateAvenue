@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Highgate Avenue - Muswell Hill Products</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260209">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
     <style>
         .mwh-product-card {
@@ -79,6 +79,79 @@
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 1.25rem;
             align-items: start;
+        }
+        .product-tile-image-wrap {
+            position: relative;
+        }
+        .mwh-product-remove-btn,
+        .mwh-product-edit-btn {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #000;
+            z-index: 10;
+            -webkit-tap-highlight-color: transparent;
+            opacity: 0.9;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+        .product-tile-image-wrap:hover .mwh-product-remove-btn,
+        .product-tile-image-wrap:hover .mwh-product-edit-btn,
+        .mwh-product-remove-btn:hover,
+        .mwh-product-edit-btn:hover,
+        .mwh-product-remove-btn:focus,
+        .mwh-product-edit-btn:focus {
+            opacity: 1;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+        .mwh-product-remove-btn {
+            top: 0.5rem;
+            left: 0.5rem;
+        }
+        .mwh-product-remove-btn:hover {
+            background: #fff;
+            border-color: #d32f2f;
+            color: #d32f2f;
+            transform: scale(1.1);
+        }
+        .mwh-product-edit-btn {
+            top: 0.5rem;
+            right: 0.5rem;
+        }
+        .mwh-product-edit-btn:hover {
+            background: #fff;
+            border-color: #000;
+            color: #000;
+            transform: scale(1.1);
+        }
+        .mwh-product-remove-btn svg,
+        .mwh-product-edit-btn svg {
+            width: 16px;
+            height: 16px;
+            pointer-events: none;
+        }
+        @media (max-width: 768px) {
+            .mwh-product-remove-btn,
+            .mwh-product-edit-btn {
+                opacity: 1;
+                width: 36px;
+                height: 36px;
+                background: rgba(255, 255, 255, 0.98);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            }
+            .mwh-product-remove-btn svg,
+            .mwh-product-edit-btn svg {
+                width: 18px;
+                height: 18px;
+            }
         }
     </style>
 </head>
@@ -217,7 +290,9 @@
                 var bought = !!p.bought;
                 var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
                 var id = p.id;
-                return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label><label><input type="checkbox" class="mwh-x-remove" data-id="' + id + '" ' + (xRemove ? 'checked' : '') + '> Remove</label><button type="button" class="mwh-edit-product" data-id="' + id + '" title="Edit product">Edit</button></div></div>';
+                var removeBtn = '<button type="button" class="mwh-product-remove-btn" data-id="' + id + '" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>';
+                var editBtn = '<button type="button" class="mwh-product-edit-btn" data-id="' + id + '" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>';
+                return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + removeBtn + editBtn + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div></div>';
             }
             function renderProductList(list) {
                 if (list.length === 0) {
@@ -272,49 +347,76 @@
                             });
                     });
                 });
-                grid.querySelectorAll('.mwh-x-remove').forEach(function(cb) {
-                    cb.addEventListener('change', function() {
-                        updateProductFlag(cb.dataset.id, 'x_remove', cb.checked);
-                        // Re-fetch and re-render so removed items are filtered out immediately
-                        fetch('/api/muswell-hill-products')
-                            .then(function(r) { return r.json(); })
-                            .then(function(products) {
-                                var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
-                                renderProductList(list);
-                            });
+                
+                // Attach event listeners to edit and delete buttons
+                grid.querySelectorAll('.mwh-product-edit-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var id = btn.getAttribute('data-id');
+                        if (id) editMwhProduct(id);
                     });
                 });
-                grid.querySelectorAll('.mwh-edit-product').forEach(function(btn) {
-                    btn.addEventListener('click', function() {
+                
+                grid.querySelectorAll('.mwh-product-remove-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
                         var id = btn.getAttribute('data-id');
-                        if (!id) return;
-                        btn.disabled = true;
-                        fetch('/api/products/' + id)
-                            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
-                            .then(function(result) {
-                                btn.disabled = false;
-                                if (!result.ok) return;
-                                var p = result.data;
-                                document.getElementById('mwhEditingProductId').value = id;
-                                document.getElementById('mwhProductModalTitle').textContent = 'Edit Product';
-                                document.getElementById('mwhSubmitProduct').textContent = 'Save changes';
-                                document.getElementById('mwhProductLink').value = p.link || '';
-                                document.getElementById('mwhProductWebsiteName').value = p.website_name || '';
-                                document.getElementById('mwhProductTitle').value = p.title || '';
-                                document.getElementById('mwhProductImageUrl').value = p.image_url || '';
-                                document.getElementById('mwhProductPrice').value = p.price || '';
-                                document.getElementById('mwhProductCategory').value = p.category || '';
-                                document.getElementById('mwhProductRoom').value = p.room || '';
-                                document.getElementById('mwhProductTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
-                                document.getElementById('mwhProductIsMwh').checked = !!p.is_mwh;
-                                if (modal) modal.style.display = 'flex';
-                                document.body.style.overflow = 'hidden';
-                                if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
-                            })
-                            .catch(function() { btn.disabled = false; });
+                        if (id && confirm('Are you sure you want to delete this product?')) {
+                            deleteMwhProduct(id);
+                        }
                     });
                 });
             }
+            
+            function editMwhProduct(id) {
+                if (!id) return;
+                fetch('/api/products/' + id)
+                    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+                    .then(function(result) {
+                        if (!result.ok) return;
+                        var p = result.data;
+                        document.getElementById('mwhEditingProductId').value = id;
+                        document.getElementById('mwhProductModalTitle').textContent = 'Edit Product';
+                        document.getElementById('mwhSubmitProduct').textContent = 'Save changes';
+                        document.getElementById('mwhProductLink').value = p.link || '';
+                        document.getElementById('mwhProductWebsiteName').value = p.website_name || '';
+                        document.getElementById('mwhProductTitle').value = p.title || '';
+                        document.getElementById('mwhProductImageUrl').value = p.image_url || '';
+                        document.getElementById('mwhProductPrice').value = p.price || '';
+                        document.getElementById('mwhProductCategory').value = p.category || '';
+                        document.getElementById('mwhProductRoom').value = p.room || '';
+                        document.getElementById('mwhProductTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
+                        document.getElementById('mwhProductIsMwh').checked = !!p.is_mwh;
+                        if (modal) modal.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                        if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+                    })
+                    .catch(function(e) { console.error(e); });
+            }
+            
+            function deleteMwhProduct(id) {
+                if (!id) return;
+                fetch('/api/products/' + id, { method: 'DELETE' })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('Failed to delete product');
+                        loading.style.display = 'block';
+                        return fetch('/api/muswell-hill-products').then(function(r) { return r.json(); });
+                    })
+                    .then(function(products) {
+                        loading.style.display = 'none';
+                        var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                        renderProductList(list);
+                    })
+                    .catch(function(e) {
+                        loading.style.display = 'none';
+                        alert('Failed to delete product: ' + (e.message || 'Unknown error'));
+                    });
+            }
+            
+            window.editMwhProduct = editMwhProduct;
+            window.deleteMwhProduct = deleteMwhProduct;
 
             function openProductModal() {
                 document.getElementById('mwhEditingProductId').value = '';

@@ -1139,6 +1139,18 @@ def update_product(product_id):
         app.logger.error(f"Error updating product: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/products/<int:product_id>', methods=['DELETE'])
+def delete_product(product_id):
+    """Delete a product."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_products').delete().eq('id', product_id).execute()
+        return '', 204
+    except Exception as e:
+        app.logger.error(f"Error deleting product: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 def _muswell_hill_product_match(row):
     """True if row is MWH only: is_mwh true or tags contains mwh."""
