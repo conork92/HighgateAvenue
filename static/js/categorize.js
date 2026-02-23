@@ -394,6 +394,12 @@ function renderIdeas() {
                 ${imageUrl ? `
                     <div class="idea-image-container">
                         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)}" class="idea-image" loading="lazy" decoding="async" onerror="this.style.display='none'" onclick="showFullImage('${escapeHtml(imageUrl)}', '${escapeHtml(name)}')" style="cursor: pointer;">
+                        <button type="button" class="idea-remove-btn" data-id="${idea.id}" title="Remove from view" onclick="event.stopPropagation(); removeIdea('${idea.id}')" aria-label="Remove">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                        <button type="button" class="idea-edit-btn" data-id="${idea.id}" title="Focus on edit fields" onclick="event.stopPropagation(); focusIdeaCard('${idea.id}')" aria-label="Edit">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
                     </div>
                 ` : ''}
                 <div class="idea-info">
@@ -421,9 +427,6 @@ function renderIdeas() {
                             </button>
                             <button class="bok-likes-btn" data-id="${idea.id}">
                                 <span>👍</span> Bok Likes: <span class="bok-count">${bokLikes}</span>
-                            </button>
-                            <button type="button" class="remove-idea-btn" data-id="${idea.id}" title="Remove from view (hide this idea)">
-                                <span>✕</span> Remove
                             </button>
                         </div>
                     </div>
@@ -478,10 +481,23 @@ function attachEventListeners() {
         btn.addEventListener('click', () => incrementBokLikes(btn.dataset.id));
     });
     
-    // Remove (X) buttons
-    document.querySelectorAll('.remove-idea-btn').forEach(btn => {
-        btn.addEventListener('click', () => removeIdea(btn.dataset.id));
-    });
+    // Focus idea card function (for edit button)
+    window.focusIdeaCard = function(ideaId) {
+        const card = document.querySelector(`.idea-card[data-id="${ideaId}"]`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Highlight the card briefly
+            card.style.outline = '2px solid var(--black)';
+            setTimeout(() => {
+                card.style.outline = '';
+            }, 2000);
+            // Focus on the name input
+            const nameInput = card.querySelector('.idea-name-input');
+            if (nameInput) {
+                setTimeout(() => nameInput.focus(), 300);
+            }
+        }
+    };
 }
 
 // Toggle like status
@@ -582,11 +598,10 @@ async function incrementBokLikes(ideaId) {
 // Mark idea as removed (hide from view)
 async function removeIdea(ideaId) {
     const card = document.querySelector(`.idea-card[data-id="${ideaId}"]`);
-    const btn = card?.querySelector('.remove-idea-btn');
+    const btn = card?.querySelector('.idea-remove-btn');
     if (!card || !btn) return;
     
     btn.disabled = true;
-    btn.textContent = 'Removing...';
     try {
         const response = await fetch(`${API_BASE}/design-ideas/${ideaId}`, {
             method: 'PUT',
@@ -606,7 +621,6 @@ async function removeIdea(ideaId) {
         alert(`Error: ${error.message}`);
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span>✕</span> Remove';
     }
 }
 

@@ -589,30 +589,92 @@ header h1 {
 }
 
 .product-tile-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    position: relative;
 }
-.product-edit-btn {
-    margin-top: 0.5rem;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--gray-dark);
-    background: transparent;
+
+.product-tile {
+    position: relative;
+}
+
+.product-actions {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity var(--transition);
+}
+
+.product-tile-wrapper:hover .product-actions,
+.product-actions:focus-within {
+    opacity: 1;
+}
+
+.product-edit-btn,
+.product-delete-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
     border: 1px solid var(--gray-medium);
+    border-radius: 4px;
     cursor: pointer;
     transition: all var(--transition);
-    font-family: inherit;
-    align-self: flex-start;
+    color: var(--black);
+    -webkit-tap-highlight-color: transparent;
 }
+
 .product-edit-btn:hover {
+    background: var(--white);
     border-color: var(--black);
     color: var(--black);
+    transform: scale(1.1);
 }
-.product-edit-btn:disabled {
-    opacity: 0.6;
+
+.product-delete-btn:hover {
+    background: var(--white);
+    border-color: #d32f2f;
+    color: #d32f2f;
+    transform: scale(1.1);
+}
+
+.product-edit-btn:disabled,
+.product-delete-btn:disabled {
+    opacity: 0.5;
     cursor: wait;
+    transform: none;
+}
+
+.product-edit-btn svg,
+.product-delete-btn svg {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .product-actions {
+        opacity: 1; /* Always visible on mobile */
+    }
+    
+    .product-edit-btn,
+    .product-delete-btn {
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .product-edit-btn svg,
+    .product-delete-btn svg {
+        width: 18px;
+        height: 18px;
+    }
 }
 
 .tag:hover {

@@ -58,6 +58,81 @@
     margin-bottom: 1rem;
 }
 
+.idea-remove-btn,
+.idea-edit-btn {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid var(--gray-medium);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--black);
+    z-index: 10;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 0;
+}
+
+.idea-image-container:hover .idea-remove-btn,
+.idea-image-container:hover .idea-edit-btn,
+.idea-remove-btn:focus,
+.idea-edit-btn:focus {
+    opacity: 1;
+}
+
+.idea-remove-btn {
+    top: 0.5rem;
+    left: 0.5rem;
+}
+
+.idea-remove-btn:hover {
+    background: var(--white);
+    border-color: #d32f2f;
+    color: #d32f2f;
+    transform: scale(1.1);
+}
+
+.idea-edit-btn {
+    top: 0.5rem;
+    right: 0.5rem;
+}
+
+.idea-edit-btn:hover {
+    background: var(--white);
+    border-color: var(--black);
+    color: var(--black);
+    transform: scale(1.1);
+}
+
+.idea-remove-btn svg,
+.idea-edit-btn svg {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .idea-remove-btn,
+    .idea-edit-btn {
+        opacity: 1; /* Always visible on mobile */
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .idea-remove-btn svg,
+    .idea-edit-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+}
+
 .idea-info {
     display: flex;
     flex-direction: column;
