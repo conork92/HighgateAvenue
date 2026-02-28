@@ -403,6 +403,147 @@ def jobs():
     )
 
 
+@app.route('/work/')
+def work():
+    """Work / job hunt page: thoughts and jobs seen."""
+    return render_template('work.html')
+
+
+@app.route('/api/work-thoughts', methods=['GET'], strict_slashes=False)
+def get_work_thoughts():
+    """List all work thoughts from ha_work_thoughts. Optional query: category=."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        query = supabase.table('ha_work_thoughts').select('*').order('created_at', desc=True)
+        category = request.args.get('category', '').strip()
+        if category:
+            query = query.eq('category', category)
+        r = query.execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching work thoughts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/work-thoughts', methods=['POST'], strict_slashes=False)
+def create_work_thought():
+    """Create a work thought (comment, category)."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        comment = (data.get('comment') or '').strip()
+        if not comment:
+            return jsonify({'error': 'Comment is required'}), 400
+        payload = {
+            'comment': comment,
+            'category': (data.get('category') or '').strip() or None,
+        }
+        r = supabase.table('ha_work_thoughts').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating work thought: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/work-thoughts/<int:thought_id>', methods=['DELETE'])
+def delete_work_thought(thought_id):
+    """Delete a work thought by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_work_thoughts').delete().eq('id', thought_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f"Error deleting work thought: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# --------- Jobs I've seen (Work page: ha_jobs_seen) ---------
+@app.route('/api/jobs-seen', methods=['GET'], strict_slashes=False)
+def get_jobs_seen():
+    """List all jobs seen from ha_jobs_seen."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        r = supabase.table('ha_jobs_seen').select('*').order('created_at', desc=True).execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching jobs seen: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/jobs-seen', methods=['POST'], strict_slashes=False)
+def create_job_seen():
+    """Create a job seen (title required; company, link, source, notes optional)."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        title = (data.get('title') or '').strip()
+        if not title:
+            return jsonify({'error': 'Title is required'}), 400
+        payload = {
+            'title': title,
+            'company': (data.get('company') or '').strip() or None,
+            'link': (data.get('link') or '').strip() or None,
+            'source': (data.get('source') or '').strip() or None,
+            'notes': (data.get('notes') or '').strip() or None,
+        }
+        r = supabase.table('ha_jobs_seen').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating job seen: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/jobs-seen/<int:job_id>', methods=['PUT'])
+def update_job_seen(job_id):
+    """Update a job seen by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        update_data = {}
+        if 'title' in data:
+            title = (data.get('title') or '').strip()
+            if not title:
+                return jsonify({'error': 'Title cannot be empty'}), 400
+            update_data['title'] = title
+        if 'company' in data:
+            update_data['company'] = (data.get('company') or '').strip() or None
+        if 'link' in data:
+            update_data['link'] = (data.get('link') or '').strip() or None
+        if 'source' in data:
+            update_data['source'] = (data.get('source') or '').strip() or None
+        if 'notes' in data:
+            update_data['notes'] = (data.get('notes') or '').strip() or None
+        if not update_data:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_jobs_seen').update(update_data).eq('id', job_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else {}), 200
+    except Exception as e:
+        app.logger.error(f"Error updating job seen: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/jobs-seen/<int:job_id>', methods=['DELETE'])
+def delete_job_seen(job_id):
+    """Delete a job seen by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_jobs_seen').delete().eq('id', job_id).execute()
+        return '', 204
+    except Exception as e:
+        app.logger.error(f"Error deleting job seen: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/jobs', methods=['GET'], strict_slashes=False)
 def get_jobs():
     """List all jobs from ha_jobs_list."""
