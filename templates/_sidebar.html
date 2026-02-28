@@ -45,6 +45,9 @@
         <li>
             <a href="{{ url_for('jobs') }}" class="{% if request.endpoint == 'jobs' %}active{% endif %}">Jobs</a>
         </li>
+        <li>
+            <a href="{{ url_for('work') }}" class="{% if request.endpoint == 'work' %}active{% endif %}">Work</a>
+        </li>
     </ul>
 </nav>
 <button type="button" class="sidebar-open" id="sidebarOpen" aria-label="Open sidebar" title="Open sidebar" style="display: none;">›</button>

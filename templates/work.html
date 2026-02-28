@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue – Work</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/work.css') }}?v=20260207">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Work</h1>
+                    <p class="subtitle">Job search – centralise your thoughts and track roles you’ve seen.</p>
+                </header>
+
+                <!-- Saved thoughts (DB) -->
+                <section class="work-section">
+                    <h2 class="work-section-title">Saved thoughts</h2>
+                    <p class="work-section-desc">Stored thoughts with a category so you can filter and revisit later.</p>
+                    <form id="workThoughtForm" class="work-thought-form">
+                        <div class="form-row-inline">
+                            <input type="text" id="workThoughtCategory" placeholder="Category (e.g. Priorities, Companies)" class="work-thought-category">
+                            <textarea id="workThoughtComment" rows="2" placeholder="Your thought…" required class="work-thought-comment"></textarea>
+                            <button type="submit" class="work-thought-submit">Save thought</button>
+                        </div>
+                    </form>
+                    <div id="workThoughtsList" class="work-thoughts-list">
+                        <!-- Filled by JS from API -->
+                    </div>
+                </section>
+
+                <!-- Jobs I've seen -->
+                <section class="work-section">
+                    <div class="work-section-header">
+                        <div>
+                            <h2 class="work-section-title">Jobs I’ve seen</h2>
+                            <p class="work-section-desc">Add roles you find so you can keep links and your thoughts in one place.</p>
+                        </div>
+                        <button type="button" id="workAddJobBtn" class="work-add-btn">+ Add job</button>
+                    </div>
+                    <div id="workJobsList" class="work-jobs-list">
+                        <!-- Filled by JS -->
+                    </div>
+                </section>
+
+                <!-- Add/Edit Job Modal -->
+                <div id="workJobModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <span class="work-close-modal" aria-label="Close">&times;</span>
+                        <h2 id="workJobModalTitle">Add job</h2>
+                        <form id="workJobForm">
+                            <div class="form-group">
+                                <label for="workJobTitle">Job title *</label>
+                                <input type="text" id="workJobTitle" placeholder="e.g. Senior Software Engineer" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="workJobCompany">Company</label>
+                                <input type="text" id="workJobCompany" placeholder="e.g. Acme Ltd">
+                            </div>
+                            <div class="form-group">
+                                <label for="workJobLink">Link</label>
+                                <input type="url" id="workJobLink" placeholder="https://…">
+                            </div>
+                            <div class="form-group">
+                                <label for="workJobSource">Source</label>
+                                <input type="text" id="workJobSource" placeholder="e.g. LinkedIn, Indeed, company site">
+                            </div>
+                            <div class="form-group">
+                                <label for="workJobNotes">My thoughts / notes</label>
+                                <textarea id="workJobNotes" rows="3" placeholder="Why it’s interesting, fit, next steps…"></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn-cancel" id="workCancelJob">Cancel</button>
+                                <button type="submit" class="btn-submit" id="workSubmitJob">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+(function() {
+    var listEl = document.getElementById('workJobsList');
+    var modal = document.getElementById('workJobModal');
+    var form = document.getElementById('workJobForm');
+    var modalTitle = document.getElementById('workJobModalTitle');
+    var editingId = null;
+    var jobsSeenList = [];
+
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function renderJobs(jobs) {
+        jobs = jobs || jobsSeenList;
+        if (!jobs.length) {
+            listEl.innerHTML = '<p class="work-empty">No jobs added yet. Click “+ Add job” to save roles you’ve seen.</p>';
+            return;
+        }
+        var html = '';
+        jobs.forEach(function(j) {
+            var id = j.id;
+            var title = escapeHtml(j.title || 'Untitled');
+            var company = (j.company || '').trim();
+            var link = (j.link || '').trim();
+            var source = (j.source || '').trim();
+            var notes = (j.notes || '').trim();
+            html += '<article class="work-job-card" data-id="' + escapeHtml(String(id)) + '">';
+            html += '<div class="work-job-card-main">';
+            html += '<h3 class="work-job-title">' + title + '</h3>';
+            if (company) html += '<p class="work-job-meta">' + escapeHtml(company) + (source ? ' · ' + escapeHtml(source) : '') + '</p>';
+            if (link) html += '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener noreferrer" class="work-job-link">View listing</a>';
+            if (notes) html += '<p class="work-job-notes">' + escapeHtml(notes) + '</p>';
+            html += '</div>';
+            html += '<div class="work-job-actions"><button type="button" class="work-job-edit" data-id="' + escapeHtml(String(id)) + '">Edit</button><button type="button" class="work-job-delete" data-id="' + escapeHtml(String(id)) + '">Delete</button></div>';
+            html += '</article>';
+        });
+        listEl.innerHTML = html;
+        listEl.querySelectorAll('.work-job-edit').forEach(function(btn) {
+            btn.addEventListener('click', function() { openEdit(btn.getAttribute('data-id')); });
+        });
+        listEl.querySelectorAll('.work-job-delete').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var id = btn.getAttribute('data-id');
+                if (!id || !confirm('Remove this job from your list?')) return;
+                fetch('/api/jobs-seen/' + id, { method: 'DELETE' })
+                    .then(function(r) { if (r.ok) fetchJobsSeen(); });
+            });
+        });
+    }
+    function fetchJobsSeen() {
+        fetch('/api/jobs-seen')
+            .then(function(r) { return r.ok ? r.json() : []; })
+            .then(function(data) {
+                jobsSeenList = Array.isArray(data) ? data : [];
+                renderJobs(jobsSeenList);
+            })
+            .catch(function() {
+                listEl.innerHTML = '<p class="work-empty">Could not load jobs.</p>';
+            });
+    }
+    function openAdd() {
+        editingId = null;
+        modalTitle.textContent = 'Add job';
+        form.reset();
+        document.getElementById('workJobTitle').value = '';
+        document.getElementById('workJobCompany').value = '';
+        document.getElementById('workJobLink').value = '';
+        document.getElementById('workJobSource').value = '';
+        document.getElementById('workJobNotes').value = '';
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function openEdit(id) {
+        var j = jobsSeenList.find(function(x) { return String(x.id) === String(id); });
+        if (!j) return;
+        editingId = id;
+        modalTitle.textContent = 'Edit job';
+        document.getElementById('workJobTitle').value = j.title || '';
+        document.getElementById('workJobCompany').value = j.company || '';
+        document.getElementById('workJobLink').value = j.link || '';
+        document.getElementById('workJobSource').value = j.source || '';
+        document.getElementById('workJobNotes').value = j.notes || '';
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        form.reset();
+        editingId = null;
+    }
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var title = (document.getElementById('workJobTitle').value || '').trim();
+        if (!title) return;
+        var payload = {
+            title: title,
+            company: (document.getElementById('workJobCompany').value || '').trim(),
+            link: (document.getElementById('workJobLink').value || '').trim(),
+            source: (document.getElementById('workJobSource').value || '').trim(),
+            notes: (document.getElementById('workJobNotes').value || '').trim()
+        };
+        if (editingId) {
+            fetch('/api/jobs-seen/' + editingId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(function(r) {
+                if (r.ok) { fetchJobsSeen(); closeModal(); }
+                else r.text().then(function(t) { alert('Update failed: ' + t); });
+            });
+        } else {
+            fetch('/api/jobs-seen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(function(r) {
+                if (r.ok) { fetchJobsSeen(); closeModal(); }
+                else r.text().then(function(t) { alert('Save failed: ' + t); });
+            });
+        }
+    });
+    document.getElementById('workAddJobBtn').addEventListener('click', openAdd);
+    document.querySelector('.work-close-modal').addEventListener('click', closeModal);
+    document.getElementById('workCancelJob').addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+    fetchJobsSeen();
+
+    // Saved thoughts (API)
+    var thoughtsListEl = document.getElementById('workThoughtsList');
+    var thoughtForm = document.getElementById('workThoughtForm');
+    function fetchThoughts() {
+        if (!thoughtsListEl) return;
+        fetch('/api/work-thoughts')
+            .then(function(r) { return r.ok ? r.json() : []; })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : [];
+                if (list.length === 0) {
+                    thoughtsListEl.innerHTML = '<p class="work-empty">No saved thoughts yet. Add one above.</p>';
+                    return;
+                }
+                list.sort(function(a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); });
+                var html = '';
+                list.forEach(function(t) {
+                    var id = t.id;
+                    var cat = (t.category || '').trim();
+                    var comment = escapeHtml((t.comment || '').trim());
+                    var date = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
+                    html += '<article class="work-thought-card" data-id="' + id + '">';
+                    if (cat) html += '<span class="work-thought-cat">' + escapeHtml(cat) + '</span>';
+                    html += '<p class="work-thought-text">' + comment + '</p>';
+                    if (date) html += '<time class="work-thought-date">' + escapeHtml(date) + '</time>';
+                    html += '<button type="button" class="work-thought-delete" data-id="' + id + '">Delete</button>';
+                    html += '</article>';
+                });
+                thoughtsListEl.innerHTML = html;
+                thoughtsListEl.querySelectorAll('.work-thought-delete').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var id = btn.getAttribute('data-id');
+                        if (!id || !confirm('Delete this thought?')) return;
+                        fetch('/api/work-thoughts/' + id, { method: 'DELETE' })
+                            .then(function() { fetchThoughts(); });
+                    });
+                });
+            })
+            .catch(function() {
+                thoughtsListEl.innerHTML = '<p class="work-empty">Could not load saved thoughts.</p>';
+            });
+    }
+    if (thoughtForm) {
+        thoughtForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var comment = (document.getElementById('workThoughtComment').value || '').trim();
+            if (!comment) return;
+            var category = (document.getElementById('workThoughtCategory').value || '').trim();
+            fetch('/api/work-thoughts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comment: comment, category: category || undefined })
+            })
+                .then(function(r) {
+                    if (!r.ok) throw new Error(r.statusText);
+                    document.getElementById('workThoughtComment').value = '';
+                    document.getElementById('workThoughtCategory').value = '';
+                    fetchThoughts();
+                })
+                .catch(function() { alert('Failed to save thought.'); });
+        });
+    }
+    fetchThoughts();
+})();
+    </script>
+</body>
+</html>
