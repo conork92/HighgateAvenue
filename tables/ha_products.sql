@@ -9,12 +9,15 @@ create table if not exists ha_products (
   price text,
   title text,
   category text,
+  sub_category text,
   room text,
   website_name text,
   tags text[] default '{}',
   bok_likes boolean not null default false,
   x_remove boolean not null default false,
   is_mwh boolean not null default false,
+  bought boolean not null default false,
+  comment text,
   created_at timestamptz default now()
 );
 
@@ -22,9 +25,15 @@ comment on table ha_products is 'Products to buy (e.g. Amazon links) with image,
 comment on column ha_products.bok_likes is 'Muswell Hill: book/likes flag';
 comment on column ha_products.x_remove is 'Muswell Hill: exclude/remove from consideration';
 comment on column ha_products.is_mwh is 'Muswell Hill: true when product is for MWH or has tag mwh';
+comment on column ha_products.bought is 'Mark as bought; shown in Bought section at bottom';
+comment on column ha_products.comment is 'Optional notes or comments for the product';
+comment on column ha_products.sub_category is 'Free-text sub category (e.g. for Baby page filters)';
 
 -- If table already exists, add columns in Supabase SQL Editor:
 -- alter table ha_products add column if not exists website_name text;
 -- alter table ha_products add column if not exists bok_likes boolean not null default false;
 -- alter table ha_products add column if not exists x_remove boolean not null default false;
 -- alter table ha_products add column if not exists is_mwh boolean not null default false;
+-- alter table ha_products add column if not exists bought boolean not null default false;
+-- alter table ha_products add column if not exists comment text;
+-- alter table ha_products add column if not exists sub_category text;

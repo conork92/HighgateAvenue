@@ -678,6 +678,12 @@ def muswell_hill_products():
     )
 
 
+@app.route('/muswell-hill/baby/')
+def muswell_hill_baby():
+    """Muswell Hill Baby: products tagged baby, filterable by sub_category."""
+    return render_template('muswell_hill_baby.html', muswell_room='baby')
+
+
 @app.route('/muswell-hill/<room_slug>/')
 def muswell_hill_room(room_slug):
     if room_slug not in MUSWELL_HILL_ROOMS:
@@ -777,6 +783,60 @@ def _title_from_url(url):
         # Habitat: /product/123 - no title in URL
         if 'habitat' in (parsed.netloc or '').lower():
             pass  # rely on og:title from fetch
+        # Dusk: /products/avery-acacia-wood-6-drawer-chest-walnut
+        if 'dusk' in (parsed.netloc or '').lower():
+            if 'products' in [s.lower() for s in segments] and len(segments) >= 2:
+                idx = next((i for i, s in enumerate(segments) if s.lower() == 'products'), -1)
+                if idx >= 0 and idx + 1 < len(segments):
+                    raw = re.sub(r'[-_]+', ' ', unquote(segments[idx + 1])).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
+        # John Lewis: /john-lewis-arcade-jute-rich-rug-multi/p114108377
+        if 'johnlewis' in (parsed.netloc or '').lower() and segments:
+            for i, seg in enumerate(segments):
+                if re.match(r'^p\d{6,}$', seg, re.I) and i > 0:
+                    raw = re.sub(r'[-_]+', ' ', unquote(segments[i - 1])).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
+            if segments and '-' in segments[0]:
+                raw = re.sub(r'[-_]+', ' ', unquote(segments[0])).strip()
+                if len(raw) > 2:
+                    return raw[:200].title()
+        # Daals: /products/izzy-curved-rattan-coffee-table-walnut
+        if 'daals' in (parsed.netloc or '').lower():
+            if 'products' in [s.lower() for s in segments] and len(segments) >= 2:
+                idx = next((i for i, s in enumerate(segments) if s.lower() == 'products'), -1)
+                if idx >= 0 and idx + 1 < len(segments):
+                    raw = re.sub(r'[-_]+', ' ', unquote(segments[idx + 1])).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
+        # Dunelm: /product/scallop-wide-sideboard-1000264689
+        if 'dunelm' in (parsed.netloc or '').lower() and segments:
+            if 'product' in [s.lower() for s in segments]:
+                idx = next((i for i, s in enumerate(segments) if s.lower() == 'product'), -1)
+                if idx >= 0 and idx + 1 < len(segments):
+                    seg = segments[idx + 1]
+                    raw = re.sub(r'-\d{7,}$', '', seg)  # strip trailing product id
+                    raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
+        # Urban Outfitters: /en-gb/shop/.../spindle-arch-storage-shelf
+        if 'urbanoutfitters' in (parsed.netloc or '').lower() and segments:
+            for seg in reversed(segments):
+                if seg.lower() in ('en-gb', 'shop', 'hybrid', 'en-us'): continue
+                if '-' in seg and not re.match(r'^\d+$', seg):
+                    raw = re.sub(r'[-_]+', ' ', unquote(seg)).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
+        # Zara Home: /gb/ombre-linen-tablecloth-x-collagerie-l47709021
+        if 'zarahome' in (parsed.netloc or '').lower() and segments:
+            for seg in segments:
+                if seg.lower() in ('gb', 'us', 'ie', 'fr', 'de', 'es', 'it', 'nl'): continue
+                if '-' in seg:
+                    raw = re.sub(r'-l\d+$', '', seg, flags=re.I)
+                    raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
         # Generic: use last non-numeric segment
         for seg in reversed(segments):
             if seg.isdigit(): continue
@@ -803,6 +863,22 @@ def _website_name_from_url(url):
             return 'Habitat'
         if 'johnlewis' in host_lower:
             return 'John Lewis'
+        if 'zarahome' in host_lower:
+            return 'Zara Home'
+        if 'dusk' in host_lower:
+            return 'Dusk'
+        if 'daals' in host_lower:
+            return 'Daals'
+        if 'made' in host_lower:
+            return 'Made'
+        if 'dunelm' in host_lower:
+            return 'Dunelm'
+        if 'urbanoutfitters' in host_lower:
+            return 'Urban Outfitters'
+        if 'next.' in host_lower and 'next.co' in host_lower:
+            return 'Next'
+        if 'hm.com' in host_lower or (host_lower.startswith('hm.') or host_lower == 'hm'):
+            return 'H&M'
         part = host.split('.')[-2] if '.' in host else host
         if part:
             return part[:1].upper() + part[1:].lower()
@@ -1109,6 +1185,59 @@ def _fetch_product_preview(url):
                     price = m.group(0).strip()
         except Exception:
             pass
+    # Dunelm: JSON-LD first; then avoid "Free delivery over £60" by taking best product-price candidate
+    if not price and 'dunelm' in url.lower():
+        try:
+            for script in soup.find_all('script', type='application/ld+json'):
+                if not script.string:
+                    continue
+                try:
+                    data = json.loads(script.string)
+                except Exception:
+                    continue
+                if isinstance(data, dict) and data.get('@type') == 'Product':
+                    off = data.get('offers')
+                    if isinstance(off, dict) and 'price' in off:
+                        pv = off.get('price')
+                        if pv is not None:
+                            price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                            break
+                    if isinstance(off, list) and off and 'price' in off[0]:
+                        pv = off[0].get('price')
+                        if pv is not None:
+                            price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                            break
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and item.get('@type') == 'Product' and 'offers' in item:
+                            off = item['offers']
+                            if isinstance(off, dict) and 'price' in off:
+                                pv = off.get('price')
+                                if pv is not None:
+                                    price = '£' + str(pv) if not str(pv).startswith('£') else str(pv)
+                                    break
+                if price:
+                    break
+            if not price:
+                text = soup.get_text()
+                # Page has "Free Standard Delivery Over £60" and "£250 gift card" before product price £199
+                all_m = list(re.finditer(r'£\s*([\d,]+)(?:\.(\d{2}))?', text))
+                candidates = []
+                skip_vals = {60, 250}  # delivery threshold, gift card
+                for m in all_m:
+                    whole = (m.group(1) or '').replace(',', '')
+                    dec = m.group(2) or '00'
+                    try:
+                        val = float(whole + '.' + dec)
+                        if 80 <= val <= 5000 and val not in skip_vals:
+                            candidates.append((val, m.group(0).strip()))
+                    except ValueError:
+                        pass
+                if candidates:
+                    best = max(candidates, key=lambda x: x[0])
+                    price = best[1]
+        except Exception:
+            pass
     if not price:
         try:
             text = soup.get_text()
@@ -1156,7 +1285,7 @@ def product_preview():
 
 @app.route('/api/products')
 def get_products():
-    """List products from ha_products. Optional query: room=, tag=."""
+    """List products from ha_products. Optional query: room=, tag=, category=."""
     if not supabase:
         return jsonify([]), 200
     try:
@@ -1164,6 +1293,9 @@ def get_products():
         room = request.args.get('room', '').strip()
         if room:
             query = query.eq('room', room)
+        category = request.args.get('category', '').strip()
+        if category:
+            query = query.eq('category', category)
         tag = request.args.get('tag', '').strip().lower()
         if tag:
             query = query.overlaps('tags', [tag])
@@ -1203,11 +1335,13 @@ def create_product():
             'image_url': (data.get('image_url') or '').strip() or None,
             'price': (data.get('price') or '').strip() or None,
             'category': (data.get('category') or '').strip() or None,
+            'sub_category': (data.get('sub_category') or '').strip() or None,
             'room': (data.get('room') or '').strip() or None,
             'website_name': (data.get('website_name') or '').strip() or None,
             'tags': tags,
             'is_mwh': is_mwh,
             'bought': _coerce_bool(data.get('bought'), default=False),
+            'comment': (data.get('comment') or '').strip() or None,
         }
         r = supabase.table('ha_products').insert(payload).execute()
         rows = r.data or []
@@ -1261,10 +1395,14 @@ def update_product(product_id):
             update_data['price'] = (data.get('price') or '').strip() or None
         if 'category' in data:
             update_data['category'] = (data.get('category') or '').strip() or None
+        if 'sub_category' in data:
+            update_data['sub_category'] = (data.get('sub_category') or '').strip() or None
         if 'room' in data:
             update_data['room'] = (data.get('room') or '').strip() or None
         if 'website_name' in data:
             update_data['website_name'] = (data.get('website_name') or '').strip() or None
+        if 'comment' in data:
+            update_data['comment'] = (data.get('comment') or '').strip() or None
         if 'tags' in data:
             tags = data['tags']
             if isinstance(tags, list):

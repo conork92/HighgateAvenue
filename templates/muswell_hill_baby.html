@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue - Muswell Hill Baby</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260209">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/muswell_baby.css') }}?v=20260209">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Muswell Hill – Baby</h1>
+                    <p class="subtitle">Products with category <strong>Baby</strong>, split by sub category. Filter by website above; add, edit and mark as bought below.</p>
+                    <button type="button" id="babyAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
+                </header>
+                <div id="babyWebsiteFilters" class="baby-website-filters" style="display: none;">
+                    <span class="baby-website-filters-label">Website:</span>
+                    <div id="babyWebsiteFilterBtns"></div>
+                </div>
+                <div id="babyProductsLoading" class="loading">Loading...</div>
+                <div id="babyProductsGrid" style="display: none;">
+                    <!-- Main grid + Bought section filled by JS -->
+                </div>
+                <p id="babyEmpty" class="baby-empty" style="display: none;">No Baby products yet. Add products with category <strong>Baby</strong> above.</p>
+            </div>
+            <!-- Add/Edit Product Modal (same as Products page) -->
+            <div id="babyProductModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close-modal close-baby-product-modal" aria-label="Close">&times;</span>
+                    <h2 id="babyProductModalTitle">Add Product</h2>
+                    <form id="babyProductForm">
+                        <div class="form-group">
+                            <label for="babyProductLink">Product link *</label>
+                            <input type="url" id="babyProductLink" name="link" placeholder="https://..." required>
+                            <button type="button" id="babyFetchPreviewBtn" class="btn-fetch-preview" style="margin-top: 0.5rem;">Fetch from link</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductWebsiteName">Website name</label>
+                            <input type="text" id="babyProductWebsiteName" name="website_name" placeholder="e.g. Amazon, IKEA">
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductTitle">Title</label>
+                            <input type="text" id="babyProductTitle" name="title" placeholder="Product name">
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductImageUrl">Image URL</label>
+                            <input type="url" id="babyProductImageUrl" name="image_url" placeholder="Optional">
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductPrice">Price</label>
+                            <input type="text" id="babyProductPrice" name="price" placeholder="e.g. £24.99">
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductCategory">Category</label>
+                            <select id="babyProductCategory" name="category">
+                                <option value="">—</option>
+                                <option value="Baby">Baby</option>
+                                <option value="Appliance">Appliance</option>
+                                <option value="Art">Art</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Decor">Decor</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Lighting">Lighting</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductSubCategory">Sub category (free text)</label>
+                            <input type="text" id="babyProductSubCategory" name="sub_category" placeholder="e.g. Cot, Pram, Clothes">
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductRoom">Room</label>
+                            <select id="babyProductRoom" name="room">
+                                <option value="">—</option>
+                                <option value="Nursery">Nursery</option>
+                                <option value="Front Room">Front Room</option>
+                                <option value="Bedroom">Bedroom</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductTags">Tags (comma-separated)</label>
+                            <input type="text" id="babyProductTags" name="tags" placeholder="baby">
+                        </div>
+                        <div class="form-group">
+                            <label for="babyProductComment">Comment</label>
+                            <textarea id="babyProductComment" name="comment" rows="2" placeholder="Notes"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="babyProductIsMwh" name="is_mwh" value="1">
+                                <span>Is MWH (show on main Products page)</span>
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" id="babyCancelProduct">Cancel</button>
+                            <button type="submit" class="btn-submit" id="babySubmitProduct">Add Product</button>
+                        </div>
+                        <input type="hidden" id="babyEditingProductId" value="">
+                    </form>
+                    <div id="babyProductStatus" class="upload-status" style="display: none;"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+(function() {
+    var BABY_FETCH_URL = '/api/products?category=Baby';
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function getWebsiteDisplay(p) {
+        if (p.website_name && p.website_name.trim()) return p.website_name.trim();
+        if (p.link && p.link.includes('amazon')) return 'Amazon';
+        return '';
+    }
+    function updateProductFlag(productId, field, value) {
+        fetch('/api/products/' + productId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: value })
+        }).then(function(r) { if (!r.ok) console.error('Failed to update', productId, field); }).catch(function(e) { console.error(e); });
+    }
+    var loading = document.getElementById('babyProductsLoading');
+    var grid = document.getElementById('babyProductsGrid');
+    var emptyEl = document.getElementById('babyEmpty');
+    var modal = document.getElementById('babyProductModal');
+    var form = document.getElementById('babyProductForm');
+    var statusEl = document.getElementById('babyProductStatus');
+    var babyProducts = [];
+    var currentWebsiteFilter = '';
+
+    function renderCard(p) {
+        var hasImage = p.image_url && p.image_url.trim();
+        var imgHtml = hasImage ? '<img src="' + escapeHtml(p.image_url) + '" alt="" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">' : '';
+        var title = escapeHtml(p.title || 'Product');
+        var rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+        var displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
+        var price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
+        var websiteDisplay = getWebsiteDisplay(p);
+        var websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
+        var link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+        var bokLikes = !!p.bok_likes;
+        var xRemove = !!p.x_remove;
+        var bought = !!p.bought;
+        var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
+        var id = p.id;
+        var commentText = (p.comment || '').trim();
+        var commentHtml = commentText ? '<p class="mwh-product-comment">' + escapeHtml(commentText) + '</p>' : '';
+        var subCat = (p.sub_category || '').trim();
+        var subCatHtml = subCat ? '<span class="mwh-product-subcategory">' + escapeHtml(subCat) + '</span>' : '';
+        var removeBtn = '<button type="button" class="mwh-product-remove-btn" data-id="' + id + '" title="Delete" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>';
+        var editBtn = '<button type="button" class="mwh-product-edit-btn" data-id="' + id + '" title="Edit" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>';
+        return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + removeBtn + editBtn + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + (subCatHtml ? subCatHtml + ' ' : '') + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="baby-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="baby-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div>' + commentHtml + '</div>';
+    }
+    function getWebsiteKey(p) {
+        return (p.website_name || '').trim() || '(No website)';
+    }
+    function getSubCategoryKey(p) {
+        return (p.sub_category || '').trim() || 'Uncategorised';
+    }
+    function attachCardListeners() {
+        grid.querySelectorAll('.baby-bok-likes').forEach(function(cb) {
+            cb.addEventListener('change', function() { updateProductFlag(cb.dataset.id, 'bok_likes', cb.checked); });
+        });
+        grid.querySelectorAll('.baby-bought').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                updateProductFlag(cb.dataset.id, 'bought', cb.checked);
+                fetch(BABY_FETCH_URL).then(function(r) { return r.json(); }).then(function(list) {
+                    babyProducts = Array.isArray(list) ? list : [];
+                    renderBabyList();
+                });
+            });
+        });
+        grid.querySelectorAll('.mwh-product-edit-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); editBabyProduct(btn.getAttribute('data-id')); });
+        });
+        grid.querySelectorAll('.mwh-product-remove-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault(); e.stopPropagation();
+                var id = btn.getAttribute('data-id');
+                if (id && confirm('Delete this product?')) deleteBabyProduct(id);
+            });
+        });
+        grid.querySelectorAll('.baby-section-title').forEach(function(title) {
+            title.addEventListener('click', function() {
+                var section = title.closest('.baby-section');
+                if (section) { section.classList.toggle('collapsed'); title.classList.toggle('collapsed'); }
+            });
+        });
+    }
+    var websiteFiltersEl = document.getElementById('babyWebsiteFilters');
+    var websiteFilterBtnsEl = document.getElementById('babyWebsiteFilterBtns');
+    function renderBabyList() {
+        var listToShow = currentWebsiteFilter ? babyProducts.filter(function(p) { return getWebsiteKey(p) === currentWebsiteFilter; }) : babyProducts;
+        var active = listToShow.filter(function(p) { return !p.bought && !p.x_remove; });
+        var bought = listToShow.filter(function(p) { return !!p.bought; });
+        emptyEl.style.display = 'none';
+        if (babyProducts.length === 0) {
+            grid.style.display = 'none';
+            websiteFiltersEl.style.display = 'none';
+            return;
+        }
+        grid.style.display = 'block';
+        var websites = [];
+        var seen = {};
+        babyProducts.forEach(function(p) {
+            var w = getWebsiteKey(p);
+            if (!seen[w]) { seen[w] = true; websites.push(w); }
+        });
+        websites.sort(function(a, b) {
+            if (a === '(No website)') return 1;
+            if (b === '(No website)') return -1;
+            return a.localeCompare(b);
+        });
+        if (websites.length > 0) {
+            websiteFiltersEl.style.display = 'flex';
+            websiteFilterBtnsEl.innerHTML = '';
+            var allBtn = document.createElement('button');
+            allBtn.type = 'button';
+            allBtn.className = 'filter-btn baby-website-btn' + (currentWebsiteFilter === '' ? ' active' : '');
+            allBtn.textContent = 'All';
+            allBtn.addEventListener('click', function() {
+                currentWebsiteFilter = '';
+                renderBabyList();
+            });
+            websiteFilterBtnsEl.appendChild(allBtn);
+            websites.forEach(function(w) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'filter-btn baby-website-btn' + (currentWebsiteFilter === w ? ' active' : '');
+                btn.textContent = w;
+                btn.addEventListener('click', function() {
+                    currentWebsiteFilter = w;
+                    renderBabyList();
+                });
+                websiteFilterBtnsEl.appendChild(btn);
+            });
+        } else {
+            websiteFiltersEl.style.display = 'none';
+        }
+        var bySubCategory = {};
+        active.forEach(function(p) {
+            var key = getSubCategoryKey(p);
+            if (!bySubCategory[key]) bySubCategory[key] = [];
+            bySubCategory[key].push(p);
+        });
+        var subCategoryOrder = Object.keys(bySubCategory).sort(function(a, b) {
+            if (a === 'Uncategorised') return 1;
+            if (b === 'Uncategorised') return -1;
+            return a.localeCompare(b);
+        });
+        var html = '';
+        subCategoryOrder.forEach(function(subCat) {
+            var productsInSection = bySubCategory[subCat];
+            if (!productsInSection.length) return;
+            html += '<div class="baby-section"><h2 class="baby-section-title" data-section="' + escapeHtml(subCat) + '">' + escapeHtml(subCat) + '</h2><div class="baby-section-grid">';
+            productsInSection.forEach(function(p) { html += renderCard(p); });
+            html += '</div></div>';
+        });
+        html += '<div class="baby-section baby-section-bought"><h2 class="baby-section-title" data-section="bought">Bought</h2><div class="baby-section-grid">';
+        if (bought.length) {
+            bought.forEach(function(p) { html += renderCard(p); });
+        } else {
+            html += '<p class="mwh-empty-bought">No items bought yet. Tick <strong>Bought</strong> on a product to move it here.</p>';
+        }
+        html += '</div></div>';
+        grid.innerHTML = html;
+        attachCardListeners();
+    }
+    function editBabyProduct(id) {
+        if (!id) return;
+        fetch('/api/products/' + id).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(result) {
+                if (!result.ok) return;
+                var p = result.data;
+                document.getElementById('babyEditingProductId').value = id;
+                document.getElementById('babyProductModalTitle').textContent = 'Edit Product';
+                document.getElementById('babySubmitProduct').textContent = 'Save changes';
+                document.getElementById('babyProductLink').value = p.link || '';
+                document.getElementById('babyProductWebsiteName').value = p.website_name || '';
+                document.getElementById('babyProductTitle').value = p.title || '';
+                document.getElementById('babyProductImageUrl').value = p.image_url || '';
+                document.getElementById('babyProductPrice').value = p.price || '';
+                document.getElementById('babyProductCategory').value = p.category || '';
+                document.getElementById('babyProductSubCategory').value = p.sub_category || '';
+                document.getElementById('babyProductRoom').value = p.room || '';
+                document.getElementById('babyProductTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
+                document.getElementById('babyProductComment').value = p.comment || '';
+                document.getElementById('babyProductIsMwh').checked = !!p.is_mwh;
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+            }).catch(function(e) { console.error(e); });
+    }
+    function deleteBabyProduct(id) {
+        if (!id) return;
+        fetch('/api/products/' + id, { method: 'DELETE' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('Delete failed');
+                loading.style.display = 'block';
+                return fetch(BABY_FETCH_URL).then(function(r) { return r.json(); });
+            })
+            .then(function(list) {
+                loading.style.display = 'none';
+                babyProducts = Array.isArray(list) ? list : [];
+                renderBabyList();
+            })
+            .catch(function(e) {
+                loading.style.display = 'none';
+                alert('Failed to delete: ' + (e.message || 'Unknown error'));
+            });
+    }
+    function openBabyModal() {
+        document.getElementById('babyEditingProductId').value = '';
+        document.getElementById('babyProductModalTitle').textContent = 'Add Product';
+        document.getElementById('babySubmitProduct').textContent = 'Add Product';
+        document.getElementById('babyProductCategory').value = 'Baby';
+        document.getElementById('babyProductTags').value = '';
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+    }
+    function closeBabyModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        if (form) form.reset();
+        document.getElementById('babyEditingProductId').value = '';
+        document.getElementById('babyProductModalTitle').textContent = 'Add Product';
+        document.getElementById('babySubmitProduct').textContent = 'Add Product';
+        if (statusEl) statusEl.style.display = 'none';
+    }
+    document.getElementById('babyAddProductBtn').addEventListener('click', openBabyModal);
+    document.querySelector('.close-baby-product-modal').addEventListener('click', closeBabyModal);
+    document.getElementById('babyCancelProduct').addEventListener('click', closeBabyModal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeBabyModal(); });
+    document.getElementById('babyFetchPreviewBtn').addEventListener('click', function() {
+        var url = (document.getElementById('babyProductLink').value || '').trim();
+        if (!url) return;
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Fetching...';
+        fetch('/api/products/preview?url=' + encodeURIComponent(url))
+            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(result) {
+                btn.disabled = false;
+                btn.textContent = 'Fetch from link';
+                if (result.ok && result.data) {
+                    var d = result.data;
+                    if (d.title) document.getElementById('babyProductTitle').value = d.title;
+                    if (d.image_url) document.getElementById('babyProductImageUrl').value = d.image_url;
+                    if (d.website_name) document.getElementById('babyProductWebsiteName').value = d.website_name;
+                    if (d.price) document.getElementById('babyProductPrice').value = d.price;
+                }
+            })
+            .catch(function() { btn.disabled = false; btn.textContent = 'Fetch from link'; });
+    });
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var editId = (document.getElementById('babyEditingProductId').value || '').trim();
+        var link = (document.getElementById('babyProductLink').value || '').trim();
+        if (!link) {
+            if (statusEl) { statusEl.textContent = 'Link is required.'; statusEl.style.display = 'block'; statusEl.className = 'upload-status error'; }
+            return;
+        }
+        var tagsStr = (document.getElementById('babyProductTags').value || '').trim();
+        var tags = tagsStr ? tagsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+        var category = (document.getElementById('babyProductCategory').value || '').trim() || null;
+        if (!editId && !category) category = 'Baby';
+        var payload = {
+            link: link,
+            title: (document.getElementById('babyProductTitle').value || '').trim() || null,
+            image_url: (document.getElementById('babyProductImageUrl').value || '').trim() || null,
+            price: (document.getElementById('babyProductPrice').value || '').trim() || null,
+            category: category,
+            sub_category: (document.getElementById('babyProductSubCategory').value || '').trim() || null,
+            room: (document.getElementById('babyProductRoom').value || '').trim() || null,
+            website_name: (document.getElementById('babyProductWebsiteName').value || '').trim() || null,
+            tags: tags,
+            is_mwh: !!document.getElementById('babyProductIsMwh').checked,
+            comment: (document.getElementById('babyProductComment').value || '').trim() || null
+        };
+        var submitBtn = document.getElementById('babySubmitProduct');
+        if (submitBtn) submitBtn.disabled = true;
+        if (statusEl) { statusEl.style.display = 'block'; statusEl.className = 'upload-status loading'; statusEl.textContent = editId ? 'Saving...' : 'Adding...'; }
+        var url = editId ? '/api/products/' + editId : '/api/products';
+        var method = editId ? 'PATCH' : 'POST';
+        fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+            .then(function(result) {
+                if (submitBtn) submitBtn.disabled = false;
+                if (!result.ok) {
+                    if (statusEl) { statusEl.textContent = (result.data && result.data.error) || 'Failed'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                    return;
+                }
+                if (statusEl) { statusEl.textContent = editId ? 'Saved.' : 'Product added.'; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
+                closeBabyModal();
+                loading.style.display = 'block';
+                return fetch(BABY_FETCH_URL).then(function(r) { return r.json(); });
+            })
+            .then(function(list) {
+                loading.style.display = 'none';
+                babyProducts = Array.isArray(list) ? list : [];
+                renderBabyList();
+            })
+            .catch(function(err) {
+                if (submitBtn) submitBtn.disabled = false;
+                if (statusEl) { statusEl.textContent = err.message || 'Error'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+            });
+    });
+    fetch(BABY_FETCH_URL)
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(list) {
+            loading.style.display = 'none';
+            babyProducts = Array.isArray(list) ? list : [];
+            renderBabyList();
+        })
+        .catch(function(e) {
+            loading.style.display = 'none';
+            emptyEl.textContent = 'Failed to load products.';
+            emptyEl.style.display = 'block';
+        });
+})();
+    </script>
+</body>
+</html>

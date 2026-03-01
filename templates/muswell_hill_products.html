@@ -114,6 +114,29 @@
             gap: 1.25rem;
             align-items: start;
         }
+        .mwh-empty-bought {
+            grid-column: 1 / -1;
+            color: var(--gray-dark, #666);
+            font-size: 0.9375rem;
+            padding: 1rem 0;
+            margin: 0;
+        }
+        .mwh-product-subcategory {
+            font-size: 0.75rem;
+            color: var(--gray-dark, #666);
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .mwh-product-comment {
+            font-size: 0.8125rem;
+            color: var(--gray-dark, #666);
+            margin: 0.5rem 0 0 0;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
         .product-tile-image-wrap {
             position: relative;
         }
@@ -172,6 +195,42 @@
             height: 16px;
             pointer-events: none;
         }
+        .mwh-website-filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+        .mwh-website-filters-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-dark, #666);
+        }
+        .mwh-website-filters #mwhWebsiteFilterBtns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .mwh-website-btn {
+            padding: 0.4rem 0.85rem;
+            font-size: 0.8125rem;
+            font-family: inherit;
+            border: 1px solid rgba(0,0,0,0.3);
+            background: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .mwh-website-btn:hover {
+            background: #f5f5f5;
+            border-color: #000;
+        }
+        .mwh-website-btn.active {
+            background: #000;
+            color: #fff;
+            border-color: #000;
+        }
         @media (max-width: 768px) {
             .mwh-product-remove-btn,
             .mwh-product-edit-btn {
@@ -199,6 +258,10 @@
                     <p class="subtitle">MWH products only (is_mwh or tag <strong>mwh</strong>), grouped by category. Removed and bought items are hidden from the main sections.</p>
                     <button type="button" id="mwhAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
                 </header>
+                <div id="mwhWebsiteFilters" class="mwh-website-filters" style="display: none;">
+                    <span class="mwh-website-filters-label">Website:</span>
+                    <div id="mwhWebsiteFilterBtns"></div>
+                </div>
             <!-- Add Product Modal -->
             <div id="mwhProductModal" class="modal" style="display: none;">
                 <div class="modal-content">
@@ -242,6 +305,10 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label for="mwhProductSubCategory">Sub category (free text)</label>
+                            <input type="text" id="mwhProductSubCategory" name="sub_category" placeholder="e.g. Cot, Pram, Clothes">
+                        </div>
+                        <div class="form-group">
                             <label for="mwhProductRoom">Room</label>
                             <select id="mwhProductRoom" name="room">
                                 <option value="">—</option>
@@ -256,6 +323,10 @@
                         <div class="form-group">
                             <label for="mwhProductTags">Tags (comma-separated)</label>
                             <input type="text" id="mwhProductTags" name="tags" placeholder="e.g. mwh">
+                        </div>
+                        <div class="form-group">
+                            <label for="mwhProductComment">Comment</label>
+                            <textarea id="mwhProductComment" name="comment" rows="2" placeholder="Notes or comments about this product"></textarea>
                         </div>
                         <div class="form-group">
                             <label class="checkbox-label">
@@ -304,7 +375,14 @@
             const modal = document.getElementById('mwhProductModal');
             const form = document.getElementById('mwhProductForm');
             const statusEl = document.getElementById('mwhProductStatus');
+            const websiteFiltersEl = document.getElementById('mwhWebsiteFilters');
+            const websiteFilterBtnsEl = document.getElementById('mwhWebsiteFilterBtns');
+            var mwhProductList = [];
+            var mwhCurrentWebsite = '';
 
+            function getWebsiteKey(p) {
+                return (p.website_name || '').trim() || '(No website)';
+            }
             function getProductCategoryKey(p) {
                 var cat = (p.category || '').trim();
                 return cat || 'Uncategorised';
@@ -324,20 +402,62 @@
                 var bought = !!p.bought;
                 var cardClass = 'mwh-product-card' + (xRemove ? ' x-removed' : '');
                 var id = p.id;
+                var commentText = (p.comment || '').trim();
+                var commentHtml = commentText ? '<p class="mwh-product-comment">' + escapeHtml(commentText) + '</p>' : '';
+                var subCat = (p.sub_category || '').trim();
+                var subCatHtml = subCat ? '<span class="mwh-product-subcategory">' + escapeHtml(subCat) + '</span>' : '';
                 var removeBtn = '<button type="button" class="mwh-product-remove-btn" data-id="' + id + '" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>';
                 var editBtn = '<button type="button" class="mwh-product-edit-btn" data-id="' + id + '" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>';
-                return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + removeBtn + editBtn + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div></div>';
+                return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + removeBtn + editBtn + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + (subCatHtml ? subCatHtml + ' ' : '') + price + '</div></a></div><div class="mwh-product-flags"><label><input type="checkbox" class="mwh-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="mwh-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div>' + commentHtml + '</div>';
             }
             function renderProductList(list) {
                 if (list.length === 0) {
                     grid.innerHTML = '<p class="subtitle">No MWH products yet. Add products with tag <strong>mwh</strong> or check Is MWH, and set a category to see them grouped.</p>';
+                    websiteFiltersEl.style.display = 'none';
                     return;
                 }
-
-                var boughtItems = list.filter(function(p) { return !!p.bought; });
-                var activeItems = list.filter(function(p) { return !p.bought && !p.x_remove; });
+                var websites = [];
+                var seen = {};
+                list.forEach(function(p) {
+                    var w = getWebsiteKey(p);
+                    if (!seen[w]) { seen[w] = true; websites.push(w); }
+                });
+                websites.sort(function(a, b) {
+                    if (a === '(No website)') return 1;
+                    if (b === '(No website)') return -1;
+                    return a.localeCompare(b);
+                });
+                if (websites.length > 0) {
+                    websiteFiltersEl.style.display = 'flex';
+                    websiteFilterBtnsEl.innerHTML = '';
+                    var allBtn = document.createElement('button');
+                    allBtn.type = 'button';
+                    allBtn.className = 'mwh-website-btn' + (mwhCurrentWebsite === '' ? ' active' : '');
+                    allBtn.textContent = 'All';
+                    allBtn.addEventListener('click', function() {
+                        mwhCurrentWebsite = '';
+                        renderProductList(mwhProductList);
+                    });
+                    websiteFilterBtnsEl.appendChild(allBtn);
+                    websites.forEach(function(w) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'mwh-website-btn' + (mwhCurrentWebsite === w ? ' active' : '');
+                        btn.textContent = w;
+                        btn.addEventListener('click', function() {
+                            mwhCurrentWebsite = w;
+                            renderProductList(mwhProductList);
+                        });
+                        websiteFilterBtnsEl.appendChild(btn);
+                    });
+                } else {
+                    websiteFiltersEl.style.display = 'none';
+                }
+                var listToShow = mwhCurrentWebsite ? list.filter(function(p) { return getWebsiteKey(p) === mwhCurrentWebsite; }) : list;
+                var boughtItems = listToShow.filter(function(p) { return !!p.bought; });
+                var activeItems = listToShow.filter(function(p) { return !p.bought && !p.x_remove; });
                 if (activeItems.length === 0 && boughtItems.length === 0) {
-                    grid.innerHTML = '<p class="subtitle">No active products to show.</p>';
+                    grid.innerHTML = '<p class="subtitle">No products for this website filter.</p>';
                     return;
                 }
 
@@ -360,11 +480,14 @@
                     productsInSection.forEach(function(p) { html += renderCard(p); });
                     html += '</div></div>';
                 });
+                // Always show Bought section at the bottom
+                html += '<div class="mwh-section mwh-section-bought"><h2 class="mwh-section-title" data-section="bought">Bought</h2><div class="mwh-section-grid">';
                 if (boughtItems.length) {
-                    html += '<div class="mwh-section"><h2 class="mwh-section-title" data-section="bought">Bought</h2><div class="mwh-section-grid">';
                     boughtItems.forEach(function(p) { html += renderCard(p); });
-                    html += '</div></div>';
+                } else {
+                    html += '<p class="mwh-empty-bought">No items bought yet. Tick <strong>Bought</strong> on a product to move it here.</p>';
                 }
+                html += '</div></div>';
                 grid.innerHTML = html;
                 grid.querySelectorAll('.mwh-bok-likes').forEach(function(cb) {
                     cb.addEventListener('change', function() { updateProductFlag(cb.dataset.id, 'bok_likes', cb.checked); });
@@ -376,8 +499,8 @@
                         fetch('/api/muswell-hill-products')
                             .then(function(r) { return r.json(); })
                             .then(function(products) {
-                                var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
-                                renderProductList(list);
+                                mwhProductList = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                                renderProductList(mwhProductList);
                             });
                     });
                 });
@@ -431,8 +554,10 @@
                         document.getElementById('mwhProductImageUrl').value = p.image_url || '';
                         document.getElementById('mwhProductPrice').value = p.price || '';
                         document.getElementById('mwhProductCategory').value = p.category || '';
+                        document.getElementById('mwhProductSubCategory').value = p.sub_category || '';
                         document.getElementById('mwhProductRoom').value = p.room || '';
                         document.getElementById('mwhProductTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
+                        document.getElementById('mwhProductComment').value = p.comment || '';
                         document.getElementById('mwhProductIsMwh').checked = !!p.is_mwh;
                         if (modal) modal.style.display = 'flex';
                         document.body.style.overflow = 'hidden';
@@ -451,8 +576,8 @@
                     })
                     .then(function(products) {
                         loading.style.display = 'none';
-                        var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
-                        renderProductList(list);
+                        mwhProductList = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                        renderProductList(mwhProductList);
                     })
                     .catch(function(e) {
                         loading.style.display = 'none';
@@ -535,10 +660,12 @@
                         image_url: (document.getElementById('mwhProductImageUrl').value || '').trim() || null,
                         price: (document.getElementById('mwhProductPrice').value || '').trim() || null,
                         category: (document.getElementById('mwhProductCategory').value || '').trim() || null,
+                        sub_category: (document.getElementById('mwhProductSubCategory').value || '').trim() || null,
                         room: (document.getElementById('mwhProductRoom').value || '').trim() || null,
                         website_name: (document.getElementById('mwhProductWebsiteName').value || '').trim() || null,
                         tags: tags,
-                        is_mwh: isMwh
+                        is_mwh: isMwh,
+                        comment: (document.getElementById('mwhProductComment').value || '').trim() || null
                     };
                     var submitBtn = document.getElementById('mwhSubmitProduct');
                     var editId = (document.getElementById('mwhEditingProductId').value || '').trim();
@@ -563,7 +690,10 @@
                         return fetch('/api/muswell-hill-products').then(function(r) { return r.json(); });
                     }).then(function(products) {
                         loading.style.display = 'none';
-                        if (Array.isArray(products)) renderProductList(products);
+                        if (Array.isArray(products)) {
+                            mwhProductList = products;
+                            renderProductList(mwhProductList);
+                        }
                     }).catch(function(err) {
                         if (submitBtn) submitBtn.disabled = false;
                         if (statusEl) { statusEl.textContent = err.message || 'Error'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
@@ -578,8 +708,8 @@
                 })
                 .then(function(products) {
                     loading.style.display = 'none';
-                    var list = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
-                    renderProductList(list);
+                    mwhProductList = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                    renderProductList(mwhProductList);
                 })
                 .catch(function(e) {
                     loading.style.display = 'none';

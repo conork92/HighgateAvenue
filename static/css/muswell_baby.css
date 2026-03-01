@@ -1,0 +1,249 @@
+/* Muswell Hill Baby page – same card/modal behaviour as Products */
+.baby-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    align-items: center;
+}
+.baby-filters .filter-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    border: 1px solid rgba(0,0,0,0.3);
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+.baby-filters .filter-btn:hover {
+    background: #f5f5f5;
+    border-color: #000;
+}
+.baby-filters .filter-btn.active {
+    background: #000;
+    color: #fff;
+    border-color: #000;
+}
+/* Website filter bar – refined pill buttons */
+.baby-website-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(to bottom, #fafafa, #f3f3f3);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.baby-website-filters-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #666;
+    margin-right: 0.25rem;
+}
+.baby-website-filters #babyWebsiteFilterBtns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+.baby-website-btn {
+    margin: 0;
+    padding: 0.5rem 1.125rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: #333;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.baby-website-btn:hover {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.25);
+    color: #000;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.baby-website-btn.active {
+    background: #000;
+    color: #fff;
+    border-color: #000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.baby-website-btn.active:hover {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+}
+.baby-section { margin-bottom: 2.5rem; }
+.baby-section:first-child { margin-top: 0; }
+.baby-section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    padding-right: 2rem;
+    border-bottom: 2px solid #000;
+    color: #000;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+.baby-section-title::after {
+    content: '▼';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+    transition: transform 0.2s ease;
+}
+.baby-section-title.collapsed::after {
+    transform: translateY(-50%) rotate(-90deg);
+}
+.baby-section-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.25rem;
+    align-items: start;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+    overflow: hidden;
+    max-height: 5000px;
+}
+.baby-section.collapsed .baby-section-grid {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    padding: 0;
+}
+.baby-section.collapsed { margin-bottom: 1rem; }
+.baby-empty-inline,
+.mwh-empty-bought {
+    grid-column: 1 / -1;
+    color: var(--gray-dark, #666);
+    font-size: 0.9375rem;
+    padding: 1rem 0;
+    margin: 0;
+}
+.baby-empty { color: #666; padding: 2rem; text-align: center; }
+
+/* Bought section: greyed-out cards */
+.baby-section-bought .mwh-product-card {
+    opacity: 0.75;
+}
+.baby-section-bought .mwh-product-card .product-tile-link,
+.baby-section-bought .mwh-product-card .product-tile-info {
+    color: #555;
+}
+.baby-section-bought .product-tile-image {
+    filter: grayscale(40%);
+}
+.baby-section-bought .mwh-product-subcategory,
+.baby-section-bought .mwh-product-comment,
+.baby-section-bought .product-tile-price {
+    color: #777;
+}
+
+/* Reuse MWH product card styles */
+.mwh-product-card {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 0;
+}
+.mwh-product-card .product-tile { flex: 1; min-height: 0; }
+.mwh-product-card.x-removed { opacity: 0.65; }
+.mwh-product-flags {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0 0;
+    flex-wrap: nowrap;
+    align-items: center;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    overflow-x: auto;
+}
+.mwh-product-flags label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.mwh-product-flags input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+.mwh-product-subcategory {
+    font-size: 0.75rem;
+    color: var(--gray-dark, #666);
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+.mwh-product-comment {
+    font-size: 0.8125rem;
+    color: var(--gray-dark, #666);
+    margin: 0.5rem 0 0 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.product-tile-image-wrap { position: relative; }
+.mwh-product-remove-btn,
+.mwh-product-edit-btn {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #000;
+    z-index: 10;
+    opacity: 0.9;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+.mwh-product-remove-btn { top: 0.5rem; left: 0.5rem; }
+.mwh-product-remove-btn:hover {
+    background: #fff;
+    border-color: #d32f2f;
+    color: #d32f2f;
+    transform: scale(1.1);
+}
+.mwh-product-edit-btn { top: 0.5rem; right: 0.5rem; }
+.mwh-product-edit-btn:hover {
+    background: #fff;
+    border-color: #000;
+    color: #000;
+    transform: scale(1.1);
+}
+.mwh-product-remove-btn svg,
+.mwh-product-edit-btn svg { width: 16px; height: 16px; pointer-events: none; }
+@media (max-width: 768px) {
+    .mwh-product-remove-btn,
+    .mwh-product-edit-btn {
+        opacity: 1;
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.98);
+    }
+}
