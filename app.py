@@ -1447,15 +1447,18 @@ def _muswell_hill_product_match(row):
 
 @app.route('/api/muswell-hill-products')
 def get_muswell_hill_products():
-    """Products for Muswell Hill: MWH only (is_mwh true or tag mwh). Display grouped by category on the page."""
+    """Products for Muswell Hill: MWH only (is_mwh true or tag mwh). Optional ?room=kitchen filters to that room."""
     if not supabase:
         return jsonify([]), 200
+    room_filter = (request.args.get('room') or '').strip().lower()
     try:
         # 1) Try RPC that runs the exact SQL (run tables/get_muswell_hill_products.sql in Supabase once)
         try:
             r = supabase.rpc('get_muswell_hill_products').execute()
             if r and getattr(r, 'data', None) is not None:
                 out = list(r.data) if isinstance(r.data, list) else []
+                if room_filter:
+                    out = [row for row in out if (row.get('room') or '').strip().lower() == room_filter]
                 return jsonify(out), 200
         except Exception as e:
             app.logger.info(f"Muswell Hill RPC not available: {e}, using fetch-all filter")
@@ -1465,6 +1468,8 @@ def get_muswell_hill_products():
         if not isinstance(all_rows, list):
             all_rows = []
         out = [row for row in all_rows if _muswell_hill_product_match(row)]
+        if room_filter:
+            out = [row for row in out if (row.get('room') or '').strip().lower() == room_filter]
         out.sort(key=lambda row: (row.get('created_at') or ''), reverse=True)
         return jsonify(out), 200
     except Exception as e:
@@ -1493,6 +1498,106 @@ def get_muswell_hill_images(room_slug):
     except Exception as e:
         app.logger.error(f"Error listing Muswell Hill images: {e}")
         return jsonify([]), 200
+
+
+# --------- Room Pinterest board & ideas (prototype: Kitchen) ---------
+@app.route('/api/room-pinterest', methods=['GET', 'PUT', 'POST'])
+def room_pinterest():
+    """GET ?room=kitchen → { board_url }; PUT/POST { room, board_url } → set."""
+    if request.method == 'GET':
+        room = (request.args.get('room') or '').strip().lower()
+        if not room:
+            return jsonify({}), 200
+        if not supabase:
+            return jsonify({}), 200
+        try:
+            r = supabase.table('ha_room_pinterest').select('board_url').eq('room_slug', room).execute()
+            row = (r.data or [None])[0]
+            return jsonify({'board_url': row.get('board_url')} if row else {}), 200
+        except Exception as e:
+            app.logger.error(f"Error fetching room Pinterest: {e}")
+            return jsonify({}), 200
+    # PUT / POST
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        room = (data.get('room') or '').strip().lower()
+        board_url = (data.get('board_url') or '').strip()
+        if not room:
+            return jsonify({'error': 'room is required'}), 400
+        if not board_url:
+            return jsonify({'error': 'board_url is required'}), 400
+        payload = {'room_slug': room, 'board_url': board_url, 'updated_at': datetime.utcnow().isoformat()}
+        supabase.table('ha_room_pinterest').upsert(payload, on_conflict='room_slug').execute()
+        return jsonify({'room': room, 'board_url': board_url}), 200
+    except Exception as e:
+        app.logger.error(f"Error setting room Pinterest: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/room-ideas')
+def get_room_ideas():
+    """GET ?room=kitchen – list ideas for that room."""
+    room = (request.args.get('room') or '').strip()
+    if not room:
+        return jsonify([]), 200
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        r = supabase.table('ha_room_ideas').select('*').eq('room', room).order('created_at', desc=True).execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching room ideas: {e}")
+        return jsonify([]), 200
+
+
+@app.route('/api/room-ideas', methods=['POST'])
+def create_room_idea():
+    """POST { room, idea, image_url?, tags? } – add an idea."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        idea = (data.get('idea') or '').strip()
+        room = (data.get('room') or '').strip()
+        if not idea:
+            return jsonify({'error': 'idea is required'}), 400
+        if not room:
+            return jsonify({'error': 'room is required'}), 400
+        tags = data.get('tags')
+        if isinstance(tags, list):
+            tags = [str(t).strip() for t in tags if str(t).strip()]
+        elif isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(',') if t.strip()]
+        else:
+            tags = []
+        payload = {
+            'room': room,
+            'idea': idea,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'tags': tags,
+        }
+        r = supabase.table('ha_room_ideas').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating room idea: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/room-ideas/<int:idea_id>', methods=['DELETE'])
+def delete_room_idea(idea_id):
+    """Delete an idea by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_room_ideas').delete().eq('id', idea_id).execute()
+        return '', 204
+    except Exception as e:
+        app.logger.error(f"Error deleting room idea: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/image/<path:image_path>')
 def serve_gcp_image(image_path):

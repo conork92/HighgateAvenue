@@ -373,6 +373,12 @@ header h1 {
     margin-bottom: 4rem;
 }
 
+.room-products-simple {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
 @media (min-width: 1200px) {
     .plans-grid {
         grid-template-columns: repeat(3, 1fr);
