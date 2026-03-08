@@ -1,0 +1,334 @@
+/* Blocky / Venture-style layout for room page (e.g. Kitchen) */
+
+/* Red selection highlight */
+.room-page--blocky ::selection {
+    background: rgba(185, 28, 28, 0.25);
+    color: #0d0d0d;
+}
+.room-page--blocky ::-moz-selection {
+    background: rgba(185, 28, 28, 0.25);
+    color: #0d0d0d;
+}
+
+.room-page--blocky .main-with-sidebar {
+    padding: 0;
+}
+.room-page--blocky .room-section .loading,
+.room-page--blocky .room-section .error {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #666;
+}
+.room-page--blocky .room-page__container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0;
+}
+
+/* Hero block: bold header */
+.room-page--blocky .room-hero {
+    background: #0d0d0d;
+    color: #fff;
+    padding: 3rem 2rem 3.5rem;
+    margin-bottom: 0;
+    border-bottom: 4px solid #0d0d0d;
+}
+.room-page--blocky .room-hero h1 {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+.room-page--blocky .room-hero .room-hero__sub {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+}
+
+/* Content area: padded block */
+.room-page--blocky .room-content {
+    padding: 2.5rem 2rem 4rem;
+}
+@media (max-width: 768px) {
+    .room-page--blocky .room-hero,
+    .room-page--blocky .room-content { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+/* Section titles: blocky label */
+.room-page--blocky .room-section {
+    margin-bottom: 2.5rem;
+}
+.room-page--blocky .room-section__title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #0d0d0d;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #0d0d0d;
+    display: inline-block;
+}
+
+/* Image grid: blocky cards */
+.room-page--blocky .room-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+@media (min-width: 900px) {
+    .room-page--blocky .room-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+.room-page--blocky .room-card {
+    background: #fff;
+    border: 2px solid #0d0d0d;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+}
+.room-page--blocky .room-card:hover {
+    box-shadow: 6px 6px 0 #0d0d0d;
+}
+.room-page--blocky .room-card a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+.room-page--blocky .room-card__img {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    display: block;
+    background: #f0f0f0;
+}
+.room-page--blocky .room-card__cap {
+    padding: 1rem 1.25rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-top: 2px solid #0d0d0d;
+}
+
+/* Pinterest block */
+.room-page--blocky .room-block {
+    border: 2px solid #0d0d0d;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+    background: #fafafa;
+}
+.room-page--blocky .room-block__row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 0.75rem;
+}
+.room-page--blocky .room-block input[type="url"],
+.room-page--blocky .room-block input[type="text"],
+.room-page--blocky .room-block textarea {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.75rem 1rem;
+    border: 2px solid #0d0d0d;
+    font-size: 1rem;
+    font-family: inherit;
+    background: #fff;
+}
+.room-page--blocky .room-block input:focus,
+.room-page--blocky .room-block textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0d0d0d;
+}
+.room-page--blocky .room-block textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+.room-page--blocky .room-block__link {
+    color: #b91c1c;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+.room-page--blocky .room-block__link:hover {
+    text-decoration: underline;
+}
+
+/* Buttons: blocky */
+.room-page--blocky .room-btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background: #0d0d0d;
+    color: #fff;
+    border: 2px solid #0d0d0d;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+.room-page--blocky .room-btn:hover {
+    background: #fff;
+    color: #0d0d0d;
+}
+
+/* Form labels */
+.room-page--blocky .room-label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.35rem;
+    color: #333;
+}
+.room-page--blocky .room-field {
+    margin-bottom: 1rem;
+}
+
+/* Ideas list */
+.room-page--blocky .room-ideas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.room-page--blocky .room-idea-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border: 2px solid #0d0d0d;
+    background: #fff;
+}
+.room-page--blocky .room-idea-card__img-wrap {
+    flex-shrink: 0;
+    width: 88px;
+    height: 66px;
+    border: 2px solid #0d0d0d;
+    overflow: hidden;
+    background: #f0f0f0;
+}
+.room-page--blocky .room-idea-card__img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.room-page--blocky .room-idea-card__body {
+    flex: 1;
+    min-width: 0;
+}
+.room-page--blocky .room-idea-card__text {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    line-height: 1.4;
+}
+.room-page--blocky .room-idea-card__tags {
+    font-size: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.room-page--blocky .room-idea-card__tag {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: #0d0d0d;
+    color: #fff;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.room-page--blocky .room-idea-card__delete {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: 2px solid #0d0d0d;
+    background: #fff;
+    color: #0d0d0d;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+.room-page--blocky .room-idea-card__delete:hover {
+    background: #b91c1c;
+    color: #fff;
+    border-color: #b91c1c;
+}
+.room-page--blocky .room-ideas-empty {
+    padding: 1.5rem;
+    border: 2px dashed #ccc;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Room products grid (blocky) */
+.room-page--blocky .room-products-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+}
+@media (min-width: 900px) {
+    .room-page--blocky .room-products-list {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+.room-page--blocky .room-product-card {
+    display: flex;
+    flex-direction: column;
+    border: 2px solid #0d0d0d;
+    background: #fff;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.2s ease;
+}
+.room-page--blocky .room-product-card:hover {
+    box-shadow: 4px 4px 0 #0d0d0d;
+}
+.room-page--blocky .room-product-card__img-wrap {
+    aspect-ratio: 1;
+    background: #f0f0f0;
+    overflow: hidden;
+    border-bottom: 2px solid #0d0d0d;
+}
+.room-page--blocky .room-product-card__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.room-page--blocky .room-product-card__noimg {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+}
+.room-page--blocky .room-product-card__cap {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.room-page--blocky .room-product-card__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.room-page--blocky .room-product-card__meta {
+    font-size: 0.75rem;
+    color: #666;
+}
+.room-page--blocky .room-product-card__price { font-weight: 600; color: #0d0d0d; }
+.room-page--blocky .room-product-card__cat { text-transform: uppercase; letter-spacing: 0.04em; }

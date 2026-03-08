@@ -8,10 +8,10 @@
 .sidebar {
     width: 240px;
     min-width: 240px;
-    background: var(--black, #000);
-    color: var(--white, #fff);
+    background: #0d0d0d;
+    color: #fff;
     padding: 1.5rem 0;
-    border-right: 1px solid rgba(255,255,255,0.1);
+    border-right: 2px solid #0d0d0d;
     transition: width 0.2s ease, min-width 0.2s ease;
     flex-shrink: 0;
     overflow: hidden;
@@ -34,7 +34,7 @@
     right: 0;
     height: 52px;
     z-index: 100;
-    background: var(--black, #000);
+    background: #0d0d0d;
     color: #fff;
     align-items: center;
     padding: 0 1rem;
@@ -112,7 +112,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 1rem 1rem;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
+    border-bottom: 1px solid rgba(255,255,255,0.12);
     margin-bottom: 1rem;
     gap: 0.5rem;
 }
@@ -163,7 +163,7 @@
     padding: 0;
     border: none;
     border-radius: 0 6px 6px 0;
-    background: var(--black, #000);
+    background: #0d0d0d;
     color: #fff;
     font-size: 1.25rem;
     cursor: pointer;
@@ -172,7 +172,7 @@
 }
 
 .sidebar-open:hover {
-    background: #222;
+    background: #1a1a1a;
 }
 
 .sidebar-nav {
@@ -189,14 +189,14 @@
 .sidebar-nav .sidebar-parent-label {
     display: block;
     padding: 0.5rem 1.25rem;
-    color: rgba(255,255,255,0.9);
+    color: rgba(255,255,255,0.92);
     text-decoration: none;
     font-size: 0.9375rem;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s;
 }
 
 .sidebar-nav a:hover {
-    background: rgba(255,255,255,0.1);
+    background: rgba(185, 28, 28, 0.2);
     color: #fff;
 }
 
@@ -208,7 +208,7 @@
 }
 
 .sidebar-nav .sidebar-parent-label:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(185, 28, 28, 0.15);
 }
 
 /* Dropdown: sub list collapsed by default, expanded when .expanded */
@@ -232,13 +232,19 @@
 }
 
 .sidebar-sub a.active {
-    background: rgba(255,255,255,0.15);
+    background: rgba(185, 28, 28, 0.25);
     color: #fff;
+    border-left: 3px solid #b91c1c;
+    margin-left: 0;
+    padding-left: calc(2rem - 3px);
 }
 
 .sidebar-nav > li > a.active {
-    background: rgba(255,255,255,0.15);
+    background: rgba(185, 28, 28, 0.25);
     color: #fff;
+    border-left: 3px solid #b91c1c;
+    margin-left: 0;
+    padding-left: calc(1.25rem - 3px);
 }
 
 .main-with-sidebar {

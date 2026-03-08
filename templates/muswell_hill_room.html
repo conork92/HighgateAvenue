@@ -5,28 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Highgate Avenue - Muswell Hill {{ room_label }}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { background: #fff; color: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260207">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/room-blocky.css') }}?v=20260207">
 </head>
-<body>
+<body class="room-page--blocky">
     <div class="app-layout">
         {% include '_sidebar.html' %}
         <main class="main-with-sidebar">
-            <div class="container">
-                <header>
+            <div class="room-page__container" data-room-blocky="true">
+                <header class="room-hero">
                     <h1>Muswell Hill – {{ room_label }}</h1>
-                    <p class="subtitle">Photos from your bucket</p>
+                    <p class="room-hero__sub">Photos & ideas</p>
                 </header>
-                <div id="muswellLoading" class="loading">Loading images...</div>
-                <div id="muswellError" class="error" style="display: none;"></div>
-                <div id="muswellGrid" class="plans-grid" style="display: none;">
-                    <!-- Filled by JS -->
+                <div class="room-content">
+                    <section class="room-section">
+                        <h2 class="room-section__title">Photos</h2>
+                        <div id="muswellLoading" class="loading">Loading images...</div>
+                        <div id="muswellError" class="error" style="display: none;"></div>
+                        <div id="muswellGrid" class="room-grid" style="display: none;"></div>
+                        <p id="muswellEmpty" class="room-ideas-empty" style="display: none;">No images in this folder yet. Add images to <code>gs://highgate-avenue-designs/{{ bucket_prefix }}/</code> to see them here.</p>
+                    </section>
+                    <section class="room-section">
+                        <h2 class="room-section__title">Pinterest board</h2>
+                        <div id="pinterestBlock" class="room-block">
+                            <p id="pinterestLinkWrap" style="display: none; margin-bottom: 0.5rem;"><a id="pinterestLink" href="#" target="_blank" rel="noopener" class="room-block__link">Open Pinterest board →</a></p>
+                            <div class="room-block__row">
+                                <input type="url" id="pinterestBoardUrl" placeholder="https://uk.pinterest.com/..." aria-label="Pinterest board URL">
+                                <button type="button" id="pinterestSave" class="room-btn">Save board</button>
+                            </div>
+                            <p id="pinterestMsg" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;"></p>
+                        </div>
+                    </section>
+                    <section class="room-section">
+                        <h2 class="room-section__title">Ideas & notes</h2>
+                        <form id="ideaForm" class="room-block" style="margin-bottom: 1rem;">
+                            <input type="hidden" name="room" value="{{ room_slug }}">
+                            <div class="room-field">
+                                <label for="ideaText" class="room-label">Idea</label>
+                                <textarea id="ideaText" name="idea" rows="2" placeholder="e.g. Drawers that can pull out"></textarea>
+                            </div>
+                            <div class="room-field">
+                                <label for="ideaImageUrl" class="room-label">Image link (optional)</label>
+                                <input type="url" id="ideaImageUrl" name="image_url" placeholder="https://...">
+                            </div>
+                            <div class="room-field">
+                                <label for="ideaTags" class="room-label">Tags (comma-separated)</label>
+                                <input type="text" id="ideaTags" name="tags" placeholder="storage, drawers">
+                            </div>
+                            <button type="submit" class="room-btn">Add idea</button>
+                        </form>
+                        <div id="ideasList" class="room-ideas-list"></div>
+                    </section>
+                    <section class="room-section" id="roomProductsSection">
+                        <h2 class="room-section__title">Products</h2>
+                        <div id="roomProductsList" class="room-products-list"></div>
+                    </section>
                 </div>
-                <p id="muswellEmpty" class="subtitle" style="display: none; margin-top: 2rem;">No images in this folder yet. Add images to <code>gs://highgate-avenue-designs/{{ bucket_prefix }}/</code> in your bucket to see them here.</p>
             </div>
         </main>
     </div>
@@ -38,14 +73,19 @@
             const errDiv = document.getElementById('muswellError');
             const grid = document.getElementById('muswellGrid');
             const empty = document.getElementById('muswellEmpty');
+            function escapeHtml(s) {
+                var div = document.createElement('div');
+                div.textContent = s;
+                return div.innerHTML;
+            }
             function renderImages(images) {
                 if (!images || images.length === 0) return;
                 grid.style.display = 'grid';
-                grid.innerHTML = images.map(img =>
-                    '<div class="plan-card"><a href="' + img.url + '" target="_blank" rel="noopener">' +
-                    '<img src="' + img.url + '" alt="' + (img.name || '') + '" class="plan-image" loading="lazy" onerror="this.style.display=\'none\'">' +
-                    '<div class="plan-header"><span class="plan-room">' + (img.name || '') + '</span></div></a></div>'
-                ).join('');
+                grid.innerHTML = images.map(function(img) {
+                    return '<div class="room-card"><a href="' + escapeHtml(img.url) + '" target="_blank" rel="noopener">' +
+                        '<img src="' + escapeHtml(img.url) + '" alt="' + escapeHtml(img.name || '') + '" class="room-card__img" loading="lazy" onerror="this.style.display=\'none\'">' +
+                        '<div class="room-card__cap">' + escapeHtml(img.name || '') + '</div></a></div>';
+                }).join('');
             }
             fetch('/api/muswell-hill-images/' + roomSlug)
                 .then(r => r.json())
@@ -70,6 +110,145 @@
                         errDiv.textContent = 'Failed to load images.';
                     }
                 });
+        })();
+
+        // Room products
+        (function() {
+            const list = document.getElementById('roomProductsList');
+            if (!list) return;
+            const roomSlug = {{ room_slug | tojson }};
+            function esc(s) {
+                var d = document.createElement('div');
+                d.textContent = s == null ? '' : s;
+                return d.innerHTML;
+            }
+            fetch('/api/muswell-hill-products?room=' + encodeURIComponent(roomSlug))
+                .then(r => r.json())
+                .then(function(products) {
+                    if (!products || products.length === 0) {
+                        list.innerHTML = '<p class="room-ideas-empty">No products linked to this room yet. <a href="/muswell-hill/products/">Add products</a> and set their room to see them here.</p>';
+                        return;
+                    }
+                    list.innerHTML = products.map(function(p) {
+                        var link = (p.link || '').trim() || '#';
+                        var img = (p.image_url || '').trim();
+                        var imgHtml = img ? '<img src="' + esc(img) + '" alt="" class="room-product-card__img" loading="lazy" onerror="this.style.display=\'none\'">' : '<div class="room-product-card__noimg">No image</div>';
+                        var price = (p.price || '').trim() ? '<span class="room-product-card__price">' + esc(p.price) + '</span>' : '';
+                        var cat = (p.category || '').trim() ? '<span class="room-product-card__cat">' + esc(p.category) + '</span>' : '';
+                        return '<a href="' + esc(link) + '" target="_blank" rel="noopener" class="room-product-card">' +
+                            '<div class="room-product-card__img-wrap">' + imgHtml + '</div>' +
+                            '<div class="room-product-card__cap">' +
+                            '<span class="room-product-card__title">' + esc(p.title || 'Untitled') + '</span>' +
+                            (price || cat ? '<span class="room-product-card__meta">' + price + (price && cat ? ' · ' : '') + cat + '</span>' : '') +
+                            '</div></a>';
+                    }).join('');
+                })
+                .catch(function() {
+                    list.innerHTML = '<p class="room-ideas-empty">Could not load products.</p>';
+                });
+        })();
+
+        // Pinterest board & Ideas (per room)
+        (function() {
+            const pinterestBlock = document.getElementById('pinterestBlock');
+            if (!pinterestBlock) return;
+            const roomSlug = {{ room_slug | tojson }};
+
+            // Pinterest
+            const pinterestLink = document.getElementById('pinterestLink');
+            const pinterestLinkWrap = document.getElementById('pinterestLinkWrap');
+            const pinterestBoardUrl = document.getElementById('pinterestBoardUrl');
+            const pinterestSave = document.getElementById('pinterestSave');
+            const pinterestMsg = document.getElementById('pinterestMsg');
+            function loadPinterest() {
+                fetch('/api/room-pinterest?room=' + encodeURIComponent(roomSlug))
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.board_url) {
+                            pinterestLink.href = data.board_url;
+                            pinterestLinkWrap.style.display = 'block';
+                            pinterestBoardUrl.value = data.board_url;
+                        } else {
+                            pinterestLinkWrap.style.display = 'none';
+                        }
+                    });
+            }
+            loadPinterest();
+            pinterestSave.addEventListener('click', function() {
+                const url = (pinterestBoardUrl.value || '').trim();
+                if (!url) { pinterestMsg.textContent = 'Enter a board URL.'; return; }
+                pinterestMsg.textContent = 'Saving...';
+                fetch('/api/room-pinterest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: roomSlug, board_url: url })
+                })
+                    .then(r => r.json())
+                    .then(() => { pinterestMsg.textContent = 'Saved.'; loadPinterest(); })
+                    .catch(() => { pinterestMsg.textContent = 'Failed to save.'; });
+            });
+
+            // Ideas
+            const ideaForm = document.getElementById('ideaForm');
+            const ideasList = document.getElementById('ideasList');
+            function loadIdeas() {
+                fetch('/api/room-ideas?room=' + encodeURIComponent(roomSlug))
+                    .then(r => r.json())
+                    .then(ideas => {
+                        if (!ideas || ideas.length === 0) {
+                            ideasList.innerHTML = '<p class="room-ideas-empty">No ideas yet. Add one above.</p>';
+                            return;
+                        }
+                        ideasList.innerHTML = ideas.map(idea => {
+                            const tags = Array.isArray(idea.tags) ? idea.tags : [];
+                            const tagsHtml = tags.length ? '<div class="room-idea-card__tags">' + tags.map(t => '<span class="room-idea-card__tag">' + escapeHtml(t) + '</span>').join('') + '</div>' : '';
+                            const imgUrl = (idea.image_url || '').trim();
+                            const imgBlock = imgUrl
+                                ? '<div class="room-idea-card__img-wrap"><a href="' + escapeHtml(imgUrl) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(imgUrl) + '" alt="" onerror="this.parentElement.style.display=\'none\'"></a></div>'
+                                : '';
+                            return '<div class="room-idea-card" data-id="' + idea.id + '">' +
+                                imgBlock +
+                                '<div class="room-idea-card__body"><p class="room-idea-card__text">' + escapeHtml(idea.idea) + '</p>' + tagsHtml + '</div>' +
+                                '<button type="button" class="room-idea-card__delete idea-delete" aria-label="Delete">&times;</button></div>';
+                        }).join('');
+                        ideasList.querySelectorAll('.idea-delete').forEach(btn => {
+                            btn.addEventListener('click', function() {
+                                const card = this.closest('.room-idea-card');
+                                const id = card && card.dataset.id;
+                                if (!id) return;
+                                fetch('/api/room-ideas/' + id, { method: 'DELETE' })
+                                    .then(() => loadIdeas());
+                            });
+                        });
+                    });
+            }
+            function escapeHtml(s) {
+                const div = document.createElement('div');
+                div.textContent = s;
+                return div.innerHTML;
+            }
+            loadIdeas();
+            ideaForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const idea = (document.getElementById('ideaText').value || '').trim();
+                if (!idea) return;
+                const imageUrl = (document.getElementById('ideaImageUrl').value || '').trim();
+                const tagsStr = (document.getElementById('ideaTags').value || '').trim();
+                const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+                fetch('/api/room-ideas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: roomSlug, idea: idea, image_url: imageUrl || null, tags: tags })
+                })
+                    .then(r => r.json())
+                    .then(() => {
+                        document.getElementById('ideaText').value = '';
+                        document.getElementById('ideaImageUrl').value = '';
+                        document.getElementById('ideaTags').value = '';
+                        loadIdeas();
+                    })
+                    .catch(() => {});
+            });
         })();
     </script>
 </body>
