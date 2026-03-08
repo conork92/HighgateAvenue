@@ -15,18 +15,18 @@
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260209">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/highgate-blocky.css') }}?v=20260207">
 </head>
-<body>
+<body class="highgate-page--blocky">
     <div class="app-layout">
         {% include '_sidebar.html' %}
         <main class="main-with-sidebar">
-    <div class="container">
-        <header>
-            <h1>Highgate Avenue</h1>
-            <p class="subtitle">Renovation Ideas & Design Inspiration</p>
-        </header>
-
-        <main>
+            <div class="highgate-page__container">
+                <header class="highgate-hero">
+                    <h1>Highgate Avenue</h1>
+                    <p class="highgate-hero__sub">Renovation Ideas & Design Inspiration</p>
+                </header>
+                <div class="highgate-content">
             <nav class="design-tabs" aria-label="Design sections">
                 <a href="{{ url_for('index') }}" class="design-tab {% if not section_filter %}design-tab--active{% endif %}">All</a>
                 {% if sections_order %}
@@ -296,12 +296,11 @@
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
             {% endif %}
-        </main>
-
-        <footer>
-            <p>&copy; 2026 Highgate Avenue</p>
-        </footer>
-    </div>
+                    <footer>
+                        <p>&copy; 2026 Highgate Avenue</p>
+                    </footer>
+                </div>
+            </div>
         </main>
     </div>
 

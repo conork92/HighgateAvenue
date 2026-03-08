@@ -1,4 +1,15 @@
 /* Blocky / Venture-style layout for room page (e.g. Kitchen) */
+
+/* Red selection highlight */
+.room-page--blocky ::selection {
+    background: rgba(185, 28, 28, 0.25);
+    color: #0d0d0d;
+}
+.room-page--blocky ::-moz-selection {
+    background: rgba(185, 28, 28, 0.25);
+    color: #0d0d0d;
+}
+
 .room-page--blocky .main-with-sidebar {
     padding: 0;
 }

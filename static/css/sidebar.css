@@ -196,7 +196,7 @@
 }
 
 .sidebar-nav a:hover {
-    background: rgba(255,255,255,0.1);
+    background: rgba(185, 28, 28, 0.2);
     color: #fff;
 }
 
@@ -208,7 +208,7 @@
 }
 
 .sidebar-nav .sidebar-parent-label:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(185, 28, 28, 0.15);
 }
 
 /* Dropdown: sub list collapsed by default, expanded when .expanded */

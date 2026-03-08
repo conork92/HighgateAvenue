@@ -1,0 +1,349 @@
+/* Highgate Avenue – blocky layout aligned with Muswell Hill room page */
+
+/* Red selection highlight */
+.highgate-page--blocky ::selection {
+    background: rgba(185, 28, 28, 0.25);
+    color: #0d0d0d;
+}
+.highgate-page--blocky ::-moz-selection {
+    background: rgba(185, 28, 28, 0.25);
+    color: #0d0d0d;
+}
+
+.highgate-page--blocky .main-with-sidebar {
+    padding: 0;
+}
+.highgate-page--blocky .highgate-page__container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0;
+}
+
+/* Hero block */
+.highgate-page--blocky .highgate-hero {
+    background: #0d0d0d;
+    color: #fff;
+    padding: 3rem 2rem 3.5rem;
+    margin-bottom: 0;
+    border-bottom: 4px solid #0d0d0d;
+}
+.highgate-page--blocky .highgate-hero h1 {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+.highgate-page--blocky .highgate-hero .highgate-hero__sub {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+}
+
+.highgate-page--blocky .highgate-content {
+    padding: 2.5rem 2rem 4rem;
+}
+@media (max-width: 768px) {
+    .highgate-page--blocky .highgate-hero,
+    .highgate-page--blocky .highgate-content { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+/* Design tabs – blocky, same palette */
+.highgate-page--blocky .design-tabs {
+    background: #0d0d0d;
+    border: 2px solid #0d0d0d;
+    padding: 0.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: none;
+}
+.highgate-page--blocky .design-tabs::after {
+    display: none;
+}
+.highgate-page--blocky .design-tab {
+    color: rgba(255,255,255,0.92);
+    border-right: 1px solid rgba(255,255,255,0.12);
+}
+.highgate-page--blocky .design-tab:hover {
+    background: rgba(185, 28, 28, 0.2);
+    color: #fff;
+}
+.highgate-page--blocky .design-tab--active {
+    background: rgba(185, 28, 28, 0.35);
+    color: #fff;
+    box-shadow: inset 0 0 0 2px #b91c1c;
+}
+.highgate-page--blocky .design-tab--active:hover {
+    background: rgba(185, 28, 28, 0.55);
+    color: #fff;
+}
+
+/* Filter section – bordered block */
+.highgate-page--blocky .filter-section {
+    margin-bottom: 2rem;
+    padding: 1.25rem 1.5rem;
+    border: 2px solid #0d0d0d;
+    background: #fafafa;
+}
+.highgate-page--blocky .filter-section .filter-select,
+.highgate-page--blocky .filter-section .room-filter {
+    border: 2px solid #0d0d0d;
+    padding: 0.6rem 1rem;
+    min-height: 2.75rem;
+}
+.highgate-page--blocky .upload-btn,
+.highgate-page--blocky .design-ideas-link {
+    padding: 0.65rem 1.25rem;
+    border: 2px solid #0d0d0d;
+    background: #0d0d0d;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.highgate-page--blocky .upload-btn:hover,
+.highgate-page--blocky .design-ideas-link:hover {
+    background: #fff;
+    color: #0d0d0d;
+}
+
+/* Section labels – blocky */
+.highgate-page--blocky .exterior-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #0d0d0d;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #0d0d0d;
+    display: inline-block;
+}
+
+/* Exterior / hero image sections */
+.highgate-page--blocky .exterior-section {
+    margin-bottom: 2.5rem;
+}
+.highgate-page--blocky .hero-image {
+    border: 2px solid #0d0d0d;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+.highgate-page--blocky .hero-image img.homepage-image {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Photo carousel */
+.highgate-page--blocky .photo-carousel-section {
+    margin-bottom: 2.5rem;
+}
+.highgate-page--blocky .photo-carousel-section .exterior-label {
+    margin-bottom: 0.5rem;
+}
+.highgate-page--blocky .custom-carousel {
+    border: 2px solid #0d0d0d;
+    border-radius: 0;
+}
+.highgate-page--blocky .carousel-btn {
+    background: #0d0d0d;
+    color: #fff;
+    border: 2px solid #0d0d0d;
+}
+.highgate-page--blocky .carousel-btn:hover {
+    background: #fff;
+    color: #0d0d0d;
+}
+
+/* Plans grid – blocky cards */
+.highgate-page--blocky .plans-grid {
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+.highgate-page--blocky .plan-card {
+    border: 2px solid #0d0d0d;
+    border-top: 2px solid #0d0d0d;
+    padding-top: 0;
+    background: #fff;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+}
+.highgate-page--blocky .plan-card:hover {
+    box-shadow: 6px 6px 0 #0d0d0d;
+}
+.highgate-page--blocky .plan-card a {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.highgate-page--blocky .plan-image {
+    margin-bottom: 0;
+    border-bottom: 2px solid #0d0d0d;
+}
+.highgate-page--blocky .plan-header {
+    padding: 1rem 1.25rem;
+}
+.highgate-page--blocky .plan-room {
+    background: #0d0d0d;
+    color: #fff;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Design Ideas by Room */
+.highgate-page--blocky #designIdeasSection .exterior-label {
+    margin-bottom: 1rem;
+}
+.highgate-page--blocky .room-sections .room-section-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #333;
+    margin: 1rem 0 0.5rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #0d0d0d;
+}
+
+/* Products section */
+.highgate-page--blocky .products-section {
+    border-top: 2px solid #0d0d0d;
+    padding-top: 2rem;
+    margin-top: 2.5rem;
+}
+.highgate-page--blocky .products-section .exterior-label {
+    margin-bottom: 1rem;
+}
+.highgate-page--blocky .product-tile {
+    border: 2px solid #0d0d0d;
+    border-top: 2px solid #0d0d0d;
+    transition: box-shadow 0.2s ease;
+}
+.highgate-page--blocky .product-tile:hover {
+    box-shadow: 4px 4px 0 #0d0d0d;
+}
+
+/* Modals */
+.highgate-page--blocky .modal-content {
+    border: 2px solid #0d0d0d;
+    border-radius: 0;
+}
+.highgate-page--blocky .modal-content h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #0d0d0d;
+    margin-bottom: 1.25rem;
+}
+.highgate-page--blocky .form-group label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #333;
+}
+.highgate-page--blocky .form-group input,
+.highgate-page--blocky .form-group select,
+.highgate-page--blocky .form-group textarea {
+    border: 2px solid #0d0d0d;
+    padding: 0.6rem 0.75rem;
+}
+.highgate-page--blocky .btn-submit {
+    background: #0d0d0d;
+    color: #fff;
+    border: 2px solid #0d0d0d;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.highgate-page--blocky .btn-submit:hover {
+    background: #fff;
+    color: #0d0d0d;
+}
+.highgate-page--blocky .btn-cancel {
+    border: 2px solid #0d0d0d;
+    color: #0d0d0d;
+    background: #fff;
+}
+.highgate-page--blocky .btn-cancel:hover {
+    background: #f0f0f0;
+}
+.highgate-page--blocky .close-modal,
+.highgate-page--blocky .close-product-modal,
+.highgate-page--blocky .close-upload-modal {
+    color: #0d0d0d;
+}
+.highgate-page--blocky .close-modal:hover,
+.highgate-page--blocky .close-product-modal:hover,
+.highgate-page--blocky .close-upload-modal:hover {
+    color: #b91c1c;
+}
+
+/* Footer */
+.highgate-page--blocky .highgate-content footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #0d0d0d;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Loading / error */
+.highgate-page--blocky .loading,
+.highgate-page--blocky .error {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #666;
+}
+
+/* Categorize page */
+.highgate-page--blocky .categorize-controls {
+    margin-bottom: 2rem;
+    padding: 1.25rem 1.5rem;
+    border: 2px solid #0d0d0d;
+    background: #fafafa;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+}
+.highgate-page--blocky .categorize-controls .filter-select {
+    border: 2px solid #0d0d0d;
+    padding: 0.6rem 1rem;
+}
+.highgate-page--blocky .categorize-controls .upload-btn {
+    padding: 0.65rem 1.25rem;
+    border: 2px solid #0d0d0d;
+    background: #0d0d0d;
+    color: #fff;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.highgate-page--blocky .categorize-controls .upload-btn:hover {
+    background: #fff;
+    color: #0d0d0d;
+}
+.highgate-page--blocky .categorize-grid {
+    display: grid;
+    gap: 1rem;
+}
+.highgate-page--blocky .categorize-grid .idea-card,
+.highgate-page--blocky .categorize-grid [class*="card"] {
+    border: 2px solid #0d0d0d;
+    background: #fff;
+}
+.highgate-page--blocky .categorize-grid .idea-card:hover,
+.highgate-page--blocky .categorize-grid [class*="card"]:hover {
+    box-shadow: 4px 4px 0 #0d0d0d;
+}
