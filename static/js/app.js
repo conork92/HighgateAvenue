@@ -142,7 +142,7 @@ function renderDesignIdeasByRoom() {
         
         return `
             <div class="room-section">
-                <h3 class="room-section-title">${escapeHtml(room)}</h3>
+                <h3 class="room-section-title" data-room="${escapeHtml(room)}">${escapeHtml(room)}</h3>
                 <div class="room-ideas-grid">
                     ${ideas.map(idea => {
                         // Prioritize public_url, fall back to image_path
@@ -207,6 +207,17 @@ function renderDesignIdeasByRoom() {
             </div>
         `;
     }).join('');
+    
+    // Make room section titles collapsible
+    container.querySelectorAll('.room-section-title').forEach(function(title) {
+        title.addEventListener('click', function() {
+            var section = title.closest('.room-section');
+            if (section) {
+                section.classList.toggle('collapsed');
+                title.classList.toggle('collapsed');
+            }
+        });
+    });
 }
 
 
@@ -365,6 +376,9 @@ function initProductModal(section, grid, loadingEl) {
         const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
         const isMwhEl = document.getElementById('productIsMwh');
         const isMwh = isMwhEl ? isMwhEl.checked : false;
+        // Auto-detect project: if is_mwh is checked, it's Muswell Hill; otherwise Highgate Avenue
+        const project = isMwh ? 'Muswell Hill' : 'Highgate Avenue';
+        
         const payload = {
             link,
             title: (document.getElementById('productTitle').value || '').trim() || null,
@@ -374,7 +388,8 @@ function initProductModal(section, grid, loadingEl) {
             room: (document.getElementById('productRoom').value || '').trim() || null,
             website_name: (document.getElementById('productWebsiteName').value || '').trim() || null,
             tags,
-            is_mwh: isMwh
+            is_mwh: isMwh,
+            project: project
         };
         submitBtn.disabled = true;
         if (productStatus) { productStatus.style.display = 'block'; productStatus.className = 'upload-status loading'; }
@@ -439,23 +454,39 @@ async function loadProducts(roomFilter, grid, loadingEl) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const products = await response.json();
         const list = Array.isArray(products) ? products : [];
+        
+        // Check if we're on a room page (has room-page--blocky class)
+        const isRoomPage = document.body.classList.contains('room-page--blocky');
+        
         grid.innerHTML = list.length === 0
             ? ''
             : list.map(p => {
                 const hasImage = p.image_url && p.image_url.trim();
-                const imgHtml = hasImage
-                    ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.title || 'Product')}" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add('product-tile-image--failed')">`
-                    : '';
                 const title = escapeHtml(p.title || 'Product');
                 const rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
                 const displayPrice = rawPrice && !rawPrice.startsWith('£') ? `£ ${escapeHtml(rawPrice)}` : escapeHtml(rawPrice);
-                const price = rawPrice ? `<span class="product-tile-price">${displayPrice}</span>` : '';
+                const price = rawPrice ? displayPrice : '';
                 const websiteDisplay = getProductWebsiteDisplay(p);
-                const websiteHtml = websiteDisplay ? `<span class="product-tile-website">${escapeHtml(websiteDisplay)}</span>` : '';
+                const cat = (p.category || '').trim();
                 const link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
-                const removeBtn = `<button type="button" class="product-delete-btn" data-product-id="${p.id}" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>`;
-                const editBtnIcon = `<button type="button" class="product-edit-btn" data-product-id="${p.id}" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>`;
-                return `<div class="product-tile-wrapper"><div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}${removeBtn}${editBtnIcon}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${price}</div></a></div></div>`;
+                
+                if (isRoomPage) {
+                    // Use room-product-card styling for room pages
+                    const imgHtml = hasImage
+                        ? `<img src="${escapeHtml(p.image_url)}" alt="" class="room-product-card__img" loading="lazy" onerror="this.style.display='none'">`
+                        : '<div class="room-product-card__noimg">No image</div>';
+                    return `<a href="${link}" target="_blank" rel="noopener" class="room-product-card"><div class="room-product-card__img-wrap">${imgHtml}</div><div class="room-product-card__cap"><span class="room-product-card__title">${title}</span>${price || cat ? `<span class="room-product-card__meta">${price}${price && cat ? ' · ' : ''}${cat ? `<span class="room-product-card__cat">${escapeHtml(cat)}</span>` : ''}</span>` : ''}</div></a>`;
+                } else {
+                    // Use product-tile styling for regular pages
+                    const imgHtml = hasImage
+                        ? `<img src="${escapeHtml(p.image_url)}" alt="${title}" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add('product-tile-image--failed')">`
+                        : '';
+                    const priceHtml = rawPrice ? `<span class="product-tile-price">${displayPrice}</span>` : '';
+                    const websiteHtml = websiteDisplay ? `<span class="product-tile-website">${escapeHtml(websiteDisplay)}</span>` : '';
+                    const removeBtn = `<button type="button" class="product-delete-btn" data-product-id="${p.id}" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>`;
+                    const editBtnIcon = `<button type="button" class="product-edit-btn" data-product-id="${p.id}" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>`;
+                    return `<div class="product-tile-wrapper"><div class="product-tile"><a href="${link}" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">${imgHtml}${removeBtn}${editBtnIcon}</div><div class="product-tile-info">${websiteHtml}<span class="product-tile-title">${title}</span>${priceHtml}</div></a></div></div>`;
+                }
             }).join('');
     } catch (e) {
         console.error('Error loading products:', e);

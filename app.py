@@ -715,10 +715,13 @@ def design_section(section_id):
         abort(404)
     sections = {section_id: DESIGN_SECTIONS[section_id]}
     product_room_filter = SECTION_TO_PRODUCT_ROOM.get(section_id)
+    # Map section_id to room slug for Pinterest/room-ideas API
+    room_slug = section_id  # Use section_id as room slug (e.g., 'master-bedroom')
     return render_template(
         'index.html',
         sections=sections,
         section_filter=section_id,
+        room_slug=room_slug,
         all_sections=DESIGN_SECTIONS,
         sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
@@ -1329,6 +1332,17 @@ def create_product():
             is_mwh = 'mwh' in tag_set_lower
         else:
             is_mwh = bool(is_mwh)
+        
+        # Auto-detect project: if is_mwh is True or project is explicitly set, use that; otherwise default to Highgate Avenue
+        project = data.get('project', '').strip()
+        if not project:
+            # Auto-detect based on is_mwh flag or referrer
+            referrer = request.headers.get('Referer', '')
+            if is_mwh or '/muswell-hill/' in referrer:
+                project = 'Muswell Hill'
+            else:
+                project = 'Highgate Avenue'
+        
         payload = {
             'link': link,
             'title': (data.get('title') or '').strip() or None,
@@ -1340,6 +1354,7 @@ def create_product():
             'website_name': (data.get('website_name') or '').strip() or None,
             'tags': tags,
             'is_mwh': is_mwh,
+            'project': project or None,
             'bought': _coerce_bool(data.get('bought'), default=False),
             'comment': (data.get('comment') or '').strip() or None,
         }
@@ -1382,8 +1397,13 @@ def update_product(product_id):
             update_data['x_remove'] = bool(data['x_remove'])
         if 'is_mwh' in data:
             update_data['is_mwh'] = bool(data['is_mwh'])
+            # Auto-update project when is_mwh changes
+            if 'project' not in data:
+                update_data['project'] = 'Muswell Hill' if bool(data['is_mwh']) else 'Highgate Avenue'
         if 'bought' in data:
             update_data['bought'] = _coerce_bool(data['bought'], default=False)
+        if 'project' in data:
+            update_data['project'] = (data.get('project') or '').strip() or None
         # Full product fields
         if 'link' in data and (data.get('link') or '').strip():
             update_data['link'] = (data.get('link') or '').strip()
@@ -1572,17 +1592,67 @@ def create_room_idea():
             tags = [t.strip() for t in tags.split(',') if t.strip()]
         else:
             tags = []
+        
+        # Auto-detect project based on referrer or room slug pattern
+        project = data.get('project', '').strip()
+        if not project:
+            referrer = request.headers.get('Referer', '')
+            # Check if referrer contains muswell-hill
+            if '/muswell-hill/' in referrer:
+                project = 'Muswell Hill'
+            else:
+                # Default to Highgate Avenue for all other routes
+                project = 'Highgate Avenue'
+        
         payload = {
             'room': room,
             'idea': idea,
             'image_url': (data.get('image_url') or '').strip() or None,
             'tags': tags,
+            'project': project or None,
         }
         r = supabase.table('ha_room_ideas').insert(payload).execute()
         rows = r.data or []
         return jsonify(rows[0] if rows else payload), 201
     except Exception as e:
         app.logger.error(f"Error creating room idea: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/room-ideas/<int:idea_id>', methods=['PUT', 'PATCH'])
+def update_room_idea(idea_id):
+    """Update a room idea by id."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        update_data = {}
+        
+        if 'idea' in data:
+            update_data['idea'] = (data.get('idea') or '').strip()
+        if 'image_url' in data:
+            update_data['image_url'] = (data.get('image_url') or '').strip() or None
+        if 'tags' in data:
+            tags = data.get('tags')
+            if isinstance(tags, list):
+                update_data['tags'] = [str(t).strip() for t in tags if str(t).strip()]
+            elif isinstance(tags, str):
+                update_data['tags'] = [t.strip() for t in tags.split(',') if t.strip()]
+            else:
+                update_data['tags'] = []
+        if 'project' in data:
+            update_data['project'] = (data.get('project') or '').strip() or None
+        
+        if not update_data:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        r = supabase.table('ha_room_ideas').update(update_data).eq('id', idea_id).execute()
+        rows = r.data or []
+        if not rows:
+            return jsonify({'error': 'Idea not found'}), 404
+        return jsonify(rows[0]), 200
+    except Exception as e:
+        app.logger.error(f"Error updating room idea: {e}")
         return jsonify({'error': str(e)}), 500
 
 

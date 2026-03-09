@@ -13,20 +13,34 @@
         html, body { background: #ffffff !important; color: #000000 !important; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260209">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260210">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    {% if product_room_filter is not none and section_filter %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/room-blocky.css') }}?v=20260210">
+    {% else %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/highgate-blocky.css') }}?v=20260207">
+    {% endif %}
 </head>
-<body class="highgate-page--blocky">
+<body class="{% if product_room_filter is not none and section_filter %}room-page--blocky{% else %}highgate-page--blocky{% endif %}">
     <div class="app-layout">
         {% include '_sidebar.html' %}
         <main class="main-with-sidebar">
+            {% if product_room_filter is not none and section_filter %}
+            <div class="room-page__container" data-room-blocky="true">
+                <header class="room-hero">
+                    <h1>Highgate Avenue – {{ sections[section_filter].label if section_filter in sections else 'Room' }}</h1>
+                    <p class="room-hero__sub">Photos & ideas</p>
+                </header>
+                <div class="room-content">
+            {% else %}
             <div class="highgate-page__container">
                 <header class="highgate-hero">
                     <h1>Highgate Avenue</h1>
                     <p class="highgate-hero__sub">Renovation Ideas & Design Inspiration</p>
                 </header>
                 <div class="highgate-content">
+            {% endif %}
+            {% if not (product_room_filter is not none and section_filter) %}
             <nav class="design-tabs" aria-label="Design sections">
                 <a href="{{ url_for('index') }}" class="design-tab {% if not section_filter %}design-tab--active{% endif %}">All</a>
                 {% if sections_order %}
@@ -66,6 +80,7 @@
                 <button id="uploadBtn" class="upload-btn"><span>+ Add Design</span></button>
                 <button id="addProductBtn" class="upload-btn"><span>+ Add Product</span></button>
             </div>
+            {% endif %}
 
             {% if show_photo_gallery %}
             <section class="photo-carousel-section">
@@ -84,6 +99,7 @@
             </section>
             {% endif %}
 
+            {% if not (product_room_filter is not none and section_filter) %}
             {% for section_id, section in sections.items() %}
             <section class="exterior-section" id="section-{{ section_id }}">
                 <h2 class="exterior-label">{{ section.label }}</h2>
@@ -94,6 +110,24 @@
                 </div>
             </section>
             {% endfor %}
+            {% else %}
+            <!-- Photos section for room pages -->
+            <section class="room-section">
+                <h2 class="room-section__title">Photos</h2>
+                {% for section_id, section in sections.items() %}
+                <div class="room-grid">
+                    {% for img in section.images %}
+                    <div class="room-card">
+                        <a href="{{ img.url }}" target="_blank" rel="noopener">
+                            <img src="{{ img.url }}" alt="{{ img.alt }}" class="room-card__img" loading="lazy" onerror="this.style.display='none'">
+                            <div class="room-card__cap">{{ img.alt }}</div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </section>
+            {% endif %}
 
             <!-- Upload Modal -->
             <div id="uploadModal" class="modal" style="display: none;">
@@ -255,6 +289,7 @@
                 </div>
             </div>
 
+            {% if not (product_room_filter is not none and section_filter) %}
             <!-- Design Ideas by Room -->
             {% if product_room_filter is not none %}
             <section id="designIdeasSection" style="display: none;" data-section-room="{{ product_room_filter }}">
@@ -278,11 +313,47 @@
 
             <div id="loading" class="loading">Loading ideas...</div>
             <div id="error" class="error" style="display: none;"></div>
+            {% endif %}
 
             {% if product_room_filter is not none %}
-            <section class="products-section" id="productsSection" data-product-room="{{ product_room_filter }}">
-                <h2 class="exterior-label">Products</h2>
-                <div id="productsGrid" class="products-grid">
+            <!-- Pinterest board section (only for room pages) -->
+            <section class="room-section" id="pinterestSection">
+                <h2 class="room-section__title">Pinterest board</h2>
+                <div id="pinterestBlock" class="room-block">
+                    <p id="pinterestLinkWrap" style="display: none; margin-bottom: 0.5rem;"><a id="pinterestLink" href="#" target="_blank" rel="noopener" class="room-block__link">Open Pinterest board →</a></p>
+                    <div class="room-block__row">
+                        <input type="url" id="pinterestBoardUrl" placeholder="https://uk.pinterest.com/..." aria-label="Pinterest board URL">
+                        <button type="button" id="pinterestSave" class="room-btn">Save board</button>
+                    </div>
+                    <p id="pinterestMsg" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;"></p>
+                </div>
+            </section>
+
+            <!-- Ideas & notes section (only for room pages) -->
+            <section class="room-section" id="roomIdeasSection">
+                <h2 class="room-section__title">Ideas & notes</h2>
+                <form id="ideaForm" class="room-block" style="margin-bottom: 1rem;">
+                    <input type="hidden" name="room" id="ideaRoomInput" value="{{ section_filter }}">
+                    <div class="room-field">
+                        <label for="ideaText" class="room-label">Idea</label>
+                        <textarea id="ideaText" name="idea" rows="2" placeholder="e.g. Drawers that can pull out"></textarea>
+                    </div>
+                    <div class="room-field">
+                        <label for="ideaImageUrl" class="room-label">Image link (optional)</label>
+                        <input type="url" id="ideaImageUrl" name="image_url" placeholder="https://...">
+                    </div>
+                    <div class="room-field">
+                        <label for="ideaTags" class="room-label">Tags (comma-separated)</label>
+                        <input type="text" id="ideaTags" name="tags" placeholder="storage, drawers">
+                    </div>
+                    <button type="submit" class="room-btn">Add idea</button>
+                </form>
+                <div id="ideasList" class="room-ideas-list"></div>
+            </section>
+
+            <section class="room-section" id="productsSection" data-product-room="{{ product_room_filter }}">
+                <h2 class="room-section__title">Products</h2>
+                <div id="productsGrid" class="room-products-list">
                     <!-- Products loaded by JS -->
                 </div>
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
@@ -296,14 +367,237 @@
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
             {% endif %}
+            {% if not (product_room_filter is not none and section_filter) %}
                     <footer>
                         <p>&copy; 2026 Highgate Avenue</p>
                     </footer>
+            {% endif %}
                 </div>
             </div>
         </main>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% if product_room_filter is not none and section_filter %}
+    <script>
+        // Pinterest board & Ideas (per room) - similar to muswell_hill_room.html
+        (function() {
+            const pinterestBlock = document.getElementById('pinterestBlock');
+            if (!pinterestBlock) return;
+            const roomSlug = {{ section_filter | tojson }};
+
+            // Pinterest
+            const pinterestLink = document.getElementById('pinterestLink');
+            const pinterestLinkWrap = document.getElementById('pinterestLinkWrap');
+            const pinterestBoardUrl = document.getElementById('pinterestBoardUrl');
+            const pinterestSave = document.getElementById('pinterestSave');
+            const pinterestMsg = document.getElementById('pinterestMsg');
+            function loadPinterest() {
+                fetch('/api/room-pinterest?room=' + encodeURIComponent(roomSlug))
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.board_url) {
+                            pinterestLink.href = data.board_url;
+                            pinterestLinkWrap.style.display = 'block';
+                            pinterestBoardUrl.value = data.board_url;
+                        } else {
+                            pinterestLinkWrap.style.display = 'none';
+                        }
+                    });
+            }
+            loadPinterest();
+            pinterestSave.addEventListener('click', function() {
+                const url = (pinterestBoardUrl.value || '').trim();
+                if (!url) { pinterestMsg.textContent = 'Enter a board URL.'; return; }
+                pinterestMsg.textContent = 'Saving...';
+                fetch('/api/room-pinterest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: roomSlug, board_url: url })
+                })
+                    .then(r => r.json())
+                    .then(() => { pinterestMsg.textContent = 'Saved.'; loadPinterest(); })
+                    .catch(() => { pinterestMsg.textContent = 'Failed to save.'; });
+            });
+
+            // Ideas
+            const ideaForm = document.getElementById('ideaForm');
+            const ideasList = document.getElementById('ideasList');
+            function loadIdeas() {
+                fetch('/api/room-ideas?room=' + encodeURIComponent(roomSlug))
+                    .then(r => r.json())
+                    .then(ideas => {
+                        if (!ideas || ideas.length === 0) {
+                            ideasList.innerHTML = '<p class="room-ideas-empty">No ideas yet. Add one above.</p>';
+                            return;
+                        }
+                        ideasList.innerHTML = ideas.map(function(idea) {
+                            var ideaId = idea.id;
+                            var ideaText = (idea.idea || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            var imageUrl = (idea.image_url || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            var tagsStr = (idea.tags && idea.tags.length > 0) ? idea.tags.join(', ') : '';
+                            
+                            var tagsHtml = '';
+                            if (idea.tags && idea.tags.length > 0) {
+                                tagsHtml = '<div class="room-idea-card__tags">' + idea.tags.map(function(t) {
+                                    return '<span class="room-idea-card__tag">' + (t || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+                                }).join('') + '</div>';
+                            }
+                            var imgHtml = '';
+                            if (idea.image_url) {
+                                imgHtml = '<div class="room-idea-card__img-wrap"><img src="' + imageUrl + '" alt="" class="room-idea-card__img" loading="lazy" onerror="this.style.display=\'none\'"></div>';
+                            }
+                            
+                            // Edit mode HTML (hidden by default)
+                            var editHtml = '<div class="room-idea-card__edit" style="display: none;" data-id="' + ideaId + '">' +
+                                '<textarea class="room-idea-card__edit-text" rows="3" placeholder="Idea text">' + ideaText + '</textarea>' +
+                                '<input type="url" class="room-idea-card__edit-image" placeholder="Image URL (optional)" value="' + imageUrl + '">' +
+                                '<input type="text" class="room-idea-card__edit-tags" placeholder="Tags (comma-separated)" value="' + tagsStr.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">' +
+                                '<div class="room-idea-card__edit-actions">' +
+                                '<button type="button" class="room-btn room-btn--small" onclick="saveRoomIdea(' + ideaId + ')">Save</button>' +
+                                '<button type="button" class="room-btn room-btn--small room-btn--cancel" onclick="cancelEditRoomIdea(' + ideaId + ')">Cancel</button>' +
+                                '</div></div>';
+                            
+                            // Display mode HTML
+                            var displayHtml = '<div class="room-idea-card__display" data-id="' + ideaId + '">' +
+                                '<div class="room-idea-card__body">' +
+                                '<p class="room-idea-card__text">' + ideaText.replace(/\n/g, '<br>') + '</p>' + tagsHtml +
+                                '</div>' +
+                                '<div class="room-idea-card__actions">' +
+                                '<button type="button" class="room-idea-card__edit-btn" data-id="' + ideaId + '" title="Edit idea" aria-label="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>' +
+                                '<button type="button" class="room-idea-card__delete" data-id="' + ideaId + '" title="Delete idea" aria-label="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>' +
+                                '</div></div>';
+                            
+                            return '<div class="room-idea-card" data-id="' + ideaId + '">' + imgHtml + displayHtml + editHtml + '</div>';
+                        }).join('');
+                        
+                        // Attach event listeners
+                        ideasList.querySelectorAll('.room-idea-card__delete').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                var id = btn.getAttribute('data-id');
+                                if (!confirm('Delete this idea?')) return;
+                                fetch('/api/room-ideas/' + id, { method: 'DELETE' })
+                                    .then(function() { loadIdeas(); })
+                                    .catch(function() { alert('Failed to delete.'); });
+                            });
+                        });
+                        
+                        ideasList.querySelectorAll('.room-idea-card__edit-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                var id = btn.getAttribute('data-id');
+                                editRoomIdea(id);
+                            });
+                        });
+                    })
+                    .catch(function() {
+                        ideasList.innerHTML = '<p class="room-ideas-empty">Could not load ideas.</p>';
+                    });
+            }
+            loadIdeas();
+            ideaForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                var idea = (document.getElementById('ideaText').value || '').trim();
+                var imageUrl = (document.getElementById('ideaImageUrl').value || '').trim();
+                var tagsStr = (document.getElementById('ideaTags').value || '').trim();
+                var tags = tagsStr ? tagsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+                if (!idea) return;
+                fetch('/api/room-ideas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: roomSlug, idea: idea, image_url: imageUrl || null, tags: tags, project: 'Highgate Avenue' })
+                })
+                    .then(r => r.json())
+                    .then(() => {
+                        document.getElementById('ideaText').value = '';
+                        document.getElementById('ideaImageUrl').value = '';
+                        document.getElementById('ideaTags').value = '';
+                        loadIdeas();
+                    })
+                    .catch(() => {});
+            });
+
+            // Edit room idea function
+            window.editRoomIdea = function(ideaId) {
+                var card = ideasList.querySelector('.room-idea-card[data-id="' + ideaId + '"]');
+                if (!card) return;
+                var display = card.querySelector('.room-idea-card__display');
+                var edit = card.querySelector('.room-idea-card__edit');
+                if (display && edit) {
+                    display.style.display = 'none';
+                    edit.style.display = 'block';
+                    edit.querySelector('.room-idea-card__edit-text').focus();
+                }
+            };
+            
+            // Cancel edit function
+            window.cancelEditRoomIdea = function(ideaId) {
+                var card = ideasList.querySelector('.room-idea-card[data-id="' + ideaId + '"]');
+                if (!card) return;
+                var display = card.querySelector('.room-idea-card__display');
+                var edit = card.querySelector('.room-idea-card__edit');
+                if (display && edit) {
+                    display.style.display = 'flex';
+                    edit.style.display = 'none';
+                    // Reload to reset form values
+                    loadIdeas();
+                }
+            };
+            
+            // Save room idea function
+            window.saveRoomIdea = function(ideaId) {
+                var card = ideasList.querySelector('.room-idea-card[data-id="' + ideaId + '"]');
+                if (!card) return;
+                var edit = card.querySelector('.room-idea-card__edit');
+                if (!edit) return;
+                
+                var ideaText = (edit.querySelector('.room-idea-card__edit-text').value || '').trim();
+                var imageUrl = (edit.querySelector('.room-idea-card__edit-image').value || '').trim();
+                var tagsStr = (edit.querySelector('.room-idea-card__edit-tags').value || '').trim();
+                var tags = tagsStr ? tagsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+                
+                if (!ideaText) {
+                    alert('Idea text is required');
+                    return;
+                }
+                
+                var saveBtn = edit.querySelector('button[onclick*="saveRoomIdea"]');
+                if (saveBtn) saveBtn.disabled = true;
+                
+                fetch('/api/room-ideas/' + ideaId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        idea: ideaText, 
+                        image_url: imageUrl || null, 
+                        tags: tags,
+                        project: 'Highgate Avenue'
+                    })
+                })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('Failed to save');
+                        return r.json();
+                    })
+                    .then(function() {
+                        loadIdeas();
+                    })
+                    .catch(function(err) {
+                        alert('Failed to save: ' + (err.message || 'Unknown error'));
+                        if (saveBtn) saveBtn.disabled = false;
+                    });
+            };
+
+            // Make room section titles collapsible
+            document.querySelectorAll('.room-section__title').forEach(function(title) {
+                title.addEventListener('click', function() {
+                    var section = title.closest('.room-section');
+                    if (section) {
+                        section.classList.toggle('collapsed');
+                        title.classList.toggle('collapsed');
+                    }
+                });
+            });
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>

@@ -71,8 +71,58 @@
     color: #0d0d0d;
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
+    padding-right: 2rem;
     border-bottom: 2px solid #0d0d0d;
     display: inline-block;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    transition: opacity 0.2s ease;
+}
+
+.room-page--blocky .room-section__title:hover {
+    opacity: 0.7;
+}
+
+.room-page--blocky .room-section__title::after {
+    content: '▼';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.625rem;
+    transition: transform 0.2s ease;
+}
+
+.room-page--blocky .room-section__title.collapsed::after {
+    transform: translateY(-50%) rotate(-90deg);
+}
+
+.room-page--blocky .room-section .room-grid,
+.room-page--blocky .room-section .room-block,
+.room-page--blocky .room-section .room-list,
+.room-page--blocky .room-section .loading,
+.room-page--blocky .room-section .error,
+.room-page--blocky .room-section .room-ideas-empty {
+    transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease;
+    overflow: hidden;
+    max-height: 5000px; /* Large enough for most sections */
+}
+
+.room-page--blocky .room-section.collapsed .room-grid,
+.room-page--blocky .room-section.collapsed .room-block,
+.room-page--blocky .room-section.collapsed .room-list,
+.room-page--blocky .room-section.collapsed .loading,
+.room-page--blocky .room-section.collapsed .error,
+.room-page--blocky .room-section.collapsed .room-ideas-empty {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    padding: 0;
+}
+
+.room-page--blocky .room-section.collapsed {
+    margin-bottom: 1rem;
 }
 
 /* Image grid: blocky cards */
@@ -207,6 +257,7 @@
     padding: 1rem 1.25rem;
     border: 2px solid #0d0d0d;
     background: #fff;
+    position: relative;
 }
 .room-page--blocky .room-idea-card__img-wrap {
     flex-shrink: 0;
@@ -216,7 +267,8 @@
     overflow: hidden;
     background: #f0f0f0;
 }
-.room-page--blocky .room-idea-card__img-wrap img {
+.room-page--blocky .room-idea-card__img-wrap img,
+.room-page--blocky .room-idea-card__img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -224,6 +276,10 @@
 .room-page--blocky .room-idea-card__body {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-grow: 1;
 }
 .room-page--blocky .room-idea-card__text {
     margin: 0 0 0.5rem 0;
@@ -245,23 +301,104 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
-.room-page--blocky .room-idea-card__delete {
+.room-page--blocky .room-idea-card__actions {
+    display: flex;
+    gap: 0.25rem;
     flex-shrink: 0;
-    width: 36px;
-    height: 36px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.room-page--blocky .room-idea-card__edit-btn,
+.room-page--blocky .room-idea-card__delete {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: #999;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.2s ease, opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0.5;
+}
+
+.room-page--blocky .room-idea-card:hover .room-idea-card__edit-btn,
+.room-page--blocky .room-idea-card:hover .room-idea-card__delete,
+.room-page--blocky .room-idea-card__edit-btn:focus,
+.room-page--blocky .room-idea-card__delete:focus {
+    opacity: 1;
+}
+
+.room-page--blocky .room-idea-card__edit-btn:hover {
+    color: #0d0d0d;
+}
+
+.room-page--blocky .room-idea-card__delete:hover {
+    color: #b91c1c;
+}
+
+.room-page--blocky .room-idea-card__edit-btn svg,
+.room-page--blocky .room-idea-card__delete svg {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.room-page--blocky .room-idea-card__display {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+}
+
+.room-page--blocky .room-idea-card__edit {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.room-page--blocky .room-idea-card__edit-text,
+.room-page--blocky .room-idea-card__edit-image,
+.room-page--blocky .room-idea-card__edit-tags {
+    width: 100%;
+    padding: 0.5rem;
     border: 2px solid #0d0d0d;
     background: #fff;
     color: #0d0d0d;
-    font-size: 1.25rem;
-    line-height: 1;
-    cursor: pointer;
     font-family: inherit;
-    transition: background 0.2s ease, color 0.2s ease;
+    font-size: 0.875rem;
 }
-.room-page--blocky .room-idea-card__delete:hover {
-    background: #b91c1c;
-    color: #fff;
-    border-color: #b91c1c;
+
+.room-page--blocky .room-idea-card__edit-text {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.room-page--blocky .room-idea-card__edit-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.room-page--blocky .room-btn--small {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+}
+
+.room-page--blocky .room-btn--cancel {
+    background: #fff;
+    color: #0d0d0d;
+}
+
+.room-page--blocky .room-btn--cancel:hover {
+    background: #f0f0f0;
 }
 .room-page--blocky .room-ideas-empty {
     padding: 1.5rem;

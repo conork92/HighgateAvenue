@@ -200,24 +200,55 @@
                             return;
                         }
                         ideasList.innerHTML = ideas.map(idea => {
+                            const ideaId = idea.id;
+                            const ideaText = escapeHtml(idea.idea || '');
+                            const imageUrl = escapeHtml((idea.image_url || '').trim());
                             const tags = Array.isArray(idea.tags) ? idea.tags : [];
+                            const tagsStr = tags.join(', ');
                             const tagsHtml = tags.length ? '<div class="room-idea-card__tags">' + tags.map(t => '<span class="room-idea-card__tag">' + escapeHtml(t) + '</span>').join('') + '</div>' : '';
                             const imgUrl = (idea.image_url || '').trim();
                             const imgBlock = imgUrl
                                 ? '<div class="room-idea-card__img-wrap"><a href="' + escapeHtml(imgUrl) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(imgUrl) + '" alt="" onerror="this.parentElement.style.display=\'none\'"></a></div>'
                                 : '';
-                            return '<div class="room-idea-card" data-id="' + idea.id + '">' +
-                                imgBlock +
-                                '<div class="room-idea-card__body"><p class="room-idea-card__text">' + escapeHtml(idea.idea) + '</p>' + tagsHtml + '</div>' +
-                                '<button type="button" class="room-idea-card__delete idea-delete" aria-label="Delete">&times;</button></div>';
+                            
+                            // Edit mode HTML (hidden by default)
+                            const editHtml = '<div class="room-idea-card__edit" style="display: none;" data-id="' + ideaId + '">' +
+                                '<textarea class="room-idea-card__edit-text" rows="3" placeholder="Idea text">' + ideaText + '</textarea>' +
+                                '<input type="url" class="room-idea-card__edit-image" placeholder="Image URL (optional)" value="' + imageUrl + '">' +
+                                '<input type="text" class="room-idea-card__edit-tags" placeholder="Tags (comma-separated)" value="' + escapeHtml(tagsStr) + '">' +
+                                '<div class="room-idea-card__edit-actions">' +
+                                '<button type="button" class="room-btn room-btn--small" onclick="saveRoomIdeaMwh(' + ideaId + ')">Save</button>' +
+                                '<button type="button" class="room-btn room-btn--small room-btn--cancel" onclick="cancelEditRoomIdeaMwh(' + ideaId + ')">Cancel</button>' +
+                                '</div></div>';
+                            
+                            // Display mode HTML
+                            const displayHtml = '<div class="room-idea-card__display" data-id="' + ideaId + '">' +
+                                '<div class="room-idea-card__body"><p class="room-idea-card__text">' + ideaText + '</p>' + tagsHtml + '</div>' +
+                                '<div class="room-idea-card__actions">' +
+                                '<button type="button" class="room-idea-card__edit-btn" data-id="' + ideaId + '" title="Edit idea" aria-label="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>' +
+                                '<button type="button" class="room-idea-card__delete idea-delete" data-id="' + ideaId + '" title="Delete idea" aria-label="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>' +
+                                '</div></div>';
+                            
+                            return '<div class="room-idea-card" data-id="' + ideaId + '">' + imgBlock + displayHtml + editHtml + '</div>';
                         }).join('');
+                        
+                        // Attach event listeners
                         ideasList.querySelectorAll('.idea-delete').forEach(btn => {
                             btn.addEventListener('click', function() {
                                 const card = this.closest('.room-idea-card');
                                 const id = card && card.dataset.id;
                                 if (!id) return;
+                                if (!confirm('Delete this idea?')) return;
                                 fetch('/api/room-ideas/' + id, { method: 'DELETE' })
-                                    .then(() => loadIdeas());
+                                    .then(() => loadIdeas())
+                                    .catch(() => alert('Failed to delete.'));
+                            });
+                        });
+                        
+                        ideasList.querySelectorAll('.room-idea-card__edit-btn').forEach(btn => {
+                            btn.addEventListener('click', function() {
+                                const id = btn.getAttribute('data-id');
+                                editRoomIdeaMwh(id);
                             });
                         });
                     });
@@ -238,7 +269,7 @@
                 fetch('/api/room-ideas', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomSlug, idea: idea, image_url: imageUrl || null, tags: tags })
+                    body: JSON.stringify({ room: roomSlug, idea: idea, image_url: imageUrl || null, tags: tags, project: 'Muswell Hill' })
                 })
                     .then(r => r.json())
                     .then(() => {
@@ -248,6 +279,92 @@
                         loadIdeas();
                     })
                     .catch(() => {});
+            });
+        })();
+
+        // Edit room idea function (Muswell Hill)
+        window.editRoomIdeaMwh = function(ideaId) {
+            const ideasList = document.getElementById('ideasList');
+            const card = ideasList.querySelector('.room-idea-card[data-id="' + ideaId + '"]');
+            if (!card) return;
+            const display = card.querySelector('.room-idea-card__display');
+            const edit = card.querySelector('.room-idea-card__edit');
+            if (display && edit) {
+                display.style.display = 'none';
+                edit.style.display = 'block';
+                edit.querySelector('.room-idea-card__edit-text').focus();
+            }
+        };
+        
+        // Cancel edit function (Muswell Hill)
+        window.cancelEditRoomIdeaMwh = function(ideaId) {
+            const ideasList = document.getElementById('ideasList');
+            const card = ideasList.querySelector('.room-idea-card[data-id="' + ideaId + '"]');
+            if (!card) return;
+            const display = card.querySelector('.room-idea-card__display');
+            const edit = card.querySelector('.room-idea-card__edit');
+            if (display && edit) {
+                display.style.display = 'flex';
+                edit.style.display = 'none';
+                // Reload to reset form values
+                loadIdeas();
+            }
+        };
+        
+        // Save room idea function (Muswell Hill)
+        window.saveRoomIdeaMwh = function(ideaId) {
+            const ideasList = document.getElementById('ideasList');
+            const card = ideasList.querySelector('.room-idea-card[data-id="' + ideaId + '"]');
+            if (!card) return;
+            const edit = card.querySelector('.room-idea-card__edit');
+            if (!edit) return;
+            
+            const ideaText = (edit.querySelector('.room-idea-card__edit-text').value || '').trim();
+            const imageUrl = (edit.querySelector('.room-idea-card__edit-image').value || '').trim();
+            const tagsStr = (edit.querySelector('.room-idea-card__edit-tags').value || '').trim();
+            const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+            
+            if (!ideaText) {
+                alert('Idea text is required');
+                return;
+            }
+            
+            const saveBtn = edit.querySelector('button[onclick*="saveRoomIdeaMwh"]');
+            if (saveBtn) saveBtn.disabled = true;
+            
+            fetch('/api/room-ideas/' + ideaId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    idea: ideaText, 
+                    image_url: imageUrl || null, 
+                    tags: tags,
+                    project: 'Muswell Hill'
+                })
+            })
+                .then(r => {
+                    if (!r.ok) throw new Error('Failed to save');
+                    return r.json();
+                })
+                .then(() => {
+                    loadIdeas();
+                })
+                .catch(err => {
+                    alert('Failed to save: ' + (err.message || 'Unknown error'));
+                    if (saveBtn) saveBtn.disabled = false;
+                });
+        };
+
+        // Make room section titles collapsible
+        (function() {
+            document.querySelectorAll('.room-section__title').forEach(function(title) {
+                title.addEventListener('click', function() {
+                    var section = title.closest('.room-section');
+                    if (section) {
+                        section.classList.toggle('collapsed');
+                        title.classList.toggle('collapsed');
+                    }
+                });
             });
         })();
     </script>
