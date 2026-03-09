@@ -360,7 +360,7 @@ function filterIdeas() {
 window.goToPage = goToPage;
 window.showFullImage = showFullImage;
 
-// Render ideas to the grid
+// Render ideas to the grid, grouped by category
 function renderIdeas() {
     if (filteredIdeas.length === 0) {
         ideasGrid.innerHTML = `
@@ -373,7 +373,26 @@ function renderIdeas() {
         return;
     }
     
-    ideasGrid.innerHTML = filteredIdeas.map(idea => {
+    // Group ideas by category
+    const ideasByCategory = {};
+    filteredIdeas.forEach(idea => {
+        const category = (idea.category && idea.category.trim()) || 'Uncategorized';
+        if (!ideasByCategory[category]) {
+            ideasByCategory[category] = [];
+        }
+        ideasByCategory[category].push(idea);
+    });
+    
+    // Sort categories alphabetically
+    const sortedCategories = Object.keys(ideasByCategory).sort();
+    
+    ideasGrid.innerHTML = sortedCategories.map(category => {
+        const ideas = ideasByCategory[category];
+        return `
+            <div class="categorize-section" data-category="${escapeHtml(category)}">
+                <h2 class="categorize-section-title">${escapeHtml(category)}</h2>
+                <div class="categorize-section-grid">
+                    ${ideas.map(idea => {
         // Prioritize public_url, fall back to image_path
         let imageUrl = '';
         if (idea.public_url) {
@@ -384,6 +403,7 @@ function renderIdeas() {
         
         const roomValue = idea.room || '';
         const categoryValue = idea.category || '';
+        const projectValue = idea.project || '';
         const tags = Array.isArray(idea.tags) ? idea.tags : (idea.tags ? idea.tags.split(',') : []);
         const name = idea.name || '';
         const liked = idea.liked || false;
@@ -418,6 +438,14 @@ function renderIdeas() {
                             <input type="text" class="idea-category-input" value="${escapeHtml(categoryValue)}" placeholder="e.g., Furniture, Lighting, Decor" data-field="category" data-id="${idea.id}">
                         </div>
                         <div class="idea-field">
+                            <label>Project</label>
+                            <select class="idea-project-select" data-field="project" data-id="${idea.id}">
+                                <option value="">—</option>
+                                <option value="Highgate Avenue" ${projectValue === 'Highgate Avenue' ? 'selected' : ''}>Highgate Avenue</option>
+                                <option value="Muswell Hill" ${projectValue === 'Muswell Hill' ? 'selected' : ''}>Muswell Hill</option>
+                            </select>
+                        </div>
+                        <div class="idea-field">
                             <label>Tags (comma-separated)</label>
                             <input type="text" class="idea-tags-input" value="${escapeHtml(tags.join(', '))}" placeholder="tag1, tag2, tag3" data-field="tags" data-id="${idea.id}">
                         </div>
@@ -437,7 +465,22 @@ function renderIdeas() {
                 </div>
             </div>
         `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
     }).join('');
+    
+    // Make category section titles collapsible
+    ideasGrid.querySelectorAll('.categorize-section-title').forEach(function(title) {
+        title.addEventListener('click', function() {
+            var section = title.closest('.categorize-section');
+            if (section) {
+                section.classList.toggle('collapsed');
+                title.classList.toggle('collapsed');
+            }
+        });
+    });
     
     // Attach event listeners
     attachEventListeners();
@@ -459,6 +502,11 @@ function attachEventListeners() {
     // Category inputs
     document.querySelectorAll('.idea-category-input').forEach(input => {
         input.addEventListener('input', () => markAsChanged(input.dataset.id));
+    });
+    
+    // Project selects
+    document.querySelectorAll('.idea-project-select').forEach(select => {
+        select.addEventListener('change', () => markAsChanged(select.dataset.id));
     });
     
     // Tags inputs
@@ -716,6 +764,7 @@ async function saveIdea(ideaId) {
     const nameInput = card.querySelector('.idea-name-input');
     const roomSelect = card.querySelector('.idea-room-select');
     const categoryInput = card.querySelector('.idea-category-input');
+    const projectSelect = card.querySelector('.idea-project-select');
     const tagsInput = card.querySelector('.idea-tags-input');
     const saveBtn = card.querySelector('.idea-save-btn');
     const likeBtn = card.querySelector('.like-btn');
@@ -730,6 +779,7 @@ async function saveIdea(ideaId) {
         name: nameInput.value.trim() || null,
         room: roomSelect.value || null,
         category: categoryInput.value.trim() || null,
+        project: projectSelect ? (projectSelect.value || null) : null,
         tags: tagsInput.value.trim() ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : []
     };
     
@@ -809,6 +859,7 @@ async function saveAllChanges() {
         const nameInput = card.querySelector('.idea-name-input');
         const roomSelect = card.querySelector('.idea-room-select');
         const categoryInput = card.querySelector('.idea-category-input');
+        const projectSelect = card.querySelector('.idea-project-select');
         const tagsInput = card.querySelector('.idea-tags-input');
         
         const likeBtn = card.querySelector('.like-btn');
@@ -819,6 +870,7 @@ async function saveAllChanges() {
             name: nameInput.value.trim() || null,
             room: roomSelect.value || null,
             category: categoryInput.value.trim() || null,
+            project: projectSelect ? (projectSelect.value || null) : null,
             tags: tagsInput.value.trim() ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [],
             liked: likeBtn ? likeBtn.dataset.liked === 'true' : false,
             bok_likes: bokLikesBtn ? parseInt(bokLikesBtn.querySelector('.bok-count').textContent) || 0 : 0

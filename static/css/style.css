@@ -1052,8 +1052,48 @@ a:hover {
     color: var(--black);
     margin-bottom: 1.5rem;
     padding-bottom: 0.75rem;
+    padding-right: 2rem;
     border-bottom: 1px solid var(--black);
     letter-spacing: -0.01em;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    transition: opacity 0.2s ease;
+}
+
+.room-section-title:hover {
+    opacity: 0.7;
+}
+
+.room-section-title::after {
+    content: '▼';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+    transition: transform 0.2s ease;
+}
+
+.room-section-title.collapsed::after {
+    transform: translateY(-50%) rotate(-90deg);
+}
+
+.room-ideas-grid {
+    transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease;
+    overflow: hidden;
+    max-height: 5000px; /* Large enough for most sections */
+}
+
+.room-section.collapsed .room-ideas-grid {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    padding: 0;
+}
+
+.room-section.collapsed {
+    margin-bottom: 1rem;
 }
 
 .room-ideas-grid {
