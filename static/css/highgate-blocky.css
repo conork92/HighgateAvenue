@@ -1,12 +1,12 @@
 /* Highgate Avenue – blocky layout aligned with Muswell Hill room page */
 
-/* Red selection highlight */
+/* Gold selection highlight */
 .highgate-page--blocky ::selection {
-    background: rgba(185, 28, 28, 0.25);
+    background: rgba(201, 162, 39, 0.25);
     color: #0d0d0d;
 }
 .highgate-page--blocky ::-moz-selection {
-    background: rgba(185, 28, 28, 0.25);
+    background: rgba(201, 162, 39, 0.25);
     color: #0d0d0d;
 }
 
@@ -67,16 +67,16 @@
     border-right: 1px solid rgba(255,255,255,0.12);
 }
 .highgate-page--blocky .design-tab:hover {
-    background: rgba(185, 28, 28, 0.2);
+    background: rgba(201, 162, 39, 0.2);
     color: #fff;
 }
 .highgate-page--blocky .design-tab--active {
-    background: rgba(185, 28, 28, 0.35);
+    background: rgba(201, 162, 39, 0.35);
     color: #fff;
-    box-shadow: inset 0 0 0 2px #b91c1c;
+    box-shadow: inset 0 0 0 2px #c9a227;
 }
 .highgate-page--blocky .design-tab--active:hover {
-    background: rgba(185, 28, 28, 0.55);
+    background: rgba(201, 162, 39, 0.55);
     color: #fff;
 }
 
@@ -285,7 +285,7 @@
 .highgate-page--blocky .close-modal:hover,
 .highgate-page--blocky .close-product-modal:hover,
 .highgate-page--blocky .close-upload-modal:hover {
-    color: #b91c1c;
+    color: #c9a227;
 }
 
 /* Footer */

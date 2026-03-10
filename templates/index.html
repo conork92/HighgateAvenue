@@ -13,15 +13,17 @@
         html, body { background: #ffffff !important; color: #000000 !important; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260210">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260211">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260211">
     {% if product_room_filter is not none and section_filter %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/room-blocky.css') }}?v=20260210">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/room-blocky.css') }}?v=20260211">
+    {% elif not section_filter %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/room-blocky.css') }}?v=20260211">
     {% else %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/highgate-blocky.css') }}?v=20260207">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/highgate-blocky.css') }}?v=20260211">
     {% endif %}
 </head>
-<body class="{% if product_room_filter is not none and section_filter %}room-page--blocky{% else %}highgate-page--blocky{% endif %}">
+<body class="{% if product_room_filter is not none and section_filter %}room-page--blocky{% elif not section_filter %}room-page--blocky{% else %}highgate-page--blocky{% endif %}">
     <div class="app-layout">
         {% include '_sidebar.html' %}
         <main class="main-with-sidebar">
@@ -32,6 +34,13 @@
                     <p class="room-hero__sub">Photos & ideas</p>
                 </header>
                 <div class="room-content">
+            {% elif not section_filter %}
+            <div class="room-page__container" data-room-blocky="true">
+                <header class="room-hero">
+                    <h1>Highgate Avenue</h1>
+                    <p class="room-hero__sub">All rooms & ideas</p>
+                </header>
+                <div class="room-content">
             {% else %}
             <div class="highgate-page__container">
                 <header class="highgate-hero">
@@ -40,7 +49,6 @@
                 </header>
                 <div class="highgate-content">
             {% endif %}
-            {% if not (product_room_filter is not none and section_filter) %}
             <nav class="design-tabs" aria-label="Design sections">
                 <a href="{{ url_for('index') }}" class="design-tab {% if not section_filter %}design-tab--active{% endif %}">All</a>
                 {% if sections_order %}
@@ -59,6 +67,7 @@
                 <a href="{{ url_for('categorize') }}" class="design-tab {% if request.endpoint == 'categorize' %}design-tab--active{% endif %}">Categorize</a>
             </nav>
 
+            {% if section_filter and not (product_room_filter is not none and section_filter) %}
             <div class="filter-section">
                 <select id="roomFilter" class="filter-select room-filter">
                     <option value="">All Rooms</option>
@@ -99,18 +108,7 @@
             </section>
             {% endif %}
 
-            {% if not (product_room_filter is not none and section_filter) %}
-            {% for section_id, section in sections.items() %}
-            <section class="exterior-section" id="section-{{ section_id }}">
-                <h2 class="exterior-label">{{ section.label }}</h2>
-                <div class="hero-image {% if section.layout == 'double' %}plans-two{% endif %}">
-                    {% for img in section.images %}
-                    <img src="{{ img.url }}" alt="{{ img.alt }}" class="homepage-image" referrerpolicy="no-referrer">
-                    {% endfor %}
-                </div>
-            </section>
-            {% endfor %}
-            {% else %}
+            {% if product_room_filter is not none and section_filter %}
             <!-- Photos section for room pages -->
             <section class="room-section">
                 <h2 class="room-section__title">Photos</h2>
@@ -127,6 +125,34 @@
                 </div>
                 {% endfor %}
             </section>
+            {% elif not section_filter %}
+            <!-- Photos section for All page (room-page styling) -->
+            {% for section_id, section in sections.items() %}
+            <section class="room-section">
+                <h2 class="room-section__title">{{ section.label }}</h2>
+                <div class="room-grid">
+                    {% for img in section.images %}
+                    <div class="room-card">
+                        <a href="{{ img.url }}" target="_blank" rel="noopener">
+                            <img src="{{ img.url }}" alt="{{ img.alt }}" class="room-card__img" loading="lazy" onerror="this.style.display='none'">
+                            <div class="room-card__cap">{{ img.alt }}</div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
+            {% else %}
+            {% for section_id, section in sections.items() %}
+            <section class="exterior-section" id="section-{{ section_id }}">
+                <h2 class="exterior-label">{{ section.label }}</h2>
+                <div class="hero-image {% if section.layout == 'double' %}plans-two{% endif %}">
+                    {% for img in section.images %}
+                    <img src="{{ img.url }}" alt="{{ img.alt }}" class="homepage-image" referrerpolicy="no-referrer">
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
             {% endif %}
 
             <!-- Upload Modal -->
@@ -289,7 +315,15 @@
                 </div>
             </div>
 
-            {% if not (product_room_filter is not none and section_filter) %}
+            {% if not section_filter %}
+            <!-- Design Ideas by Room - hidden on All page for now -->
+            <section id="designIdeasSection" style="display: none;" data-section-room="" data-hide-section="true">
+                <h2 class="room-section__title">Design Ideas by Room</h2>
+                <div id="designIdeasByRoom" class="room-sections">
+                    <!-- Room sections will be loaded here -->
+                </div>
+            </section>
+            {% elif not (product_room_filter is not none and section_filter) %}
             <!-- Design Ideas by Room -->
             {% if product_room_filter is not none %}
             <section id="designIdeasSection" style="display: none;" data-section-room="{{ product_room_filter }}">
@@ -358,6 +392,15 @@
                 </div>
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
+            {% elif not section_filter %}
+            <!-- Products section (All page - room-page styling) -->
+            <section class="room-section" id="productsSection" data-product-room="">
+                <h2 class="room-section__title">Products</h2>
+                <div id="productsGrid" class="room-products-list">
+                    <!-- Products loaded by JS -->
+                </div>
+                <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
+            </section>
             {% else %}
             <section class="products-section" id="productsSection" data-product-room="">
                 <h2 class="exterior-label">Products</h2>
@@ -367,7 +410,7 @@
                 <div id="productsLoading" class="loading" style="display: none;">Loading products...</div>
             </section>
             {% endif %}
-            {% if not (product_room_filter is not none and section_filter) %}
+            {% if section_filter and not (product_room_filter is not none and section_filter) %}
                     <footer>
                         <p>&copy; 2026 Highgate Avenue</p>
                     </footer>

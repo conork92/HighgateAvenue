@@ -1,12 +1,12 @@
 /* Blocky / Venture-style layout for room page (e.g. Kitchen) */
 
-/* Red selection highlight */
+/* Gold selection highlight */
 .room-page--blocky ::selection {
-    background: rgba(185, 28, 28, 0.25);
+    background: rgba(201, 162, 39, 0.25);
     color: #0d0d0d;
 }
 .room-page--blocky ::-moz-selection {
-    background: rgba(185, 28, 28, 0.25);
+    background: rgba(201, 162, 39, 0.25);
     color: #0d0d0d;
 }
 
@@ -54,9 +54,72 @@
 .room-page--blocky .room-content {
     padding: 2.5rem 2rem 4rem;
 }
+
+/* Navigation tabs styling for room pages */
+.room-page--blocky .design-tabs {
+    padding: 1.5rem 2rem 0;
+    margin-bottom: 2rem;
+    background: var(--artdeco-charcoal);
+    border: 2px solid var(--black);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    position: relative;
+}
+
+.room-page--blocky .design-tabs::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 3px;
+    background: linear-gradient(90deg, transparent 0%, var(--artdeco-gold) 20%, var(--artdeco-gold) 80%, transparent 100%);
+    opacity: 0.7;
+}
+
+.room-page--blocky .design-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--artdeco-cream);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    text-decoration: none;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.room-page--blocky .design-tab:last-child {
+    border-right: none;
+}
+
+.room-page--blocky .design-tab:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--white);
+}
+
+.room-page--blocky .design-tab--active {
+    background: var(--artdeco-cream);
+    color: var(--artdeco-charcoal);
+    box-shadow: inset 0 -2px 0 var(--artdeco-gold);
+}
+
+.room-page--blocky .design-tab--active:hover {
+    background: var(--white);
+    color: var(--black);
+}
+
 @media (max-width: 768px) {
     .room-page--blocky .room-hero,
-    .room-page--blocky .room-content { padding-left: 1.5rem; padding-right: 1.5rem; }
+    .room-page--blocky .room-content,
+    .room-page--blocky .design-tabs { padding-left: 1.5rem; padding-right: 1.5rem; }
 }
 
 /* Section titles: blocky label */
@@ -201,7 +264,7 @@
     min-height: 80px;
 }
 .room-page--blocky .room-block__link {
-    color: #b91c1c;
+    color: #c9a227;
     font-weight: 600;
     text-decoration: none;
     font-size: 0.9rem;
@@ -338,7 +401,7 @@
 }
 
 .room-page--blocky .room-idea-card__delete:hover {
-    color: #b91c1c;
+    color: #c9a227;
 }
 
 .room-page--blocky .room-idea-card__edit-btn svg,

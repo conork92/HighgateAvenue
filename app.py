@@ -384,6 +384,7 @@ def index():
         sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
         product_room_filter=None,
+        room_slug=None,
     )
 
 @app.route('/categorize/')
