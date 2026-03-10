@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue - HK Products</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260211">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260211">
+    <style>
+        .hk-product-card {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-height: 0;
+        }
+        .hk-product-card .product-tile {
+            flex: 1;
+            min-height: 0;
+        }
+        .hk-product-card.x-removed { opacity: 0.65; }
+        .hk-product-flags {
+            display: flex;
+            gap: 0.6rem;
+            margin-top: 0.5rem;
+            padding: 0.5rem 0 0;
+            flex-wrap: nowrap;
+            align-items: center;
+            border-top: 1px solid rgba(0,0,0,0.08);
+            overflow-x: auto;
+        }
+        .hk-product-flags label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .hk-product-flags input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+        }
+        .hk-edit-product {
+            margin-left: auto;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--gray-dark, #666);
+            background: transparent;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .hk-edit-product:hover {
+            border-color: #000;
+            color: #000;
+        }
+        .hk-edit-product:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        .hk-section { margin-bottom: 2.5rem; }
+        .hk-section:first-child { margin-top: 0; }
+        .hk-section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            padding-right: 2rem;
+            border-bottom: 2px solid #000;
+            color: #000;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            transition: opacity 0.2s ease;
+        }
+        .hk-section-title:hover {
+            opacity: 0.7;
+        }
+        .hk-section-title::after {
+            content: '▼';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.875rem;
+            transition: transform 0.2s ease;
+        }
+        .hk-section-title.collapsed::after {
+            transform: translateY(-50%) rotate(-90deg);
+        }
+        .hk-section-grid {
+            transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease;
+            overflow: hidden;
+            max-height: 5000px; /* Large enough for most sections */
+        }
+        .hk-section.collapsed .hk-section-grid {
+            max-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+            padding: 0;
+        }
+        .hk-section.collapsed {
+            margin-bottom: 1rem;
+        }
+        .hk-section-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.25rem;
+            align-items: start;
+        }
+        .hk-empty-bought {
+            grid-column: 1 / -1;
+            color: var(--gray-dark, #666);
+            font-size: 0.9375rem;
+            padding: 1rem 0;
+            margin: 0;
+        }
+        .hk-product-subcategory {
+            font-size: 0.75rem;
+            color: var(--gray-dark, #666);
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .hk-product-comment {
+            font-size: 0.8125rem;
+            color: var(--gray-dark, #666);
+            margin: 0.5rem 0 0 0;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .product-tile-image-wrap {
+            position: relative;
+        }
+        .hk-product-remove-btn,
+        .hk-product-edit-btn {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #000;
+            z-index: 10;
+            -webkit-tap-highlight-color: transparent;
+            opacity: 0.9;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+        .product-tile-image-wrap:hover .hk-product-remove-btn,
+        .product-tile-image-wrap:hover .hk-product-edit-btn,
+        .hk-product-remove-btn:hover,
+        .hk-product-edit-btn:hover,
+        .hk-product-remove-btn:focus,
+        .hk-product-edit-btn:focus {
+            opacity: 1;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+        .hk-product-remove-btn {
+            top: 0.5rem;
+            left: 0.5rem;
+        }
+        .hk-product-remove-btn:hover {
+            background: #fff;
+            border-color: #d32f2f;
+            color: #d32f2f;
+            transform: scale(1.1);
+        }
+        .hk-product-edit-btn {
+            top: 0.5rem;
+            right: 0.5rem;
+        }
+        .hk-product-edit-btn:hover {
+            background: #fff;
+            border-color: #000;
+            color: #000;
+            transform: scale(1.1);
+        }
+        .hk-product-remove-btn svg,
+        .hk-product-edit-btn svg {
+            width: 16px;
+            height: 16px;
+            pointer-events: none;
+        }
+        .hk-website-filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+        .hk-website-filters-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-dark, #666);
+        }
+        .hk-website-filters #hkWebsiteFilterBtns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .hk-website-btn {
+            padding: 0.4rem 0.85rem;
+            font-size: 0.8125rem;
+            font-family: inherit;
+            border: 1px solid rgba(0,0,0,0.3);
+            background: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .hk-website-btn:hover {
+            background: #f5f5f5;
+            border-color: #000;
+        }
+        .hk-website-btn.active {
+            background: #000;
+            color: #fff;
+            border-color: #000;
+        }
+        @media (max-width: 768px) {
+            .hk-product-remove-btn,
+            .hk-product-edit-btn {
+                opacity: 1;
+                width: 36px;
+                height: 36px;
+                background: rgba(255, 255, 255, 0.98);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            }
+            .hk-product-remove-btn svg,
+            .hk-product-edit-btn svg {
+                width: 18px;
+                height: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>HK – Products</h1>
+                    <p class="subtitle">HK products only (tag <strong>hk</strong> or category <strong>HK</strong>), grouped by category. Removed and bought items are hidden from the main sections.</p>
+                    <button type="button" id="hkAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
+                </header>
+                <div id="hkWebsiteFilters" class="hk-website-filters" style="display: none;">
+                    <span class="hk-website-filters-label">Website:</span>
+                    <div id="hkWebsiteFilterBtns"></div>
+                </div>
+            <!-- Add Product Modal -->
+            <div id="hkProductModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close-modal close-hk-product-modal" aria-label="Close">&times;</span>
+                    <h2 id="hkProductModalTitle">Add Product</h2>
+                    <form id="hkProductForm">
+                        <div class="form-group">
+                            <label for="hkProductLink">Product link (e.g. Amazon, Gumtree) *</label>
+                            <input type="url" id="hkProductLink" name="link" placeholder="https://..." required>
+                            <button type="button" id="hkFetchPreviewBtn" class="btn-fetch-preview" style="margin-top: 0.5rem;" title="Fill title, image, price and site from the link">Fetch from link</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductWebsiteName">Website name</label>
+                            <input type="text" id="hkProductWebsiteName" name="website_name" placeholder="e.g. Amazon, IKEA">
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductTitle">Title</label>
+                            <input type="text" id="hkProductTitle" name="title" placeholder="Product name">
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductImageUrl">Image URL</label>
+                            <input type="url" id="hkProductImageUrl" name="image_url" placeholder="Optional">
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductPrice">Price</label>
+                            <input type="text" id="hkProductPrice" name="price" placeholder="e.g. £24.99">
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductCategory">Category</label>
+                            <select id="hkProductCategory" name="category">
+                                <option value="HK" selected>HK</option>
+                                <option value="">—</option>
+                                <option value="Appliance">Appliance</option>
+                                <option value="Art">Art</option>
+                                <option value="Baby">Baby</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Decor">Decor</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Lighting">Lighting</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductSubCategory">Sub category (free text)</label>
+                            <input type="text" id="hkProductSubCategory" name="sub_category" placeholder="e.g. Cot, Pram, Clothes">
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductRoom">Room</label>
+                            <select id="hkProductRoom" name="room">
+                                <option value="">—</option>
+                                <option value="Front Room">Front Room</option>
+                                <option value="Bedroom">Bedroom</option>
+                                <option value="Kitchen">Kitchen</option>
+                                <option value="Bathroom">Bathroom</option>
+                                <option value="Nursery">Nursery</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductTags">Tags (comma-separated)</label>
+                            <input type="text" id="hkProductTags" name="tags" placeholder="e.g. hk" value="hk">
+                        </div>
+                        <div class="form-group">
+                            <label for="hkProductComment">Comment</label>
+                            <textarea id="hkProductComment" name="comment" rows="2" placeholder="Notes or comments about this product"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" id="hkCancelProduct">Cancel</button>
+                            <button type="submit" class="btn-submit" id="hkSubmitProduct">Add Product</button>
+                        </div>
+                        <input type="hidden" id="hkEditingProductId" value="">
+                    </form>
+                    <div id="hkProductStatus" class="upload-status" style="display: none;"></div>
+                </div>
+            </div>
+                <div id="hkProductsLoading" class="loading">Loading products...</div>
+                <div id="hkProductsGrid">
+                    <!-- Filled by JS: sections with subheaders + product grids -->
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        (function() {
+            function escapeHtml(s) {
+                if (s == null) return '';
+                return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+            function getWebsiteDisplay(p) {
+                if (p.website_name && p.website_name.trim()) return p.website_name.trim();
+                if (p.link && p.link.includes('amazon')) return 'Amazon';
+                return '';
+            }
+            function updateProductFlag(productId, field, value) {
+                fetch('/api/products/' + productId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [field]: value })
+                }).then(function(r) {
+                    if (!r.ok) console.error('Failed to update product', productId, field, value);
+                }).catch(function(e) { console.error(e); });
+            }
+            const loading = document.getElementById('hkProductsLoading');
+            const grid = document.getElementById('hkProductsGrid');
+            const modal = document.getElementById('hkProductModal');
+            const form = document.getElementById('hkProductForm');
+            const statusEl = document.getElementById('hkProductStatus');
+            const websiteFiltersEl = document.getElementById('hkWebsiteFilters');
+            const websiteFilterBtnsEl = document.getElementById('hkWebsiteFilterBtns');
+            var hkProductList = [];
+            var hkCurrentWebsite = '';
+
+            function getWebsiteKey(p) {
+                return (p.website_name || '').trim() || '(No website)';
+            }
+            function getProductCategoryKey(p) {
+                var cat = (p.category || '').trim();
+                return cat || 'Uncategorised';
+            }
+            function renderCard(p) {
+                var hasImage = p.image_url && p.image_url.trim();
+                var imgHtml = hasImage ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title || 'Product') + '" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">' : '';
+                var title = escapeHtml(p.title || 'Product');
+                var rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+                var displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
+                var price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
+                var websiteDisplay = getWebsiteDisplay(p);
+                var websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
+                var link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+                var bokLikes = !!p.bok_likes;
+                var xRemove = !!p.x_remove;
+                var bought = !!p.bought;
+                var cardClass = 'hk-product-card' + (xRemove ? ' x-removed' : '');
+                var id = p.id;
+                var commentText = (p.comment || '').trim();
+                var commentHtml = commentText ? '<p class="hk-product-comment">' + escapeHtml(commentText) + '</p>' : '';
+                var subCat = (p.sub_category || '').trim();
+                var subCatHtml = subCat ? '<span class="hk-product-subcategory">' + escapeHtml(subCat) + '</span>' : '';
+                var removeBtn = '<button type="button" class="hk-product-remove-btn" data-id="' + id + '" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>';
+                var editBtn = '<button type="button" class="hk-product-edit-btn" data-id="' + id + '" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>';
+                return '<div class="' + cardClass + '" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + removeBtn + editBtn + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + (subCatHtml ? subCatHtml + ' ' : '') + price + '</div></a></div><div class="hk-product-flags"><label><input type="checkbox" class="hk-bok-likes" data-id="' + id + '" ' + (bokLikes ? 'checked' : '') + '> Bok likes</label><label><input type="checkbox" class="hk-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div>' + commentHtml + '</div>';
+            }
+            function renderProductList(list) {
+                if (list.length === 0) {
+                    grid.innerHTML = '<p class="subtitle">No HK products yet. Add products with tag <strong>hk</strong> or category <strong>HK</strong> and set a category to see them grouped.</p>';
+                    websiteFiltersEl.style.display = 'none';
+                    return;
+                }
+                var websites = [];
+                var seen = {};
+                list.forEach(function(p) {
+                    var w = getWebsiteKey(p);
+                    if (!seen[w]) { seen[w] = true; websites.push(w); }
+                });
+                websites.sort(function(a, b) {
+                    if (a === '(No website)') return 1;
+                    if (b === '(No website)') return -1;
+                    return a.localeCompare(b);
+                });
+                if (websites.length > 0) {
+                    websiteFiltersEl.style.display = 'flex';
+                    websiteFilterBtnsEl.innerHTML = '';
+                    var allBtn = document.createElement('button');
+                    allBtn.type = 'button';
+                    allBtn.className = 'hk-website-btn' + (hkCurrentWebsite === '' ? ' active' : '');
+                    allBtn.textContent = 'All';
+                    allBtn.addEventListener('click', function() {
+                        hkCurrentWebsite = '';
+                        renderProductList(hkProductList);
+                    });
+                    websiteFilterBtnsEl.appendChild(allBtn);
+                    websites.forEach(function(w) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'hk-website-btn' + (hkCurrentWebsite === w ? ' active' : '');
+                        btn.textContent = w;
+                        btn.addEventListener('click', function() {
+                            hkCurrentWebsite = w;
+                            renderProductList(hkProductList);
+                        });
+                        websiteFilterBtnsEl.appendChild(btn);
+                    });
+                } else {
+                    websiteFiltersEl.style.display = 'none';
+                }
+                var listToShow = hkCurrentWebsite ? list.filter(function(p) { return getWebsiteKey(p) === hkCurrentWebsite; }) : list;
+                var boughtItems = listToShow.filter(function(p) { return !!p.bought; });
+                var activeItems = listToShow.filter(function(p) { return !p.bought && !p.x_remove; });
+                if (activeItems.length === 0 && boughtItems.length === 0) {
+                    grid.innerHTML = '<p class="subtitle">No products for this website filter.</p>';
+                    return;
+                }
+
+                var byCategory = {};
+                activeItems.forEach(function(p) {
+                    var key = getProductCategoryKey(p);
+                    if (!byCategory[key]) byCategory[key] = [];
+                    byCategory[key].push(p);
+                });
+                var categoryOrder = Object.keys(byCategory).sort(function(a, b) {
+                    if (a === 'Uncategorised') return 1;
+                    if (b === 'Uncategorised') return -1;
+                    return a.localeCompare(b);
+                });
+                var html = '';
+                categoryOrder.forEach(function(cat) {
+                    var productsInSection = byCategory[cat];
+                    if (!productsInSection.length) return;
+                    html += '<div class="hk-section"><h2 class="hk-section-title" data-section="' + escapeHtml(cat) + '">' + escapeHtml(cat) + '</h2><div class="hk-section-grid">';
+                    productsInSection.forEach(function(p) { html += renderCard(p); });
+                    html += '</div></div>';
+                });
+                // Always show Bought section at the bottom
+                html += '<div class="hk-section hk-section-bought"><h2 class="hk-section-title" data-section="bought">Bought</h2><div class="hk-section-grid">';
+                if (boughtItems.length) {
+                    boughtItems.forEach(function(p) { html += renderCard(p); });
+                } else {
+                    html += '<p class="hk-empty-bought">No items bought yet. Tick <strong>Bought</strong> on a product to move it here.</p>';
+                }
+                html += '</div></div>';
+                grid.innerHTML = html;
+                grid.querySelectorAll('.hk-bok-likes').forEach(function(cb) {
+                    cb.addEventListener('change', function() { updateProductFlag(cb.dataset.id, 'bok_likes', cb.checked); });
+                });
+                grid.querySelectorAll('.hk-bought').forEach(function(cb) {
+                    cb.addEventListener('change', function() {
+                        updateProductFlag(cb.dataset.id, 'bought', cb.checked);
+                        // Re-fetch and re-render so item moves between sections immediately
+                        fetch('/api/hk-products')
+                            .then(function(r) { return r.json(); })
+                            .then(function(products) {
+                                hkProductList = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                                renderProductList(hkProductList);
+                            });
+                    });
+                });
+                
+                // Attach event listeners to edit and delete buttons
+                grid.querySelectorAll('.hk-product-edit-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var id = btn.getAttribute('data-id');
+                        if (id) editHkProduct(id);
+                    });
+                });
+                
+                grid.querySelectorAll('.hk-product-remove-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var id = btn.getAttribute('data-id');
+                        if (id && confirm('Are you sure you want to delete this product?')) {
+                            deleteHkProduct(id);
+                        }
+                    });
+                });
+                
+                // Make section titles collapsible
+                grid.querySelectorAll('.hk-section-title').forEach(function(title) {
+                    title.addEventListener('click', function() {
+                        var section = title.closest('.hk-section');
+                        if (section) {
+                            section.classList.toggle('collapsed');
+                            title.classList.toggle('collapsed');
+                        }
+                    });
+                });
+            }
+            
+            function editHkProduct(id) {
+                if (!id) return;
+                fetch('/api/products/' + id)
+                    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+                    .then(function(result) {
+                        if (!result.ok) return;
+                        var p = result.data;
+                        document.getElementById('hkEditingProductId').value = id;
+                        document.getElementById('hkProductModalTitle').textContent = 'Edit Product';
+                        document.getElementById('hkSubmitProduct').textContent = 'Save changes';
+                        document.getElementById('hkProductLink').value = p.link || '';
+                        document.getElementById('hkProductWebsiteName').value = p.website_name || '';
+                        document.getElementById('hkProductTitle').value = p.title || '';
+                        document.getElementById('hkProductImageUrl').value = p.image_url || '';
+                        document.getElementById('hkProductPrice').value = p.price || '';
+                        var category = p.category || '';
+                        // Ensure category is HK if not set
+                        if (!category || category.toLowerCase() !== 'hk') {
+                            category = 'HK';
+                        }
+                        document.getElementById('hkProductCategory').value = category;
+                        document.getElementById('hkProductSubCategory').value = p.sub_category || '';
+                        document.getElementById('hkProductRoom').value = p.room || '';
+                        var tags = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
+                        // Ensure hk tag is included
+                        if (tags && !tags.toLowerCase().includes('hk')) {
+                            tags = tags + (tags ? ', ' : '') + 'hk';
+                        } else if (!tags) {
+                            tags = 'hk';
+                        }
+                        document.getElementById('hkProductTags').value = tags;
+                        document.getElementById('hkProductComment').value = p.comment || '';
+                        if (modal) modal.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                        if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+                    })
+                    .catch(function(e) { console.error(e); });
+            }
+            
+            function deleteHkProduct(id) {
+                if (!id) return;
+                fetch('/api/products/' + id, { method: 'DELETE' })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('Failed to delete product');
+                        loading.style.display = 'block';
+                        return fetch('/api/hk-products').then(function(r) { return r.json(); });
+                    })
+                    .then(function(products) {
+                        loading.style.display = 'none';
+                        hkProductList = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                        renderProductList(hkProductList);
+                    })
+                    .catch(function(e) {
+                        loading.style.display = 'none';
+                        alert('Failed to delete product: ' + (e.message || 'Unknown error'));
+                    });
+            }
+            
+            window.editHkProduct = editHkProduct;
+            window.deleteHkProduct = deleteHkProduct;
+
+            function openProductModal() {
+                document.getElementById('hkEditingProductId').value = '';
+                document.getElementById('hkProductModalTitle').textContent = 'Add Product';
+                document.getElementById('hkSubmitProduct').textContent = 'Add Product';
+                // Ensure category defaults to HK
+                document.getElementById('hkProductCategory').value = 'HK';
+                // Ensure tags default to hk
+                document.getElementById('hkProductTags').value = 'hk';
+                if (modal) modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+            }
+            function closeProductModal() {
+                if (modal) modal.style.display = 'none';
+                document.body.style.overflow = '';
+                if (form) form.reset();
+                document.getElementById('hkEditingProductId').value = '';
+                document.getElementById('hkProductModalTitle').textContent = 'Add Product';
+                document.getElementById('hkSubmitProduct').textContent = 'Add Product';
+                // Reset tags to include hk and category to HK
+                document.getElementById('hkProductTags').value = 'hk';
+                document.getElementById('hkProductCategory').value = 'HK';
+                if (statusEl) statusEl.style.display = 'none';
+            }
+
+            if (document.getElementById('hkAddProductBtn')) {
+                document.getElementById('hkAddProductBtn').addEventListener('click', openProductModal);
+            }
+            if (document.querySelector('.close-hk-product-modal')) {
+                document.querySelector('.close-hk-product-modal').addEventListener('click', closeProductModal);
+            }
+            if (document.getElementById('hkCancelProduct')) {
+                document.getElementById('hkCancelProduct').addEventListener('click', closeProductModal);
+            }
+            var fetchPreviewBtn = document.getElementById('hkFetchPreviewBtn');
+            var linkInput = document.getElementById('hkProductLink');
+            if (fetchPreviewBtn && linkInput) {
+                fetchPreviewBtn.addEventListener('click', function() {
+                    var url = (linkInput.value || '').trim();
+                    if (!url) return;
+                    fetchPreviewBtn.disabled = true;
+                    fetchPreviewBtn.textContent = 'Fetching...';
+                    fetch('/api/products/preview?url=' + encodeURIComponent(url))
+                        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+                        .then(function(result) {
+                            fetchPreviewBtn.disabled = false;
+                            fetchPreviewBtn.textContent = 'Fetch from link';
+                            if (result.ok && result.data) {
+                                var d = result.data;
+                                if (d.title) document.getElementById('hkProductTitle').value = d.title;
+                                if (d.image_url) document.getElementById('hkProductImageUrl').value = d.image_url;
+                                if (d.website_name) document.getElementById('hkProductWebsiteName').value = d.website_name;
+                                if (d.price) document.getElementById('hkProductPrice').value = d.price;
+                                // Ensure category stays as HK
+                                document.getElementById('hkProductCategory').value = 'HK';
+                            }
+                        })
+                        .catch(function() {
+                            fetchPreviewBtn.disabled = false;
+                            fetchPreviewBtn.textContent = 'Fetch from link';
+                        });
+                });
+            }
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var link = (document.getElementById('hkProductLink').value || '').trim();
+                    if (!link) {
+                        if (statusEl) { statusEl.textContent = 'Link is required.'; statusEl.style.display = 'block'; statusEl.className = 'upload-status error'; }
+                        return;
+                    }
+                    var tagsStr = (document.getElementById('hkProductTags').value || '').trim();
+                    var tags = tagsStr ? tagsStr.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+                    // Ensure hk tag is included
+                    var tagSet = new Set(tags.map(function(t) { return t.toLowerCase(); }));
+                    if (!tagSet.has('hk')) {
+                        tags.push('hk');
+                    }
+                    var category = (document.getElementById('hkProductCategory').value || '').trim();
+                    // Ensure category is HK if not set
+                    if (!category || category.toLowerCase() !== 'hk') {
+                        category = 'HK';
+                    }
+                    var payload = {
+                        link: link,
+                        title: (document.getElementById('hkProductTitle').value || '').trim() || null,
+                        image_url: (document.getElementById('hkProductImageUrl').value || '').trim() || null,
+                        price: (document.getElementById('hkProductPrice').value || '').trim() || null,
+                        category: category,
+                        sub_category: (document.getElementById('hkProductSubCategory').value || '').trim() || null,
+                        room: (document.getElementById('hkProductRoom').value || '').trim() || null,
+                        website_name: (document.getElementById('hkProductWebsiteName').value || '').trim() || null,
+                        tags: tags,
+                        comment: (document.getElementById('hkProductComment').value || '').trim() || null
+                    };
+                    var submitBtn = document.getElementById('hkSubmitProduct');
+                    var editId = (document.getElementById('hkEditingProductId').value || '').trim();
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (statusEl) { statusEl.style.display = 'block'; statusEl.className = 'upload-status loading'; statusEl.textContent = editId ? 'Saving...' : 'Adding...'; }
+                    var url = editId ? '/api/products/' + editId : '/api/products';
+                    var method = editId ? 'PATCH' : 'POST';
+                    fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }).then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+                    .then(function(result) {
+                        if (submitBtn) submitBtn.disabled = false;
+                        if (!result.ok) {
+                            if (statusEl) { statusEl.textContent = result.data && result.data.error ? result.data.error : (editId ? 'Failed to save.' : 'Failed to add product'); statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                            return;
+                        }
+                        if (statusEl) { statusEl.textContent = editId ? 'Saved.' : 'Product added.'; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
+                        closeProductModal();
+                        loading.style.display = 'block';
+                        return fetch('/api/hk-products').then(function(r) { return r.json(); });
+                    }).then(function(products) {
+                        loading.style.display = 'none';
+                        if (Array.isArray(products)) {
+                            hkProductList = products;
+                            renderProductList(hkProductList);
+                        }
+                    }).catch(function(err) {
+                        if (submitBtn) submitBtn.disabled = false;
+                        if (statusEl) { statusEl.textContent = err.message || 'Error'; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                    });
+                });
+            }
+
+            fetch('/api/hk-products')
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(products) {
+                    loading.style.display = 'none';
+                    hkProductList = Array.isArray(products) ? products : (products && Array.isArray(products.data) ? products.data : []);
+                    renderProductList(hkProductList);
+                })
+                .catch(function(e) {
+                    loading.style.display = 'none';
+                    grid.innerHTML = '<p class="error">Failed to load products.</p>';
+                });
+        })();
+    </script>
+</body>
+</html>

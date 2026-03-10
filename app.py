@@ -384,6 +384,7 @@ def index():
         sections_order=DESIGN_SECTIONS_ORDER,
         show_photo_gallery=False,
         product_room_filter=None,
+        room_slug=None,
     )
 
 @app.route('/categorize/')
@@ -683,6 +684,14 @@ def muswell_hill_baby():
     """Muswell Hill Baby: products tagged baby, filterable by sub_category."""
     return render_template('muswell_hill_baby.html', muswell_room='baby')
 
+@app.route('/hk/products/')
+def hk_products():
+    """HK products page: hk tag only."""
+    return render_template(
+        'hk_products.html',
+        hk_room='products',
+    )
+
 
 @app.route('/muswell-hill/<room_slug>/')
 def muswell_hill_room(room_slug):
@@ -840,6 +849,17 @@ def _title_from_url(url):
                     raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
                     if len(raw) > 2:
                         return raw[:200].title()
+        # Carousell: /p/product-name-slug-123456789/
+        if 'carousell' in (parsed.netloc or '').lower() and segments:
+            if 'p' in [s.lower() for s in segments]:
+                idx = next((i for i, s in enumerate(segments) if s.lower() == 'p'), -1)
+                if idx >= 0 and idx + 1 < len(segments):
+                    seg = segments[idx + 1]
+                    # Remove trailing ID if present (e.g., -1423101461)
+                    raw = re.sub(r'-\d{8,}$', '', seg)
+                    raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
+                    if len(raw) > 2:
+                        return raw[:200].title()
         # Generic: use last non-numeric segment
         for seg in reversed(segments):
             if seg.isdigit(): continue
@@ -856,6 +876,8 @@ def _website_name_from_url(url):
     try:
         host = urlparse(url).netloc or ''
         host_lower = host.replace('www.', '').lower()
+        if 'carousell' in host_lower:
+            return 'Carousell'
         if 'amazon.' in host_lower:
             return 'Amazon'
         if 'gumtree' in host_lower:
@@ -1067,7 +1089,63 @@ def _fetch_product_preview(url):
 
     # Price: site-specific and fallback regex
     price = None
-    if 'gumtree' in url.lower():
+    if 'carousell' in url.lower():
+        try:
+            # Carousell uses JSON-LD or meta tags for price
+            for script in soup.find_all('script', type='application/ld+json'):
+                if script.string and '"price"' in script.string:
+                    try:
+                        data = json.loads(script.string)
+                        if isinstance(data, dict) and 'offers' in data:
+                            offers = data['offers']
+                            if isinstance(offers, dict) and 'price' in offers:
+                                price_raw = offers.get('price', '')
+                                # Convert HK$ to GBP by dividing by 10
+                                try:
+                                    price_num = float(str(price_raw).replace(',', '').replace('HK$', '').replace('$', '').strip())
+                                    price = f"£{price_num / 10:.2f}".replace('.00', '')
+                                except (ValueError, AttributeError):
+                                    price = str(price_raw)
+                            elif isinstance(offers, list) and offers and 'price' in offers[0]:
+                                price_raw = offers[0]['price']
+                                try:
+                                    price_num = float(str(price_raw).replace(',', '').replace('HK$', '').replace('$', '').strip())
+                                    price = f"£{price_num / 10:.2f}".replace('.00', '')
+                                except (ValueError, AttributeError):
+                                    price = str(price_raw)
+                        if price:
+                            break
+                    except Exception:
+                        continue
+            # Fallback: look for price in text (HK$ or HKD format)
+            if not price:
+                text = soup.get_text()
+                # Try HK$ format first
+                m = re.search(r'HK\$\s*([\d,]+)(?:\.(\d{2}))?', text, re.I)
+                if m:
+                    whole_part = m.group(1).replace(',', '')
+                    dec_part = m.group(2) or '0'
+                    try:
+                        price_num = float(whole_part + '.' + dec_part)
+                        # Convert HK$ to GBP by dividing by 10
+                        price = f"£{price_num / 10:.2f}".replace('.00', '')
+                    except ValueError:
+                        price = m.group(0).strip()
+                # Fallback to regular currency symbols (but still convert if it's from Carousell)
+                if not price:
+                    m = re.search(r'[£$]\s*([\d,]+)(?:\.(\d{2}))?', text)
+                    if m:
+                        whole_part = m.group(1).replace(',', '')
+                        dec_part = m.group(2) or '0'
+                        try:
+                            price_num = float(whole_part + '.' + dec_part)
+                            # Convert HK$ to GBP by dividing by 10
+                            price = f"£{price_num / 10:.2f}".replace('.00', '')
+                        except ValueError:
+                            price = m.group(0).strip()
+        except Exception:
+            pass
+    if not price and 'gumtree' in url.lower():
         try:
             for script in soup.find_all('script', type='application/ld+json'):
                 if script.string and '"price"' in script.string:
@@ -1464,6 +1542,22 @@ def _muswell_hill_product_match(row):
         return True
     return False
 
+def _hk_product_match(row):
+    """True if row is HK only: tags contains hk OR category is HK."""
+    # Check category first
+    category = (row.get('category') or '').strip()
+    if category.lower() == 'hk':
+        return True
+    # Check tags
+    tags = row.get('tags')
+    if isinstance(tags, list):
+        tag_set = { str(t).strip().lower() for t in tags }
+        if 'hk' in tag_set:
+            return True
+    elif tags and 'hk' in str(tags).lower():
+        return True
+    return False
+
 
 @app.route('/api/muswell-hill-products')
 def get_muswell_hill_products():
@@ -1494,6 +1588,28 @@ def get_muswell_hill_products():
         return jsonify(out), 200
     except Exception as e:
         app.logger.error(f"Error fetching Muswell Hill products: {e}")
+        return jsonify([]), 200
+
+
+@app.route('/api/hk-products')
+def get_hk_products():
+    """Products for HK: HK only (tag hk OR category HK). Optional ?room=kitchen filters to that room."""
+    if not supabase:
+        return jsonify([]), 200
+    room_filter = (request.args.get('room') or '').strip().lower()
+    try:
+        # Fetch all products, filter in Python for HK tag
+        r = supabase.table('ha_products').select('*').execute()
+        all_rows = (r.data or []) if (r and hasattr(r, 'data')) else []
+        if not isinstance(all_rows, list):
+            all_rows = []
+        out = [row for row in all_rows if _hk_product_match(row)]
+        if room_filter:
+            out = [row for row in out if (row.get('room') or '').strip().lower() == room_filter]
+        out.sort(key=lambda row: (row.get('created_at') or ''), reverse=True)
+        return jsonify(out), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching HK products: {e}")
         return jsonify([]), 200
 
 

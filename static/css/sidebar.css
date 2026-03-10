@@ -196,7 +196,7 @@
 }
 
 .sidebar-nav a:hover {
-    background: rgba(185, 28, 28, 0.2);
+    background: rgba(201, 162, 39, 0.2);
     color: #fff;
 }
 
@@ -208,7 +208,7 @@
 }
 
 .sidebar-nav .sidebar-parent-label:hover {
-    background: rgba(185, 28, 28, 0.15);
+    background: rgba(201, 162, 39, 0.15);
 }
 
 /* Dropdown: sub list collapsed by default, expanded when .expanded */
@@ -232,17 +232,17 @@
 }
 
 .sidebar-sub a.active {
-    background: rgba(185, 28, 28, 0.25);
+    background: rgba(201, 162, 39, 0.25);
     color: #fff;
-    border-left: 3px solid #b91c1c;
+    border-left: 3px solid #c9a227;
     margin-left: 0;
     padding-left: calc(2rem - 3px);
 }
 
 .sidebar-nav > li > a.active {
-    background: rgba(185, 28, 28, 0.25);
+    background: rgba(201, 162, 39, 0.25);
     color: #fff;
-    border-left: 3px solid #b91c1c;
+    border-left: 3px solid #c9a227;
     margin-left: 0;
     padding-left: calc(1.25rem - 3px);
 }
