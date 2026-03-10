@@ -43,6 +43,12 @@
                 <li><a href="{{ url_for('muswell_hill_baby') }}" class="{% if request.endpoint == 'muswell_hill_baby' %}active{% endif %}">Baby</a></li>
             </ul>
         </li>
+        <li class="sidebar-parent" id="sidebar-hk">
+            <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="false" aria-controls="sidebar-hk-sub">HK</span>
+            <ul class="sidebar-sub" id="sidebar-hk-sub">
+                <li><a href="{{ url_for('hk_products') }}" class="{% if request.endpoint == 'hk_products' %}active{% endif %}">Products</a></li>
+            </ul>
+        </li>
         <li>
             <a href="{{ url_for('jobs') }}" class="{% if request.endpoint == 'jobs' %}active{% endif %}">Jobs</a>
         </li>
