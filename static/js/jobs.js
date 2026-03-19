@@ -1,6 +1,10 @@
 // API base URL
 const API_BASE = '/api';
 
+// Canonical dropdown options (edit here to add new ones)
+const ASSIGNED_OPTIONS = ['Conor', 'Rebecca', 'Caroline'];
+const COUNTRY_OPTIONS = ['Hong Kong', 'London', 'Other'];
+
 // State
 let allJobs = [];
 let filteredJobs = [];
@@ -11,6 +15,7 @@ const jobsList = document.getElementById('jobsList');
 const assignedFilter = document.getElementById('assignedFilter');
 const doneFilter = document.getElementById('doneFilter');
 const countryFilter = document.getElementById('countryFilter');
+const jobsTodayTile = document.getElementById('jobsTodayTile');
 const loading = document.getElementById('loading');
 const errorDiv = document.getElementById('error');
 const addJobBtn = document.getElementById('addJobBtn');
@@ -50,6 +55,7 @@ async function loadJobs() {
         filteredJobs = [...allJobs];
         
         updateFilters();
+        renderTodayTile();
         renderJobs();
         showLoading(false);
     } catch (error) {
@@ -66,8 +72,9 @@ function initFilters() {
 
 // Update filter dropdowns with unique values from jobs
 function updateFilters() {
-    // Get unique assigned people
-    const assignedPeople = [...new Set(allJobs.map(job => job.assigned).filter(Boolean))].sort();
+    // Keep canonical options, but also include any legacy values already in DB (so nothing breaks).
+    const assignedLegacy = [...new Set(allJobs.map(job => job.assigned).filter(Boolean))].filter(v => !ASSIGNED_OPTIONS.includes(v)).sort();
+    const assignedPeople = [...ASSIGNED_OPTIONS, ...assignedLegacy];
     if (assignedFilter) {
         const currentValue = assignedFilter.value;
         assignedFilter.innerHTML = '<option value="">All People</option>';
@@ -80,8 +87,8 @@ function updateFilters() {
         assignedFilter.value = currentValue;
     }
     
-    // Get unique countries
-    const countries = [...new Set(allJobs.map(job => job.country).filter(Boolean))].sort();
+    const countryLegacy = [...new Set(allJobs.map(job => job.country).filter(Boolean))].filter(v => !COUNTRY_OPTIONS.includes(v)).sort();
+    const countries = [...COUNTRY_OPTIONS, ...countryLegacy];
     if (countryFilter) {
         const currentValue = countryFilter.value;
         countryFilter.innerHTML = '<option value="">All Countries</option>';
@@ -93,6 +100,65 @@ function updateFilters() {
         });
         countryFilter.value = currentValue;
     }
+}
+
+function renderTodayTile() {
+    if (!jobsTodayTile) return;
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+
+    const pending = allJobs.filter(j => !j.done);
+    const dueToday = pending.filter(j => j.date_due === todayStr);
+    const overdue = pending.filter(j => j.date_due && j.date_due < todayStr);
+
+    const total = dueToday.length + overdue.length;
+    if (total === 0) {
+        jobsTodayTile.style.display = 'none';
+        jobsTodayTile.innerHTML = '';
+        jobsTodayTile.classList.remove('jobs-today-tile--urgent');
+        return;
+    }
+
+    const urgent = overdue.length > 0;
+    jobsTodayTile.classList.toggle('jobs-today-tile--urgent', urgent);
+    jobsTodayTile.style.display = 'block';
+
+    const title = urgent ? 'Jobs due today / overdue' : 'Jobs due today';
+    const meta = urgent
+        ? `${dueToday.length} due today, ${overdue.length} overdue`
+        : `${dueToday.length} due today`;
+
+    const items = [
+        ...overdue.sort((a, b) => (a.date_due || '').localeCompare(b.date_due || '')),
+        ...dueToday.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))),
+    ].slice(0, 8);
+
+    const listHtml = items.map(j => {
+        const badge = j.date_due && j.date_due < todayStr ? '<span class="jobs-today-tile__badge">Overdue</span>' : '<span class="jobs-today-tile__badge">Today</span>';
+        return `<a class="jobs-today-tile__link" href="#job-${j.id}" data-job-jump="${j.id}">${escapeHtml(j.name)}${badge}</a>`;
+    }).join('');
+
+    jobsTodayTile.innerHTML = `
+        <div class="jobs-today-tile__title">${escapeHtml(title)}</div>
+        <div class="jobs-today-tile__meta">${escapeHtml(meta)}</div>
+        <div class="jobs-today-tile__list">${listHtml}</div>
+    `;
+
+    jobsTodayTile.querySelectorAll('[data-job-jump]').forEach(a => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const id = e.currentTarget.getAttribute('data-job-jump');
+            const el = document.getElementById(`job-${id}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                el.classList.add('job-card--flash');
+                setTimeout(() => el.classList.remove('job-card--flash'), 1200);
+            }
+        });
+    });
 }
 
 // Filter jobs based on selected filters
@@ -108,6 +174,7 @@ function filterJobs() {
         return true;
     });
     
+    renderTodayTile();
     renderJobs();
 }
 
@@ -120,9 +187,19 @@ function renderJobs() {
         return;
     }
     
+    // Sort by due date (earliest first; blank due dates last)
+    const byDueAscNullLast = (a, b) => {
+        const ad = a.date_due || '';
+        const bd = b.date_due || '';
+        if (ad && bd) return ad.localeCompare(bd);
+        if (!ad && bd) return 1;
+        if (ad && !bd) return -1;
+        return String(b.created_at || '').localeCompare(String(a.created_at || '')); // newest first tie-break
+    };
+    
     // Group jobs by done status
-    const pendingJobs = filteredJobs.filter(job => !job.done);
-    const doneJobs = filteredJobs.filter(job => job.done);
+    const pendingJobs = filteredJobs.filter(job => !job.done).sort(byDueAscNullLast);
+    const doneJobs = filteredJobs.filter(job => job.done).sort(byDueAscNullLast);
     
     let html = '';
     
@@ -170,7 +247,7 @@ function renderJobCard(job) {
         : '';
     
     return `
-        <div class="job-card ${job.done ? 'job-card--done' : ''}" data-job-id="${job.id}">
+        <div class="job-card ${job.done ? 'job-card--done' : ''}" data-job-id="${job.id}" id="job-${job.id}">
             <div class="job-header">
                 <h3 class="job-name">${escapeHtml(job.name)}</h3>
                 <label class="job-checkbox-label">
@@ -275,9 +352,9 @@ function openJobModal(job = null) {
     // Populate form if editing
     if (job) {
         document.getElementById('jobName').value = job.name || '';
-        document.getElementById('jobAssigned').value = job.assigned || '';
+        ensureSelectHasValue(document.getElementById('jobAssigned'), job.assigned);
         document.getElementById('jobDateDue').value = job.date_due || '';
-        document.getElementById('jobCountry').value = job.country || '';
+        ensureSelectHasValue(document.getElementById('jobCountry'), job.country);
         document.getElementById('jobTags').value = job.tags ? job.tags.join(', ') : '';
         document.getElementById('jobNotes').value = job.notes || '';
         document.getElementById('jobDone').checked = job.done || false;
@@ -334,6 +411,23 @@ async function handleJobSubmit(e) {
         console.error('Error saving job:', error);
         showJobStatus('Failed to save job. Please try again.', 'error');
     }
+}
+
+function ensureSelectHasValue(selectEl, value) {
+    if (!selectEl) return;
+    const v = (value || '').trim();
+    if (!v) {
+        selectEl.value = '';
+        return;
+    }
+    const has = [...selectEl.options].some(o => o.value === v);
+    if (!has) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        selectEl.appendChild(opt);
+    }
+    selectEl.value = v;
 }
 
 // Create a new job
