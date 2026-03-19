@@ -553,8 +553,28 @@ def get_jobs():
     try:
         r = supabase.table('ha_jobs_list').select('*').execute()
         data = r.data or []
-        # Sort by created_at descending (newest first)
+        # Sort: pending first, then by date_due (earliest first; null last), then newest created.
+        # date_due is a Postgres DATE -> serialized as YYYY-MM-DD so string ordering works.
+        data.sort(
+            key=lambda row: (
+                1 if row.get('done') else 0,
+                1 if not row.get('date_due') else 0,
+                row.get('date_due') or '9999-12-31',
+                row.get('created_at') or '',
+            ),
+            reverse=False,
+        )
+        # For identical keys we still want newest first among same due date.
+        # Secondary stable sort by created_at desc.
         data.sort(key=lambda row: (row.get('created_at') or ''), reverse=True)
+        data.sort(
+            key=lambda row: (
+                1 if row.get('done') else 0,
+                1 if not row.get('date_due') else 0,
+                row.get('date_due') or '9999-12-31',
+            ),
+            reverse=False,
+        )
         return jsonify(data), 200
     except Exception as e:
         app.logger.error(f"Error fetching jobs: {e}")

@@ -28,6 +28,7 @@
         </header>
 
         <main>
+            <div id="jobsTodayTile" class="jobs-today-tile" style="display: none;" aria-live="polite"></div>
             <!-- Top Navigation Bar for Jobs -->
             <nav class="jobs-top-nav">
                 <div class="jobs-top-nav-left">
@@ -80,7 +81,12 @@
 
                         <div class="form-group">
                             <label for="jobAssigned">Assigned To</label>
-                            <input type="text" id="jobAssigned" name="assigned" placeholder="e.g., John, Sarah">
+                            <select id="jobAssigned" name="assigned">
+                                <option value="">—</option>
+                                <option value="Conor">Conor</option>
+                                <option value="Rebecca">Rebecca</option>
+                                <option value="Caroline">Caroline</option>
+                            </select>
                         </div>
 
                         <div class="form-group">
@@ -90,7 +96,12 @@
 
                         <div class="form-group">
                             <label for="jobCountry">Country</label>
-                            <input type="text" id="jobCountry" name="country" placeholder="e.g., UK, Ireland">
+                            <select id="jobCountry" name="country">
+                                <option value="">—</option>
+                                <option value="Hong Kong">Hong Kong</option>
+                                <option value="London">London</option>
+                                <option value="Other">Other</option>
+                            </select>
                         </div>
 
                         <div class="form-group">
