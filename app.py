@@ -910,6 +910,8 @@ def _website_name_from_url(url):
             return 'Carousell'
         if 'amazon.' in host_lower:
             return 'Amazon'
+        if 'hulalahome' in host_lower or 'hulala' in host_lower:
+            return 'Hulala Home'
         if 'gumtree' in host_lower:
             return 'Gumtree'
         if 'ikea' in host_lower:
@@ -1171,6 +1173,121 @@ def _wayfair_primary_image_from_soup(soup, page_url):
         return None
 
 
+def _hulalahome_extract_price(soup):
+    """Hulala Home PDP: extract the main product price (avoid cart header £0.00, etc)."""
+    # JSON-LD often has the cleanest `offers.price`
+    try:
+        candidates = []
+        for script in soup.find_all('script', type='application/ld+json'):
+            if not script.string:
+                continue
+            try:
+                data = json.loads(script.string)
+            except Exception:
+                continue
+            for node in _walk_json_ld_nodes(data):
+                if isinstance(node, dict) and 'price' in node:
+                    p = node.get('price')
+                    if p is None:
+                        continue
+                    try:
+                        val = float(str(p).replace(',', '').strip())
+                    except Exception:
+                        continue
+                    # Avoid header/placeholder values like 0.00; keep reasonable price range.
+                    if val > 1 and val < 100000:
+                        candidates.append(val)
+        if candidates:
+            # Hulala pages typically show just one product price in JSON-LD; take max as a safe default.
+            return '£' + str(max(candidates)).rstrip('0').rstrip('.') if '.' in str(max(candidates)) else '£' + str(max(candidates))
+    except Exception:
+        pass
+
+    # Fallback: find all £xx.xx, but ignore small/placeholder and payment snippets.
+    try:
+        text = soup.get_text(' ', strip=True)
+        matches = list(re.finditer(r'£\s*([\d,]+(?:\.\d{2})?)', text))
+        best = None
+        for m in matches:
+            raw = (m.group(1) or '').replace(',', '').strip()
+            try:
+                val = float(raw)
+            except Exception:
+                continue
+            if val <= 1 or val >= 100000:
+                continue
+            snippet = text[max(0, m.start() - 60):min(len(text), m.end() + 60)].lower()
+            if any(x in snippet for x in ('klarna', 'interest-free', 'payments', '/month', 'per month')):
+                continue
+            # Prefer the first plausible main price; if none, keep max.
+            if best is None:
+                best = (val, m.group(0))
+                break
+            if best and val > best[0]:
+                best = (val, m.group(0))
+        if best:
+            # Normalize to `£169.99` format if regex captured it already.
+            return best[1].replace('£', '£').replace('££', '£')
+    except Exception:
+        pass
+
+    return None
+
+
+def _made_extract_price(soup):
+    """MADE.com: extract product price from JSON-LD/meta, fallback to text scan."""
+    # JSON-LD first (Product/Offer)
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            if not script.string or 'price' not in script.string.lower():
+                continue
+            try:
+                data = json.loads(script.string)
+            except Exception:
+                continue
+            for node in _walk_json_ld_nodes(data):
+                pr = _json_ld_price_from_node(node)
+                if pr:
+                    pnorm = str(pr).strip()
+                    if not pnorm.startswith('£') and re.search(r'^\d', pnorm):
+                        pnorm = '£' + pnorm
+                    return re.sub(r'^£+', '£', pnorm)
+    except Exception:
+        pass
+
+    # Meta tags sometimes include price
+    try:
+        for name in ('product:price:amount', 'og:price:amount'):
+            tag = soup.find('meta', property=name)
+            if tag and tag.get('content'):
+                amt = tag['content'].strip()
+                if amt and re.match(r'^\d+(\.\d{1,2})?$', amt):
+                    return '£' + amt
+        tag = soup.find('meta', attrs={'name': 'twitter:data1'})
+        if tag and tag.get('content') and '£' in tag['content']:
+            m = re.search(r'£\s*[\d,]+(?:\.\d{2})?', tag['content'])
+            if m:
+                return m.group(0).replace('£ ', '£')
+    except Exception:
+        pass
+
+    # Last resort: scan visible text for plausible £ amounts
+    try:
+        text = soup.get_text(' ', strip=True)
+        for m in re.finditer(r'£\s*([\d,]+)(?:\.(\d{2}))?', text):
+            whole = (m.group(1) or '').replace(',', '')
+            dec = m.group(2) or '00'
+            try:
+                val = float(whole + '.' + dec)
+            except Exception:
+                continue
+            if 5 <= val <= 50000:
+                return m.group(0).replace('£ ', '£')
+    except Exception:
+        pass
+    return None
+
+
 def _fetch_product_preview(url):
     """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
     if not url or not url.startswith(('http://', 'https://')):
@@ -1197,7 +1314,7 @@ def _fetch_product_preview(url):
     except Exception as e:
         app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
-        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair')
+        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made')
         if any(d in url.lower() for d in retry_domains):
             try:
                 soup = _do_fetch(user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
@@ -1206,6 +1323,25 @@ def _fetch_product_preview(url):
                 return out if out.get('title') or out.get('website_name') else None
         else:
             return out if out.get('title') or out.get('website_name') else None
+
+    # Some retailers (incl. MADE) expose richer OG data to social-crawler UAs.
+    # Only do this when we haven't got a price yet (price is extracted later) and og tags are thin.
+    try:
+        if ('made.com' in host) and (not soup.find('meta', property='og:image') or not soup.find('meta', property='og:title')):
+            social_soup = _do_fetch(user_agent='facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)')
+            # Merge OG title/image if missing
+            if not soup.find('meta', property='og:title'):
+                ogt = social_soup.find('meta', property='og:title')
+                if ogt and ogt.get('content') and not out.get('title'):
+                    out['title'] = ogt['content'].strip()
+            if not soup.find('meta', property='og:image'):
+                ogi = social_soup.find('meta', property='og:image')
+                if ogi and ogi.get('content') and not out.get('image_url'):
+                    out['image_url'] = _normalize_image_url(ogi['content'])
+            # Keep the richer soup for price parsing too
+            soup = social_soup or soup
+    except Exception:
+        pass
 
     host = (urlparse(url).netloc or '').lower()
 
@@ -1289,6 +1425,10 @@ def _fetch_product_preview(url):
     price = None
     if 'wayfair' in host:
         price = _wayfair_extract_price(soup)
+    if price is None and ('hulalahome.uk' in host or 'hulala' in url.lower()):
+        price = _hulalahome_extract_price(soup)
+    if price is None and ('made.com' in host or 'made' in host):
+        price = _made_extract_price(soup)
     if 'carousell' in url.lower():
         try:
             # Carousell uses JSON-LD or meta tags for price
