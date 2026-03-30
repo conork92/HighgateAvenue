@@ -255,7 +255,7 @@
             <div class="container">
                 <header>
                     <h1>Muswell Hill – Products</h1>
-                    <p class="subtitle">MWH products only (is_mwh or tag <strong>mwh</strong>), grouped by category. Removed and bought items are hidden from the main sections.</p>
+                    <p class="subtitle">MWH products only (is_mwh or tag <strong>mwh</strong>), grouped by category. Tag <strong>desk</strong> puts an item only in the Desk section (not Furniture). Removed and bought items are hidden from the main sections.</p>
                     <button type="button" id="mwhAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
                 </header>
                 <div id="mwhWebsiteFilters" class="mwh-website-filters" style="display: none;">
@@ -299,6 +299,7 @@
                                 <option value="Bathroom">Bathroom</option>
                                 <option value="Decor">Decor</option>
                                 <option value="Furniture">Furniture</option>
+                                <option value="Desk">Desk</option>
                                 <option value="Kitchen">Kitchen</option>
                                 <option value="Lighting">Lighting</option>
                                 <option value="Other">Other</option>
@@ -322,7 +323,7 @@
                         </div>
                         <div class="form-group">
                             <label for="mwhProductTags">Tags (comma-separated)</label>
-                            <input type="text" id="mwhProductTags" name="tags" placeholder="e.g. mwh">
+                            <input type="text" id="mwhProductTags" name="tags" placeholder="e.g. mwh, desk">
                         </div>
                         <div class="form-group">
                             <label for="mwhProductComment">Comment</label>
@@ -330,7 +331,7 @@
                         </div>
                         <div class="form-group">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="mwhProductIsMwh" name="is_mwh" value="1">
+                                <input type="checkbox" id="mwhProductIsMwh" name="is_mwh" value="1" checked>
                                 <span>Is MWH (show on this page)</span>
                             </label>
                         </div>
@@ -383,8 +384,15 @@
             function getWebsiteKey(p) {
                 return (p.website_name || '').trim() || '(No website)';
             }
+            function hasDeskTag(p) {
+                var tags = p.tags;
+                if (!Array.isArray(tags)) return false;
+                return tags.some(function(t) { return String(t).trim().toLowerCase() === 'desk'; });
+            }
             function getProductCategoryKey(p) {
+                if (hasDeskTag(p)) return 'Desk';
                 var cat = (p.category || '').trim();
+                if (cat.toLowerCase() === 'desk') return 'Desk';
                 return cat || 'Uncategorised';
             }
             function renderCard(p) {
@@ -468,6 +476,8 @@
                     byCategory[key].push(p);
                 });
                 var categoryOrder = Object.keys(byCategory).sort(function(a, b) {
+                    if (a === 'Desk' && b !== 'Desk') return -1;
+                    if (b === 'Desk' && a !== 'Desk') return 1;
                     if (a === 'Uncategorised') return 1;
                     if (b === 'Uncategorised') return -1;
                     return a.localeCompare(b);
@@ -592,6 +602,8 @@
                 document.getElementById('mwhEditingProductId').value = '';
                 document.getElementById('mwhProductModalTitle').textContent = 'Add Product';
                 document.getElementById('mwhSubmitProduct').textContent = 'Add Product';
+                if (form) form.reset();
+                document.getElementById('mwhProductIsMwh').checked = true;
                 if (modal) modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
