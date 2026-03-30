@@ -852,6 +852,16 @@ def _title_from_url(url):
                     raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
                     if len(raw) > 2:
                         return raw[:200].title()
+        # Wayfair: .../pdp/slug-u003178290.html
+        if 'wayfair' in (parsed.netloc or '').lower() and segments:
+            for seg in segments:
+                if seg.lower() == 'pdp' or not seg.lower().endswith('.html'):
+                    continue
+                base = seg[:-5] if seg.lower().endswith('.html') else seg
+                base = re.sub(r'-u\d+$', '', base, flags=re.I)
+                raw = re.sub(r'[-_]+', ' ', unquote(base)).strip()
+                if len(raw) > 2:
+                    return raw[:200].title()
         # Urban Outfitters: /en-gb/shop/.../spindle-arch-storage-shelf
         if 'urbanoutfitters' in (parsed.netloc or '').lower() and segments:
             for seg in reversed(segments):
@@ -918,6 +928,8 @@ def _website_name_from_url(url):
             return 'Made'
         if 'dunelm' in host_lower:
             return 'Dunelm'
+        if 'wayfair' in host_lower:
+            return 'Wayfair'
         if 'urbanoutfitters' in host_lower:
             return 'Urban Outfitters'
         if 'next.' in host_lower and 'next.co' in host_lower:
@@ -1022,6 +1034,143 @@ def _amazon_image_from_soup(soup):
     return None
 
 
+def _wayfair_clean_title(title):
+    """Strip Wayfair marketing suffixes (e.g. '| Wayfair.co.uk', '| Reviews | Wayfair')."""
+    if not title:
+        return title
+    t = title.strip()
+    t = re.sub(r'\s*[&|]\s*Reviews\s*\|\s*Wayfair.*$', '', t, flags=re.I).strip()
+    t = re.sub(r'\s*\|\s*Wayfair(?:\.co\.uk|\.com)?\s*$', '', t, flags=re.I).strip()
+    return t
+
+
+def _walk_json_ld_nodes(data):
+    """Yield dict nodes from JSON-LD payload (handles @graph and nested lists)."""
+    if isinstance(data, dict):
+        yield data
+        graph = data.get('@graph')
+        if isinstance(graph, list):
+            for item in graph:
+                yield from _walk_json_ld_nodes(item)
+    elif isinstance(data, list):
+        for item in data:
+            yield from _walk_json_ld_nodes(item)
+
+
+def _json_ld_price_from_node(node):
+    """Extract a displayable price string from Product / Offer-like JSON-LD dict."""
+    if not isinstance(node, dict):
+        return None
+    types = node.get('@type')
+    type_list = types if isinstance(types, list) else ([types] if types else [])
+    type_names = {str(t) for t in type_list if t}
+
+    def pick_offers(offers):
+        if isinstance(offers, dict):
+            candidates = [offers]
+        elif isinstance(offers, list):
+            candidates = [o for o in offers if isinstance(o, dict)]
+        else:
+            return None
+        for off in candidates:
+            if not isinstance(off, dict):
+                continue
+            p = off.get('price')
+            if p is None and isinstance(off.get('priceSpecification'), dict):
+                p = off['priceSpecification'].get('price')
+            if p is None:
+                p = off.get('lowPrice') or off.get('highPrice')
+            if p is not None:
+                cur = off.get('priceCurrency') or ''
+                ps = str(p).strip()
+                if cur.upper() == 'GBP' and ps and not ps.startswith('£'):
+                    return '£' + ps
+                if ps.startswith('£') or ps.startswith('$'):
+                    return ps
+                return ps
+        return None
+
+    if 'Product' in type_names or 'IndividualProduct' in type_names:
+        pr = pick_offers(node.get('offers'))
+        if pr:
+            return pr
+    if 'Offer' in type_names or 'AggregateOffer' in type_names:
+        pr = pick_offers(node)
+        if pr:
+            return pr
+    return None
+
+
+def _wayfair_extract_price(soup):
+    """Wayfair PDP: prefer JSON-LD offer price, then '£sale RRP' pattern (avoid Klarna snippets)."""
+    for script in soup.find_all('script', type='application/ld+json'):
+        if not script.string or 'price' not in script.string.lower():
+            continue
+        try:
+            data = json.loads(script.string)
+        except Exception:
+            continue
+        for node in _walk_json_ld_nodes(data):
+            pr = _json_ld_price_from_node(node)
+            if pr:
+                pnorm = str(pr).strip()
+                if not pnorm.startswith('£'):
+                    pnorm = '£' + pnorm.lstrip('$').strip()
+                return re.sub(r'^£+', '£', pnorm)
+    try:
+        text = soup.get_text(' ', strip=True)
+        m = re.search(r'£\s*([\d,]+(?:\.\d{2})?)\s+RRP\b', text, re.I)
+        if m:
+            return '£' + m.group(1).replace(',', '')
+        for m in re.finditer(r'£\s*([\d,]+(?:\.\d{2})?)', text):
+            span = max(0, m.start() - 50)
+            end = min(len(text), m.end() + 80)
+            snippet = text[span:end].lower()
+            if any(x in snippet for x in ('klarna', 'interest-free', 'payments', '/month', 'per month')):
+                continue
+            val = m.group(1).replace(',', '')
+            try:
+                fv = float(val)
+            except ValueError:
+                continue
+            if 3 <= fv <= 50000:
+                return '£' + val
+    except Exception:
+        pass
+    return None
+
+
+def _wayfair_primary_image_from_soup(soup, page_url):
+    """Pick a main product image when og:image is missing (common for some Wayfair responses)."""
+    try:
+        base_host = (urlparse(page_url).netloc or '').lower()
+        best = None
+        best_area = 0
+        for img in soup.find_all('img'):
+            src = (img.get('src') or img.get('data-src') or img.get('data-lazy-src') or '').strip()
+            if not src or src.startswith('data:'):
+                continue
+            if 'wayfair' not in src.lower() and 'scene7' not in src.lower() and 'wfcdn' not in src.lower():
+                continue
+            low = src.lower()
+            if any(x in low for x in ('logo', 'icon', 'sprite', 'pixel', '1x1', 'tracking')):
+                continue
+            w = int(img.get('width') or 0) or 0
+            h = int(img.get('height') or 0) or 0
+            area = w * h if w and h else 400 * 400
+            if area > best_area:
+                best_area = area
+                best = src
+        if best:
+            if best.startswith('//'):
+                return 'https:' + best
+            if best.startswith('/') and base_host:
+                return 'https://' + base_host + best
+        return None
+    except Exception:
+        return None
+
+
 def _fetch_product_preview(url):
     """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
     if not url or not url.startswith(('http://', 'https://')):
@@ -1048,7 +1197,7 @@ def _fetch_product_preview(url):
     except Exception as e:
         app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
-        retry_domains = ('amazon', 'habitat', 'ikea')
+        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair')
         if any(d in url.lower() for d in retry_domains):
             try:
                 soup = _do_fetch(user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
@@ -1058,10 +1207,16 @@ def _fetch_product_preview(url):
         else:
             return out if out.get('title') or out.get('website_name') else None
 
+    host = (urlparse(url).netloc or '').lower()
+
     # Open Graph / generic meta
     og_title = soup.find('meta', property='og:title')
     if og_title and og_title.get('content'):
         out['title'] = og_title['content'].strip()
+    if 'wayfair' in host and out.get('title'):
+        cleaned = _wayfair_clean_title(out['title'])
+        if cleaned:
+            out['title'] = cleaned
     og_image = soup.find('meta', property='og:image')
     if og_image and og_image.get('content'):
         out['image_url'] = _normalize_image_url(og_image['content'])
@@ -1076,8 +1231,12 @@ def _fetch_product_preview(url):
         if fallback_meta and fallback_meta.get('content'):
             out['image_url'] = _normalize_image_url(fallback_meta['content'])
 
+    if 'wayfair' in host and not out.get('image_url'):
+        wf_img = _wayfair_primary_image_from_soup(soup, url)
+        if wf_img:
+            out['image_url'] = _normalize_image_url(wf_img)
+
     # Amazon-specific fallback for pages where og/twitter image is absent or blocked
-    host = (urlparse(url).netloc or '').lower()
     if 'amazon.' in host and not out.get('image_url'):
         amazon_image = _amazon_image_from_soup(soup)
         if amazon_image:
@@ -1107,8 +1266,29 @@ def _fetch_product_preview(url):
         except Exception:
             pass
 
+    if 'wayfair' in host and not out.get('image_url'):
+        try:
+            social_soup = _do_fetch(
+                user_agent='facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+            )
+            social_og = social_soup.find('meta', property='og:image')
+            if social_og and social_og.get('content'):
+                out['image_url'] = _normalize_image_url(social_og['content'])
+            if not out.get('image_url'):
+                social_fallback = (
+                    social_soup.find('meta', property='og:image:secure_url')
+                    or social_soup.find('meta', attrs={'name': 'twitter:image'})
+                    or social_soup.find('meta', attrs={'name': 'twitter:image:src'})
+                )
+                if social_fallback and social_fallback.get('content'):
+                    out['image_url'] = _normalize_image_url(social_fallback['content'])
+        except Exception:
+            pass
+
     # Price: site-specific and fallback regex
     price = None
+    if 'wayfair' in host:
+        price = _wayfair_extract_price(soup)
     if 'carousell' in url.lower():
         try:
             # Carousell uses JSON-LD or meta tags for price

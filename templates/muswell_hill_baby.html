@@ -97,7 +97,7 @@
                         </div>
                         <div class="form-group">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="babyProductIsMwh" name="is_mwh" value="1">
+                                <input type="checkbox" id="babyProductIsMwh" name="is_mwh" value="1" checked>
                                 <span>Is MWH (show on main Products page)</span>
                             </label>
                         </div>
@@ -325,8 +325,9 @@
         document.getElementById('babyEditingProductId').value = '';
         document.getElementById('babyProductModalTitle').textContent = 'Add Product';
         document.getElementById('babySubmitProduct').textContent = 'Add Product';
+        if (form) form.reset();
         document.getElementById('babyProductCategory').value = 'Baby';
-        document.getElementById('babyProductTags').value = '';
+        document.getElementById('babyProductIsMwh').checked = true;
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
