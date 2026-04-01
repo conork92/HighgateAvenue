@@ -1,4 +1,4 @@
-.PHONY: help start stop build clean install dev test
+.PHONY: help start run stop build clean install dev test
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -12,6 +12,8 @@ start: ## Start the application using Docker Compose (with rebuild)
 	@echo "Starting Highgate Avenue application..."
 	docker-compose up -d
 	@echo "Application is running at http://localhost:8001"
+
+run: start ## Same as start (Docker Compose with rebuild)
 
 stop: ## Stop the application
 	@echo "Stopping Highgate Avenue application..."
