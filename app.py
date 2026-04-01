@@ -890,6 +890,12 @@ def _title_from_url(url):
                     raw = re.sub(r'[-_]+', ' ', unquote(raw)).strip()
                     if len(raw) > 2:
                         return raw[:200].title()
+        # TK Maxx: .../iridescent-dry-erase-board-24x18cm/p/64069613
+        if 'tkmaxx' in (parsed.netloc or '').lower() and len(segments) >= 3:
+            if segments[-2].lower() == 'p' and segments[-1].isdigit():
+                raw = re.sub(r'[-_+]+', ' ', unquote(segments[-3])).strip()
+                if len(raw) > 2:
+                    return raw[:200].title()
         # Generic: use last non-numeric segment
         for seg in reversed(segments):
             if seg.isdigit(): continue
@@ -932,6 +938,8 @@ def _website_name_from_url(url):
             return 'Dunelm'
         if 'wayfair' in host_lower:
             return 'Wayfair'
+        if 'tkmaxx' in host_lower or 'tk maxx' in host_lower:
+            return 'TK Maxx'
         if 'urbanoutfitters' in host_lower:
             return 'Urban Outfitters'
         if 'next.' in host_lower and 'next.co' in host_lower:
@@ -1288,6 +1296,90 @@ def _made_extract_price(soup):
     return None
 
 
+def _tkmaxx_extract_price(soup):
+    """TK Maxx UK PDP: sale price near the product (avoid nav 'over £50' and delivery fees)."""
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            if not script.string or 'price' not in script.string.lower():
+                continue
+            try:
+                data = json.loads(script.string)
+            except Exception:
+                continue
+            for node in _walk_json_ld_nodes(data):
+                pr = _json_ld_price_from_node(node)
+                if pr:
+                    pnorm = str(pr).strip()
+                    if not pnorm.startswith('£') and re.search(r'^\d', pnorm):
+                        pnorm = '£' + pnorm
+                    return re.sub(r'^£+', '£', pnorm)
+    except Exception:
+        pass
+
+    def _snippet_bad_delivery(snippet_lower):
+        if not snippet_lower:
+            return True
+        return any(
+            x in snippet_lower
+            for x in (
+                'free click', 'free standard', 'over £', 'delivery', 'collect £',
+                'next day', 'order by', 'returns',
+            )
+        )
+
+    def _snippet_bad_promo(snippet_lower):
+        """Exclude RRP / was / clearance line prices when scanning full page."""
+        if not snippet_lower:
+            return False
+        return any(
+            x in snippet_lower
+            for x in ('rrp', 'before clearance', 'was £', 'save £')
+        )
+
+    # Text immediately after <h1> (main product price is usually here, e.g. £4.50)
+    try:
+        h1 = soup.find('h1')
+        if h1:
+            parts = []
+            cur = h1
+            for _ in range(25):
+                cur = cur.next_sibling
+                if cur is None:
+                    break
+                if hasattr(cur, 'get_text'):
+                    t = cur.get_text(' ', strip=True)
+                    if t:
+                        parts.append(t)
+                if len(' '.join(parts)) > 400:
+                    break
+            blob = ' '.join(parts)
+            for m in re.finditer(r'£\s*([\d,]+(?:\.\d{2})?)', blob):
+                sn = blob[max(0, m.start() - 40):min(len(blob), m.end() + 40)].lower()
+                if _snippet_bad_delivery(sn):
+                    continue
+                return '£' + m.group(1).replace(',', '')
+    except Exception:
+        pass
+
+    # Fallback: scan page text, skip obvious delivery / promo lines
+    try:
+        text = soup.get_text(' ', strip=True)
+        for m in re.finditer(r'£\s*([\d,]+(?:\.\d{2})?)', text):
+            sn = text[max(0, m.start() - 50):min(len(text), m.end() + 50)].lower()
+            if _snippet_bad_delivery(sn) or _snippet_bad_promo(sn):
+                continue
+            val = m.group(1).replace(',', '')
+            try:
+                fv = float(val)
+            except ValueError:
+                continue
+            if 0.5 <= fv <= 20000:
+                return '£' + val
+    except Exception:
+        pass
+    return None
+
+
 def _fetch_product_preview(url):
     """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
     if not url or not url.startswith(('http://', 'https://')):
@@ -1309,12 +1401,14 @@ def _fetch_product_preview(url):
         r.raise_for_status()
         return BeautifulSoup(r.text, 'html.parser')
 
+    host = (urlparse(url).netloc or '').lower()
+
     try:
         soup = _do_fetch()
     except Exception as e:
         app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
-        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made')
+        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made', 'tkmaxx')
         if any(d in url.lower() for d in retry_domains):
             try:
                 soup = _do_fetch(user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
@@ -1342,8 +1436,6 @@ def _fetch_product_preview(url):
             soup = social_soup or soup
     except Exception:
         pass
-
-    host = (urlparse(url).netloc or '').lower()
 
     # Open Graph / generic meta
     og_title = soup.find('meta', property='og:title')
@@ -1429,6 +1521,8 @@ def _fetch_product_preview(url):
         price = _hulalahome_extract_price(soup)
     if price is None and ('made.com' in host or 'made' in host):
         price = _made_extract_price(soup)
+    if price is None and 'tkmaxx' in host:
+        price = _tkmaxx_extract_price(soup)
     if 'carousell' in url.lower():
         try:
             # Carousell uses JSON-LD or meta tags for price
