@@ -10,6 +10,7 @@ as $$
   FROM ha_products p
   WHERE p.is_mwh = true
      OR 'mwh' = ANY(p.tags)
+     OR lower(trim(coalesce(p.project, ''))) = 'muswell hill'
   ORDER BY p.created_at DESC;
 $$;
 

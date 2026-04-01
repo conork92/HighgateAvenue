@@ -58,12 +58,15 @@ supabase: Client = None
 supabase_storage: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        if SUPABASE_SERVICE_ROLE_KEY:
-            supabase_storage = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-        else:
-            supabase_storage = supabase
-            app.logger.warning("SUPABASE_SERVICE_ROLE_KEY not set. Storage uploads may fail if RLS policies are restrictive.")
+        # Prefer service role for server-side DB access (avoids RLS blocking reads like MWH products).
+        db_key = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY
+        supabase = create_client(SUPABASE_URL, db_key)
+        # Keep a dedicated client for storage in case you want different keys later.
+        supabase_storage = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_SERVICE_ROLE_KEY else supabase
+        if not SUPABASE_SERVICE_ROLE_KEY:
+            app.logger.warning(
+                "SUPABASE_SERVICE_ROLE_KEY not set. DB reads/writes may be restricted by RLS, and storage uploads may fail."
+            )
     except Exception as e:
         import logging
         logging.warning(f"Supabase client not available: {e}. DB features (plans, upload) will be disabled.")
@@ -1316,6 +1319,47 @@ def _tkmaxx_extract_price(soup):
     except Exception:
         pass
 
+    # Inline JSON in generic script tags (TK Maxx often embeds product data outside ld+json)
+    try:
+        for script in soup.find_all('script'):
+            if not script.string or 'price' not in script.string.lower():
+                continue
+            if script.get('type') == 'application/ld+json':
+                continue
+            blob = script.string
+            for pat in (
+                r'"(?:price|currentPrice|nowPrice|salePrice|listPrice)"\s*:\s*"?([\d.,]+)"?',
+                r"'(?:price|currentPrice)'\s*:\s*'([\d.,]+)'",
+                r'price["\']?\s*:\s*["\']?£?\s*([\d.,]+)',
+            ):
+                m = re.search(pat, blob, re.I)
+                if m:
+                    raw = m.group(1).replace(',', '').strip()
+                    try:
+                        val = float(raw)
+                        if 0.5 <= val <= 50000:
+                            return '£' + raw.split('.')[0] + ('.' + raw.split('.')[1][:2] if '.' in raw else '')
+                    except ValueError:
+                        pass
+    except Exception:
+        pass
+
+    # Meta / microdata
+    try:
+        for prop in ('product:price:amount', 'og:price:amount'):
+            tag = soup.find('meta', property=prop)
+            if tag and tag.get('content'):
+                amt = tag['content'].strip().replace(',', '')
+                if amt and re.match(r'^\d+(\.\d{1,2})?$', amt):
+                    return '£' + amt
+        ip = soup.find(attrs={'itemprop': 'price'})
+        if ip and ip.get('content'):
+            c = str(ip['content']).strip().replace(',', '')
+            if c and re.match(r'^\d+(\.\d{1,2})?$', c):
+                return '£' + c
+    except Exception:
+        pass
+
     def _snippet_bad_delivery(snippet_lower):
         if not snippet_lower:
             return True
@@ -1361,6 +1405,27 @@ def _tkmaxx_extract_price(soup):
     except Exception:
         pass
 
+    # h1 is often inside a wrapper; price may not be immediate next siblings
+    try:
+        h1 = soup.find('h1')
+        if h1:
+            candidates = [h1.parent, h1.find_parent('article'), h1.find_parent('section'), h1.find_parent('main')]
+            seen = set()
+            for anc in candidates:
+                if not anc or id(anc) in seen or not hasattr(anc, 'get_text'):
+                    continue
+                seen.add(id(anc))
+                blob = anc.get_text(' ', strip=True)
+                if len(blob) < 10 or len(blob) > 12000:
+                    continue
+                for m in re.finditer(r'£\s*([\d,]+(?:\.\d{2})?)', blob):
+                    sn = blob[max(0, m.start() - 40):min(len(blob), m.end() + 40)].lower()
+                    if _snippet_bad_delivery(sn) or _snippet_bad_promo(sn):
+                        continue
+                    return '£' + m.group(1).replace(',', '')
+    except Exception:
+        pass
+
     # Fallback: scan page text, skip obvious delivery / promo lines
     try:
         text = soup.get_text(' ', strip=True)
@@ -1380,6 +1445,129 @@ def _tkmaxx_extract_price(soup):
     return None
 
 
+def _tkmaxx_image_from_soup(soup):
+    """Best-effort main product image for TK Maxx PDP."""
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            if not script.string or 'image' not in script.string.lower():
+                continue
+            try:
+                data = json.loads(script.string)
+            except Exception:
+                continue
+            for node in _walk_json_ld_nodes(data):
+                if not isinstance(node, dict):
+                    continue
+                typ = node.get('@type')
+                types = typ if isinstance(typ, list) else ([typ] if typ else [])
+                if 'Product' not in {str(t) for t in types if t} and 'ProductGroup' not in {str(t) for t in types if t}:
+                    continue
+                img = node.get('image')
+                if isinstance(img, str) and img.startswith('http'):
+                    return img
+                if isinstance(img, list) and img and isinstance(img[0], str):
+                    return img[0]
+                if isinstance(img, dict) and img.get('url'):
+                    return img['url']
+    except Exception:
+        pass
+    try:
+        og = soup.find('meta', property='og:image')
+        if og and og.get('content'):
+            return og['content'].strip()
+        tw = soup.find('meta', attrs={'name': 'twitter:image'})
+        if tw and tw.get('content'):
+            return tw['content'].strip()
+    except Exception:
+        pass
+    try:
+        for img in soup.find_all('img'):
+            src = (img.get('src') or img.get('data-src') or img.get('data-lazy-src') or '').strip()
+            if not src or src.startswith('data:'):
+                continue
+            low = src.lower()
+            if not any(x in low for x in ('tkmaxx', 'tjmaxx', 'akamaized', 'scene7', 'ismedia')):
+                continue
+            if any(x in low for x in ('logo', 'icon', 'sprite', 'payment', 'trust')):
+                continue
+            if src.startswith('//'):
+                return 'https:' + src
+            return src
+    except Exception:
+        pass
+    return None
+
+
+def _tkmaxx_is_placeholder_or_block_html(html):
+    """TK Maxx / Akamai often returns 403 + branded 'Something went wrong' with no PDP data."""
+    if not html or len(html) < 400:
+        return True
+    t = html.lower()
+    if '<title>access denied</title>' in t:
+        return True
+    if "you don't have permission to access" in t:
+        return True
+    if 'tkmaxx.com: something went wrong' in t:
+        return True
+    if 'something went wrong' in t and 'looking to shop?' in t:
+        return True
+    return False
+
+
+def _tkmaxx_html_has_product_signals(html):
+    if not html or len(html) < 1500:
+        return False
+    low = html.lower()
+    if 'application/ld+json' in low and 'product' in low:
+        return True
+    if 'og:image' in low and '/p/' in low:
+        return True
+    if 'itemprop="price"' in low or "itemprop='price'" in low:
+        return True
+    return False
+
+
+def _tkmaxx_fetch_product_soup(url):
+    """
+    TK Maxx often responds 403 to the default UA while still sending a placeholder HTML body.
+    Try several UAs; do not use raise_for_status so we can inspect the body.
+    """
+    attempts = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    ]
+    headers_base = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-GB,en;q=0.9',
+        'Referer': 'https://www.tkmaxx.com/',
+    }
+    session = requests.Session()
+    try:
+        warm_h = {
+            **headers_base,
+            'User-Agent': attempts[0],
+        }
+        session.get('https://www.tkmaxx.com/', headers=warm_h, timeout=18, allow_redirects=True)
+    except Exception:
+        pass
+    for ua in attempts:
+        h = {**headers_base, 'User-Agent': ua}
+        try:
+            timeout = 25 if 'facebook' in ua.lower() or 'googlebot' in ua.lower() else 22
+            r = session.get(url, headers=h, timeout=timeout, allow_redirects=True)
+        except Exception:
+            continue
+        text = r.text or ''
+        if _tkmaxx_is_placeholder_or_block_html(text):
+            continue
+        if r.status_code >= 400 and not _tkmaxx_html_has_product_signals(text):
+            continue
+        return BeautifulSoup(text, 'html.parser')
+    return None
+
+
 def _fetch_product_preview(url):
     """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
     if not url or not url.startswith(('http://', 'https://')):
@@ -1391,20 +1579,30 @@ def _fetch_product_preview(url):
     if url_title:
         out['title'] = url_title
 
-    def _do_fetch(user_agent=None):
+    host = (urlparse(url).netloc or '').lower()
+
+    def _do_fetch(user_agent=None, timeout=None):
         headers = {
             'User-Agent': user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-GB,en;q=0.9',
         }
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        wait = timeout if timeout is not None else (22 if 'tkmaxx' in host else 10)
+        r = requests.get(url, headers=headers, timeout=wait, allow_redirects=True)
         r.raise_for_status()
         return BeautifulSoup(r.text, 'html.parser')
 
-    host = (urlparse(url).netloc or '').lower()
-
     try:
-        soup = _do_fetch()
+        if 'tkmaxx' in host:
+            soup = _tkmaxx_fetch_product_soup(url)
+            if soup is None:
+                app.logger.warning(
+                    'Product preview: TK Maxx returned no usable PDP (bot block / placeholder) for %s',
+                    url[:120],
+                )
+                return out if out.get('title') or out.get('website_name') else None
+        else:
+            soup = _do_fetch()
     except Exception as e:
         app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
@@ -1437,6 +1635,29 @@ def _fetch_product_preview(url):
     except Exception:
         pass
 
+    # TK Maxx: initial HTML is often a thin shell; social/crawler UAs get full OG tags and product markup.
+    if 'tkmaxx' in host:
+        try:
+            plain_len = len(soup.get_text())
+            has_og_img = bool(soup.find('meta', property='og:image'))
+            if not has_og_img or plain_len < 1200:
+                social_soup = _do_fetch(
+                    user_agent='facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+                    timeout=25,
+                )
+                slen = len(social_soup.get_text())
+                if social_soup.find('meta', property='og:image') or slen > plain_len + 300:
+                    soup = social_soup
+            if len(soup.get_text()) < 800:
+                bot_soup = _do_fetch(
+                    user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                    timeout=25,
+                )
+                if len(bot_soup.get_text()) > len(soup.get_text()) + 200:
+                    soup = bot_soup
+        except Exception:
+            pass
+
     # Open Graph / generic meta
     og_title = soup.find('meta', property='og:title')
     if og_title and og_title.get('content'):
@@ -1458,6 +1679,11 @@ def _fetch_product_preview(url):
         )
         if fallback_meta and fallback_meta.get('content'):
             out['image_url'] = _normalize_image_url(fallback_meta['content'])
+
+    if 'tkmaxx' in host and not out.get('image_url'):
+        tx_img = _tkmaxx_image_from_soup(soup)
+        if tx_img:
+            out['image_url'] = _normalize_image_url(tx_img)
 
     if 'wayfair' in host and not out.get('image_url'):
         wf_img = _wayfair_primary_image_from_soup(soup, url)
@@ -1510,6 +1736,22 @@ def _fetch_product_preview(url):
                 )
                 if social_fallback and social_fallback.get('content'):
                     out['image_url'] = _normalize_image_url(social_fallback['content'])
+        except Exception:
+            pass
+
+    if 'tkmaxx' in host and not out.get('image_url'):
+        try:
+            social_soup = _do_fetch(
+                user_agent='facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+                timeout=25,
+            )
+            social_og = social_soup.find('meta', property='og:image')
+            if social_og and social_og.get('content'):
+                out['image_url'] = _normalize_image_url(social_og['content'])
+            if not out.get('image_url'):
+                tx_img = _tkmaxx_image_from_soup(social_soup)
+                if tx_img:
+                    out['image_url'] = _normalize_image_url(tx_img)
         except Exception:
             pass
 
@@ -1964,8 +2206,8 @@ def delete_product(product_id):
 
 
 def _muswell_hill_product_match(row):
-    """True if row is MWH only: is_mwh true or tags contains mwh."""
-    if row.get('is_mwh') is True:
+    """True if row belongs on Muswell Hill products: is_mwh, tag mwh, or project Muswell Hill."""
+    if _coerce_bool(row.get('is_mwh'), default=False):
         return True
     tags = row.get('tags')
     if isinstance(tags, list):
@@ -1973,6 +2215,9 @@ def _muswell_hill_product_match(row):
         if 'mwh' in tag_set:
             return True
     elif tags and 'mwh' in str(tags).lower():
+        return True
+    project = (row.get('project') or '').strip().lower()
+    if project == 'muswell hill':
         return True
     return False
 
@@ -2000,17 +2245,19 @@ def get_muswell_hill_products():
         return jsonify([]), 200
     room_filter = (request.args.get('room') or '').strip().lower()
     try:
-        # 1) Try RPC that runs the exact SQL (run tables/get_muswell_hill_products.sql in Supabase once)
+        # 1) Try RPC when available. If it returns [], still use Python path below: RPC SQL may be
+        #    older than app logic (e.g. missing project=muswell hill), or RLS may differ.
         try:
             r = supabase.rpc('get_muswell_hill_products').execute()
             if r and getattr(r, 'data', None) is not None:
                 out = list(r.data) if isinstance(r.data, list) else []
                 if room_filter:
                     out = [row for row in out if (row.get('room') or '').strip().lower() == room_filter]
-                return jsonify(out), 200
+                if len(out) > 0:
+                    return jsonify(out), 200
         except Exception as e:
             app.logger.info(f"Muswell Hill RPC not available: {e}, using fetch-all filter")
-        # 2) Fallback: fetch all products, filter in Python (same logic as your SQL)
+        # 2) Fallback: fetch all products, filter in Python (canonical filter for this app)
         r = supabase.table('ha_products').select('*').execute()
         all_rows = (r.data or []) if (r and hasattr(r, 'data')) else []
         if not isinstance(all_rows, list):
