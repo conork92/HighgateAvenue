@@ -356,10 +356,15 @@ MUSWELL_HILL_DESIGN_SECTIONS = {
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/muswell-hill/nursery/Screenshot%202026-02-19%20at%2013.17.05.png', 'alt': 'Nursery'},
         ],
     },
+    'study': {
+        'label': 'Study',
+        'layout': 'single',
+        'images': [],
+    },
 }
 
 MUSWELL_HILL_DESIGN_SECTIONS_ORDER = [
-    'front-room', 'kitchen', 'bathroom', 'bedroom', 'nursery'
+    'front-room', 'kitchen', 'bathroom', 'bedroom', 'nursery', 'study'
 ]
 
 # Also keep legacy MUSWELL_HILL_ROOMS for existing GCS routes/API:
@@ -369,6 +374,7 @@ MUSWELL_HILL_ROOMS = {
     'bathroom': {'label': 'Bathroom', 'prefix': 'muswell-hill/bathroom'},
     'bedroom': {'label': 'Bedroom', 'prefix': 'muswell-hill/bedroom'},
     'nursery': {'label': 'Nursery', 'prefix': 'muswell-hill/nursery'},
+    'study': {'label': 'Study', 'prefix': 'muswell-hill/study'},
 }
 MUSWELL_HILL_BUCKET = 'highgate-avenue-designs'
 

@@ -39,6 +39,7 @@
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='bathroom') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'bathroom') %}active{% endif %}">Bathroom</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='bedroom') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'bedroom') %}active{% endif %}">Bedroom</a></li>
                 <li><a href="{{ url_for('muswell_hill_room', room_slug='nursery') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'nursery') %}active{% endif %}">Nursery</a></li>
+                <li><a href="{{ url_for('muswell_hill_room', room_slug='study') }}" class="{% if request.endpoint == 'muswell_hill_room' and (muswell_room is defined and muswell_room == 'study') %}active{% endif %}">Study</a></li>
                 <li><a href="{{ url_for('muswell_hill_products') }}" class="{% if request.endpoint == 'muswell_hill_products' %}active{% endif %}">Products</a></li>
                 <li><a href="{{ url_for('muswell_hill_baby') }}" class="{% if request.endpoint == 'muswell_hill_baby' %}active{% endif %}">Baby</a></li>
             </ul>

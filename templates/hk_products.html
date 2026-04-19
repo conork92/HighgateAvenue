@@ -83,16 +83,19 @@
             opacity: 0.7;
         }
         .hk-section-title::after {
-            content: '▼';
+            content: '−';
             position: absolute;
             right: 0;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 0.875rem;
-            transition: transform 0.2s ease;
+            font-size: 1.125rem;
+            font-weight: 700;
+            line-height: 1;
+            transition: opacity 0.2s ease;
         }
         .hk-section-title.collapsed::after {
-            transform: translateY(-50%) rotate(-90deg);
+            content: '+';
+            transform: translateY(-50%);
         }
         .hk-section-grid {
             transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease;
@@ -195,41 +198,78 @@
             height: 16px;
             pointer-events: none;
         }
-        .hk-website-filters {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 1.25rem;
-        }
-        .hk-website-filters-label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--gray-dark, #666);
-        }
-        .hk-website-filters #hkWebsiteFilterBtns {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-        .hk-website-btn {
-            padding: 0.4rem 0.85rem;
-            font-size: 0.8125rem;
-            font-family: inherit;
-            border: 1px solid rgba(0,0,0,0.3);
+        /* Bauhaus-style filter panel (same grammar as Muswell Hill products) */
+        .hk-filter-panel {
+            display: none;
+            flex-direction: column;
+            border: 2px solid #000;
+            margin: 2rem 0 0;
             background: #fff;
-            border-radius: 6px;
+        }
+        .hk-filter-panel.is-visible {
+            display: flex;
+        }
+        .hk-filter-row {
+            display: flex;
+            align-items: stretch;
+            min-height: 2.75rem;
+            border-bottom: 1px solid #000;
+        }
+        .hk-filter-row:last-child {
+            border-bottom: none;
+        }
+        .hk-filter-key {
+            flex: 0 0 6.5rem;
+            display: flex;
+            align-items: center;
+            padding: 0 0.75rem 0 1rem;
+            font-size: 0.625rem;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #000;
+            background: #f0f0f0;
+            border-right: 1px solid #000;
+        }
+        @media (max-width: 520px) {
+            .hk-filter-key { flex-basis: 5.25rem; padding-left: 0.65rem; font-size: 0.5625rem; }
+        }
+        .hk-segmented {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+        .hk-segmented .hk-website-btn {
+            flex: 1 1 auto;
+            min-width: 3.25rem;
+            margin: 0;
+            padding: 0.65rem 0.85rem;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            font-family: inherit;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: none;
+            border-right: 1px solid rgba(0, 0, 0, 0.22);
+            border-radius: 0;
+            background: #fff;
+            color: #000;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
+            transition: background 0.15s ease, color 0.15s ease;
         }
-        .hk-website-btn:hover {
-            background: #f5f5f5;
-            border-color: #000;
+        .hk-segmented .hk-website-btn:last-child {
+            border-right: none;
         }
-        .hk-website-btn.active {
+        .hk-segmented .hk-website-btn:hover {
+            background: #e8e8e8;
+        }
+        .hk-segmented .hk-website-btn.active {
             background: #000;
             color: #fff;
-            border-color: #000;
+        }
+        .hk-segmented .hk-website-btn.hk-segment--new-row {
+            border-top: 1px solid #000;
         }
         @media (max-width: 768px) {
             .hk-product-remove-btn,
@@ -258,9 +298,19 @@
                     <p class="subtitle">HK products only (tag <strong>hk</strong> or category <strong>HK</strong>), grouped by category. Tag <strong>desk</strong> puts an item only in the Desk section (not Furniture). Removed and bought items are hidden from the main sections.</p>
                     <button type="button" id="hkAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
                 </header>
-                <div id="hkWebsiteFilters" class="hk-website-filters" style="display: none;">
-                    <span class="hk-website-filters-label">Website:</span>
-                    <div id="hkWebsiteFilterBtns"></div>
+                <div id="hkFilterPanel" class="hk-filter-panel" aria-label="Product filters">
+                    <div class="hk-filter-row">
+                        <span class="hk-filter-key">Source</span>
+                        <div id="hkWebsiteFilterBtns" class="hk-segmented" data-hk-segments="source" role="group" aria-label="Filter by retailer or site"></div>
+                    </div>
+                    <div class="hk-filter-row">
+                        <span class="hk-filter-key">Category</span>
+                        <div id="hkCategoryFilterBtns" class="hk-segmented" data-hk-segments="category" role="group" aria-label="Filter by product category"></div>
+                    </div>
+                    <div class="hk-filter-row">
+                        <span class="hk-filter-key">Room</span>
+                        <div id="hkRoomFilterBtns" class="hk-segmented" data-hk-segments="room" role="group" aria-label="Filter by room"></div>
+                    </div>
                 </div>
             <!-- Add Product Modal -->
             <div id="hkProductModal" class="modal" style="display: none;">
@@ -320,6 +370,7 @@
                                 <option value="Kitchen">Kitchen</option>
                                 <option value="Bathroom">Bathroom</option>
                                 <option value="Nursery">Nursery</option>
+                                <option value="Study">Study</option>
                                 <option value="Other">Other</option>
                             </select>
                         </div>
@@ -372,10 +423,24 @@
             const modal = document.getElementById('hkProductModal');
             const form = document.getElementById('hkProductForm');
             const statusEl = document.getElementById('hkProductStatus');
-            const websiteFiltersEl = document.getElementById('hkWebsiteFilters');
-            const websiteFilterBtnsEl = document.getElementById('hkWebsiteFilterBtns');
+            const filterPanelEl = document.getElementById('hkFilterPanel');
+            const websiteFilterBtnsEl = filterPanelEl ? filterPanelEl.querySelector('[data-hk-segments="source"]') : null;
+            const categoryFilterBtnsEl = filterPanelEl ? filterPanelEl.querySelector('[data-hk-segments="category"]') : null;
+            const roomFilterBtnsEl = filterPanelEl ? filterPanelEl.querySelector('[data-hk-segments="room"]') : null;
             var hkProductList = [];
             var hkCurrentWebsite = '';
+            var hkCurrentCategory = '';
+            var hkCurrentRoom = '';
+            var HK_ROOM_FILTER_OPTIONS = [
+                { value: '', label: 'All' },
+                { value: 'Front Room', label: 'Front Room' },
+                { value: 'Bedroom', label: 'Bedroom' },
+                { value: 'Kitchen', label: 'Kitchen' },
+                { value: 'Bathroom', label: 'Bathroom' },
+                { value: 'Nursery', label: 'Nursery' },
+                { value: 'Study', label: 'Study' },
+                { value: 'Other', label: 'Other' }
+            ];
 
             function getWebsiteKey(p) {
                 return (p.website_name || '').trim() || '(No website)';
@@ -390,6 +455,37 @@
                 var cat = (p.category || '').trim();
                 if (cat.toLowerCase() === 'desk') return 'Desk';
                 return cat || 'Uncategorised';
+            }
+            function compareCategoryKeys(a, b) {
+                if (a === 'Desk' && b !== 'Desk') return -1;
+                if (b === 'Desk' && a !== 'Desk') return 1;
+                if (a === 'Uncategorised') return 1;
+                if (b === 'Uncategorised') return -1;
+                return a.localeCompare(b);
+            }
+            function markHkSegmentWrapRows() {
+                if (!websiteFilterBtnsEl || !categoryFilterBtnsEl || !roomFilterBtnsEl) return;
+                [websiteFilterBtnsEl, categoryFilterBtnsEl, roomFilterBtnsEl].forEach(function(seg) {
+                    var buttons = seg.querySelectorAll('.hk-website-btn');
+                    if (!buttons.length) return;
+                    var firstTop = buttons[0].offsetTop;
+                    for (var i = 0; i < buttons.length; i++) {
+                        var btn = buttons[i];
+                        if (btn.offsetTop > firstTop + 1) btn.classList.add('hk-segment--new-row');
+                        else btn.classList.remove('hk-segment--new-row');
+                    }
+                });
+            }
+            var hkSegmentResizeTimer;
+            var hkSegmentResizeBound = false;
+            function bindHkSegmentResizeOnce() {
+                if (hkSegmentResizeBound) return;
+                hkSegmentResizeBound = true;
+                window.addEventListener('resize', function() {
+                    if (!filterPanelEl || !filterPanelEl.classList.contains('is-visible')) return;
+                    clearTimeout(hkSegmentResizeTimer);
+                    hkSegmentResizeTimer = setTimeout(markHkSegmentWrapRows, 80);
+                });
             }
             function renderCard(p) {
                 var hasImage = p.image_url && p.image_url.trim();
@@ -417,7 +513,12 @@
             function renderProductList(list) {
                 if (list.length === 0) {
                     grid.innerHTML = '<p class="subtitle">No HK products yet. Add products with tag <strong>hk</strong> or category <strong>HK</strong> and set a category to see them grouped.</p>';
-                    websiteFiltersEl.style.display = 'none';
+                    if (filterPanelEl) filterPanelEl.classList.remove('is-visible');
+                    return;
+                }
+                if (filterPanelEl) filterPanelEl.classList.add('is-visible');
+                if (!websiteFilterBtnsEl || !categoryFilterBtnsEl || !roomFilterBtnsEl) {
+                    console.error('HK products: filter panel markup is incomplete (missing segment containers).');
                     return;
                 }
                 var websites = [];
@@ -431,37 +532,95 @@
                     if (b === '(No website)') return -1;
                     return a.localeCompare(b);
                 });
-                if (websites.length > 0) {
-                    websiteFiltersEl.style.display = 'flex';
-                    websiteFilterBtnsEl.innerHTML = '';
-                    var allBtn = document.createElement('button');
-                    allBtn.type = 'button';
-                    allBtn.className = 'hk-website-btn' + (hkCurrentWebsite === '' ? ' active' : '');
-                    allBtn.textContent = 'All';
-                    allBtn.addEventListener('click', function() {
-                        hkCurrentWebsite = '';
+                websiteFilterBtnsEl.innerHTML = '';
+                var allBtn = document.createElement('button');
+                allBtn.type = 'button';
+                allBtn.className = 'hk-website-btn' + (hkCurrentWebsite === '' ? ' active' : '');
+                allBtn.textContent = 'All';
+                allBtn.addEventListener('click', function() {
+                    hkCurrentWebsite = '';
+                    renderProductList(hkProductList);
+                });
+                websiteFilterBtnsEl.appendChild(allBtn);
+                websites.forEach(function(w) {
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'hk-website-btn' + (hkCurrentWebsite === w ? ' active' : '');
+                    btn.textContent = w;
+                    btn.addEventListener('click', function() {
+                        hkCurrentWebsite = w;
                         renderProductList(hkProductList);
                     });
-                    websiteFilterBtnsEl.appendChild(allBtn);
-                    websites.forEach(function(w) {
-                        var btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.className = 'hk-website-btn' + (hkCurrentWebsite === w ? ' active' : '');
-                        btn.textContent = w;
-                        btn.addEventListener('click', function() {
-                            hkCurrentWebsite = w;
+                    websiteFilterBtnsEl.appendChild(btn);
+                });
+                var catSeen = {};
+                list.forEach(function(p) {
+                    var ck = getProductCategoryKey(p);
+                    catSeen[ck] = true;
+                });
+                var categoryKeys = Object.keys(catSeen).sort(compareCategoryKeys);
+                if (hkCurrentCategory && categoryKeys.indexOf(hkCurrentCategory) === -1) {
+                    hkCurrentCategory = '';
+                }
+                categoryFilterBtnsEl.innerHTML = '';
+                var allCatBtn = document.createElement('button');
+                allCatBtn.type = 'button';
+                allCatBtn.className = 'hk-website-btn' + (hkCurrentCategory === '' ? ' active' : '');
+                allCatBtn.textContent = 'All';
+                allCatBtn.addEventListener('click', function() {
+                    hkCurrentCategory = '';
+                    renderProductList(hkProductList);
+                });
+                categoryFilterBtnsEl.appendChild(allCatBtn);
+                categoryKeys.forEach(function(ck) {
+                    var cbtn = document.createElement('button');
+                    cbtn.type = 'button';
+                    cbtn.className = 'hk-website-btn' + (hkCurrentCategory === ck ? ' active' : '');
+                    cbtn.textContent = ck;
+                    (function(catVal) {
+                        cbtn.addEventListener('click', function() {
+                            hkCurrentCategory = catVal;
                             renderProductList(hkProductList);
                         });
-                        websiteFilterBtnsEl.appendChild(btn);
-                    });
-                } else {
-                    websiteFiltersEl.style.display = 'none';
+                    })(ck);
+                    categoryFilterBtnsEl.appendChild(cbtn);
+                });
+                roomFilterBtnsEl.innerHTML = '';
+                HK_ROOM_FILTER_OPTIONS.forEach(function(opt) {
+                    var rbtn = document.createElement('button');
+                    rbtn.type = 'button';
+                    rbtn.className = 'hk-website-btn' + (hkCurrentRoom === opt.value ? ' active' : '');
+                    rbtn.textContent = opt.label;
+                    (function(roomVal) {
+                        rbtn.addEventListener('click', function() {
+                            hkCurrentRoom = roomVal;
+                            renderProductList(hkProductList);
+                        });
+                    })(opt.value);
+                    roomFilterBtnsEl.appendChild(rbtn);
+                });
+                bindHkSegmentResizeOnce();
+                var listToShow = list;
+                if (hkCurrentWebsite) {
+                    listToShow = listToShow.filter(function(p) { return getWebsiteKey(p) === hkCurrentWebsite; });
                 }
-                var listToShow = hkCurrentWebsite ? list.filter(function(p) { return getWebsiteKey(p) === hkCurrentWebsite; }) : list;
+                if (hkCurrentRoom) {
+                    var rl = hkCurrentRoom.toLowerCase();
+                    listToShow = listToShow.filter(function(p) {
+                        return (p.room || '').trim().toLowerCase() === rl;
+                    });
+                }
+                if (hkCurrentCategory) {
+                    listToShow = listToShow.filter(function(p) {
+                        return getProductCategoryKey(p) === hkCurrentCategory;
+                    });
+                }
                 var boughtItems = listToShow.filter(function(p) { return !!p.bought; });
                 var activeItems = listToShow.filter(function(p) { return !p.bought && !p.x_remove; });
                 if (activeItems.length === 0 && boughtItems.length === 0) {
-                    grid.innerHTML = '<p class="subtitle">No products for this website filter.</p>';
+                    grid.innerHTML = '<p class="subtitle">No products match these filters. Try another source, category, room, or clear filters.</p>';
+                    markHkSegmentWrapRows();
+                    requestAnimationFrame(markHkSegmentWrapRows);
                     return;
                 }
 
@@ -471,13 +630,7 @@
                     if (!byCategory[key]) byCategory[key] = [];
                     byCategory[key].push(p);
                 });
-                var categoryOrder = Object.keys(byCategory).sort(function(a, b) {
-                    if (a === 'Desk' && b !== 'Desk') return -1;
-                    if (b === 'Desk' && a !== 'Desk') return 1;
-                    if (a === 'Uncategorised') return 1;
-                    if (b === 'Uncategorised') return -1;
-                    return a.localeCompare(b);
-                });
+                var categoryOrder = Object.keys(byCategory).sort(compareCategoryKeys);
                 var html = '';
                 categoryOrder.forEach(function(cat) {
                     var productsInSection = byCategory[cat];
@@ -542,6 +695,8 @@
                         }
                     });
                 });
+                markHkSegmentWrapRows();
+                requestAnimationFrame(markHkSegmentWrapRows);
             }
             
             function editHkProduct(id) {
