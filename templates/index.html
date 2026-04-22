@@ -271,6 +271,7 @@
                                 <option value="Kitchen">Kitchen</option>
                                 <option value="Lighting">Lighting</option>
                                 <option value="Paint & Wallpaper">Paint & Wallpaper</option>
+                                <option value="Rugs">Rugs</option>
                                 <option value="Storage">Storage</option>
                                 <option value="Textiles">Textiles</option>
                                 <option value="Tiles">Tiles</option>
@@ -387,6 +388,11 @@
 
             <section class="room-section" id="productsSection" data-product-room="{{ product_room_filter }}">
                 <h2 class="room-section__title">Products</h2>
+                <div class="room-block" style="margin-bottom: 1rem;">
+                    <div class="room-block__row">
+                        <button type="button" class="room-btn" data-add-product="true">+ Add product</button>
+                    </div>
+                </div>
                 <div id="productsGrid" class="room-products-list">
                     <!-- Products loaded by JS -->
                 </div>

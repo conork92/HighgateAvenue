@@ -498,6 +498,54 @@
     background: #f0f0f0;
     overflow: hidden;
     border-bottom: 2px solid #0d0d0d;
+    position: relative;
+}
+.room-page--blocky .room-product-card .product-edit-btn,
+.room-page--blocky .room-product-card .product-delete-btn {
+    position: absolute;
+    top: 6px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #0d0d0d;
+    color: #0d0d0d;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    z-index: 2;
+}
+.room-page--blocky .room-product-card .product-edit-btn { right: 40px; }
+.room-page--blocky .room-product-card .product-delete-btn { right: 6px; }
+.room-page--blocky .room-product-card:hover .product-edit-btn,
+.room-page--blocky .room-product-card:hover .product-delete-btn,
+.room-page--blocky .room-product-card:focus-within .product-edit-btn,
+.room-page--blocky .room-product-card:focus-within .product-delete-btn {
+    opacity: 1;
+}
+.room-page--blocky .room-product-card .product-edit-btn:hover {
+    background: #fff;
+    color: #0d0d0d;
+}
+.room-page--blocky .room-product-card .product-delete-btn:hover {
+    background: #fff;
+    border-color: #d32f2f;
+    color: #d32f2f;
+}
+.room-page--blocky .room-product-card .product-edit-btn svg,
+.room-page--blocky .room-product-card .product-delete-btn svg {
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+@media (max-width: 768px) {
+    .room-page--blocky .room-product-card .product-edit-btn,
+    .room-page--blocky .room-product-card .product-delete-btn {
+        opacity: 1;
+    }
 }
 .room-page--blocky .room-product-card__img {
     width: 100%;
