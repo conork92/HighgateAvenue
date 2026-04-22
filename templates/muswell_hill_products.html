@@ -358,6 +358,7 @@
                                 <option value="Desk">Desk</option>
                                 <option value="Kitchen">Kitchen</option>
                                 <option value="Lighting">Lighting</option>
+                                <option value="Rugs">Rugs</option>
                                 <option value="Other">Other</option>
                             </select>
                         </div>
@@ -455,15 +456,19 @@
             function getWebsiteKey(p) {
                 return (p.website_name || '').trim() || '(No website)';
             }
-            function hasDeskTag(p) {
+            function hasTag(p, name) {
                 var tags = p.tags;
                 if (!Array.isArray(tags)) return false;
-                return tags.some(function(t) { return String(t).trim().toLowerCase() === 'desk'; });
+                var target = String(name).trim().toLowerCase();
+                return tags.some(function(t) { return String(t).trim().toLowerCase() === target; });
             }
             function getProductCategoryKey(p) {
-                if (hasDeskTag(p)) return 'Desk';
+                if (hasTag(p, 'desk')) return 'Desk';
+                if (hasTag(p, 'rug') || hasTag(p, 'rugs')) return 'Rugs';
                 var cat = (p.category || '').trim();
-                if (cat.toLowerCase() === 'desk') return 'Desk';
+                var catLower = cat.toLowerCase();
+                if (catLower === 'desk') return 'Desk';
+                if (catLower === 'rug' || catLower === 'rugs') return 'Rugs';
                 return cat || 'Uncategorised';
             }
             function compareCategoryKeys(a, b) {
@@ -807,6 +812,10 @@
                             fetchPreviewBtn.textContent = 'Fetch from link';
                             if (result.ok && result.data) {
                                 var d = result.data;
+                                if (d.blocked) {
+                                    var msg = d.blocked_reason || 'This site blocks automated previews; please fill manually.';
+                                    if (statusEl) { statusEl.textContent = msg; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                                }
                                 if (d.title) document.getElementById('mwhProductTitle').value = d.title;
                                 if (d.image_url) document.getElementById('mwhProductImageUrl').value = d.image_url;
                                 if (d.website_name) document.getElementById('mwhProductWebsiteName').value = d.website_name;

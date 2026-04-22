@@ -29,9 +29,9 @@ let selectedFile = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    loadPlans();
+    if (plansGrid) loadPlans();
     loadDesignIdeas();
-    roomFilter.addEventListener('change', filterPlans);
+    if (roomFilter) roomFilter.addEventListener('change', filterPlans);
     initUploadHandlers();
     initPhotoCarousel();
     initProducts();
@@ -234,7 +234,7 @@ function initProducts() {
 }
 
 function initProductModal(section, grid, loadingEl) {
-    const addBtn = document.getElementById('addProductBtn');
+    const addBtn = section.querySelector('[data-add-product="true"]') || document.getElementById('addProductBtn');
     const modal = document.getElementById('productModal');
     const modalTitle = document.getElementById('productModalTitle');
     const closeBtn = modal && modal.querySelector('.close-product-modal');
@@ -274,6 +274,13 @@ function initProductModal(section, grid, loadingEl) {
     addBtn.addEventListener('click', () => {
         setAddMode();
         form.reset();
+        // Auto-pick room based on current tab / room filter selection
+        try {
+            const fallback = (section.getAttribute('data-product-room') || '').trim();
+            const roomValue = fallback || '';
+            const roomField = document.getElementById('productRoom');
+            if (roomField) roomField.value = roomValue;
+        } catch (e) {}
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         if (productStatus) productStatus.style.display = 'none';
@@ -357,6 +364,10 @@ function initProductModal(section, grid, loadingEl) {
                 const r = await fetch(`${API_BASE}/products/preview?url=${encodeURIComponent(url)}`);
                 const data = await r.json();
                 if (r.ok && data) {
+                    if (data.blocked) {
+                        const reason = data.blocked_reason || 'This site blocks automated previews; please fill manually.';
+                        if (productStatus) { productStatus.textContent = reason; productStatus.className = 'upload-status error'; productStatus.style.display = 'block'; }
+                    }
                     if (data.title) document.getElementById('productTitle').value = data.title;
                     if (data.image_url) document.getElementById('productImageUrl').value = data.image_url;
                     if (data.website_name) document.getElementById('productWebsiteName').value = data.website_name;
@@ -475,7 +486,9 @@ async function loadProducts(roomFilter, grid, loadingEl) {
                     const imgHtml = hasImage
                         ? `<img src="${escapeHtml(p.image_url)}" alt="" class="room-product-card__img" loading="lazy" onerror="this.style.display='none'">`
                         : '<div class="room-product-card__noimg">No image</div>';
-                    return `<a href="${link}" target="_blank" rel="noopener" class="room-product-card"><div class="room-product-card__img-wrap">${imgHtml}</div><div class="room-product-card__cap"><span class="room-product-card__title">${title}</span>${price || cat ? `<span class="room-product-card__meta">${price}${price && cat ? ' · ' : ''}${cat ? `<span class="room-product-card__cat">${escapeHtml(cat)}</span>` : ''}</span>` : ''}</div></a>`;
+                    const deleteBtn = `<button type="button" class="product-delete-btn" data-product-id="${p.id}" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>`;
+                    const editBtn = `<button type="button" class="product-edit-btn" data-product-id="${p.id}" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>`;
+                    return `<a href="${link}" target="_blank" rel="noopener" class="room-product-card"><div class="room-product-card__img-wrap">${imgHtml}${editBtn}${deleteBtn}</div><div class="room-product-card__cap"><span class="room-product-card__title">${title}</span>${price || cat ? `<span class="room-product-card__meta">${price}${price && cat ? ' · ' : ''}${cat ? `<span class="room-product-card__cat">${escapeHtml(cat)}</span>` : ''}</span>` : ''}</div></a>`;
                 } else {
                     // Use product-tile styling for regular pages
                     const imgHtml = hasImage
@@ -895,62 +908,63 @@ window.saveRoomIdeaTags = saveRoomIdeaTags;
 
 // Initialize upload handlers
 function initUploadHandlers() {
-    // Open modal
+    // Bail out gracefully on pages that don't include the upload UI
+    // (e.g. Highgate room pages like /designs/bathroom/ don't render the Add Design modal).
+    if (!uploadBtn || !uploadModal || !uploadForm) return;
+
     uploadBtn.addEventListener('click', () => {
         uploadModal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
     });
 
-    // Close modal
-    closeModal.addEventListener('click', closeUploadModal);
-    cancelUploadBtn.addEventListener('click', closeUploadModal);
-    
-    // Close on outside click
+    if (closeModal) closeModal.addEventListener('click', closeUploadModal);
+    if (cancelUploadBtn) cancelUploadBtn.addEventListener('click', closeUploadModal);
+
     uploadModal.addEventListener('click', (e) => {
         if (e.target === uploadModal) {
             closeUploadModal();
         }
     });
 
-    // File input change
-    imageInput.addEventListener('change', handleFileSelect);
+    if (imageInput) imageInput.addEventListener('change', handleFileSelect);
 
-    // Upload area click
-    uploadArea.addEventListener('click', () => {
-        if (!uploadPreview.style.display || uploadPreview.style.display === 'none') {
-            imageInput.click();
-        }
-    });
+    if (uploadArea) {
+        uploadArea.addEventListener('click', () => {
+            if (!uploadPreview || !uploadPreview.style.display || uploadPreview.style.display === 'none') {
+                if (imageInput) imageInput.click();
+            }
+        });
 
-    // Drag and drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
 
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
 
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFile(files[0]);
-        }
-    });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
 
-    // Remove image
-    removeImageBtn.addEventListener('click', () => {
-        selectedFile = null;
-        imageInput.value = '';
-        uploadPreview.style.display = 'none';
-        document.querySelector('.upload-placeholder').style.display = 'block';
-    });
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+    }
 
-    // Form submission
+    if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', () => {
+            selectedFile = null;
+            if (imageInput) imageInput.value = '';
+            if (uploadPreview) uploadPreview.style.display = 'none';
+            const ph = document.querySelector('.upload-placeholder');
+            if (ph) ph.style.display = 'block';
+        });
+    }
+
     uploadForm.addEventListener('submit', handleUpload);
 }
 

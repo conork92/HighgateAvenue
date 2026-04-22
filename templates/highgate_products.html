@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue - Products</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260211">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260211">
+    <style>
+        .ha-product-card {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-height: 0;
+        }
+        .ha-product-card .product-tile { flex: 1; min-height: 0; }
+        .ha-product-flags {
+            display: flex;
+            gap: 0.6rem;
+            margin-top: 0.5rem;
+            padding: 0.5rem 0 0;
+            flex-wrap: nowrap;
+            align-items: center;
+            border-top: 1px solid rgba(0,0,0,0.08);
+            overflow-x: auto;
+        }
+        .ha-product-flags label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .ha-product-flags input[type="checkbox"] { width: 1rem; height: 1rem; flex-shrink: 0; }
+
+        .ha-section { margin-bottom: 2.5rem; }
+        .ha-section:first-child { margin-top: 0; }
+        .ha-section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            padding-right: 2rem;
+            border-bottom: 2px solid #000;
+            color: #000;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            transition: opacity 0.2s ease;
+        }
+        .ha-section-title:hover { opacity: 0.7; }
+        .ha-section-title::after {
+            content: '−';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.125rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .ha-section-title.collapsed::after { content: '+'; }
+        .ha-section-grid {
+            transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease;
+            overflow: hidden;
+            max-height: 5000px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.25rem;
+            align-items: start;
+        }
+        .ha-section.collapsed .ha-section-grid {
+            max-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+            padding: 0;
+        }
+        .ha-empty-bought {
+            grid-column: 1 / -1;
+            color: var(--gray-dark, #666);
+            font-size: 0.9375rem;
+            padding: 1rem 0;
+            margin: 0;
+        }
+        .ha-product-subcategory {
+            font-size: 0.75rem;
+            color: var(--gray-dark, #666);
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .ha-product-comment {
+            font-size: 0.8125rem;
+            color: var(--gray-dark, #666);
+            margin: 0.5rem 0 0 0;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .product-tile-image-wrap { position: relative; }
+        .ha-product-remove-btn,
+        .ha-product-edit-btn {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #000;
+            z-index: 10;
+            opacity: 0.9;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .ha-product-remove-btn { top: 0.5rem; left: 0.5rem; }
+        .ha-product-edit-btn { top: 0.5rem; right: 0.5rem; }
+        .ha-product-remove-btn:hover { border-color: #d32f2f; color: #d32f2f; transform: scale(1.08); }
+        .ha-product-edit-btn:hover { border-color: #000; color: #000; transform: scale(1.08); }
+
+        /* Filter panel (same grammar as MWH) */
+        .ha-filter-panel {
+            display: none;
+            flex-direction: column;
+            border: 2px solid #000;
+            margin: 2rem 0 0;
+            background: #fff;
+        }
+        .ha-filter-panel.is-visible { display: flex; }
+        .ha-filter-row {
+            display: flex;
+            align-items: stretch;
+            min-height: 2.75rem;
+            border-bottom: 1px solid #000;
+        }
+        .ha-filter-row:last-child { border-bottom: none; }
+        .ha-filter-key {
+            flex: 0 0 6.5rem;
+            display: flex;
+            align-items: center;
+            padding: 0 0.75rem 0 1rem;
+            font-size: 0.625rem;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #000;
+            background: #f0f0f0;
+            border-right: 1px solid #000;
+        }
+        @media (max-width: 520px) {
+            .ha-filter-key { flex-basis: 5.25rem; padding-left: 0.65rem; font-size: 0.5625rem; }
+        }
+        .ha-segmented {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+        .ha-segmented .ha-seg-btn {
+            flex: 1 1 auto;
+            min-width: 3.25rem;
+            margin: 0;
+            padding: 0.65rem 0.85rem;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            font-family: inherit;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: none;
+            border-right: 1px solid rgba(0, 0, 0, 0.22);
+            border-radius: 0;
+            background: #fff;
+            color: #000;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .ha-segmented .ha-seg-btn:last-child { border-right: none; }
+        .ha-segmented .ha-seg-btn:hover { background: #e8e8e8; }
+        .ha-segmented .ha-seg-btn.active { background: #000; color: #fff; }
+        .ha-segmented .ha-seg-btn.ha-seg--new-row { border-top: 1px solid #000; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Highgate Avenue – Products</h1>
+                    <p class="subtitle">All products (including items also marked as MWH), grouped by category. Use filters below; add, edit, and mark as bought.</p>
+                    <button type="button" id="haAddProductBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add Product</span></button>
+                </header>
+
+                <div id="haFilterPanel" class="ha-filter-panel" aria-label="Product filters">
+                    <div class="ha-filter-row">
+                        <span class="ha-filter-key">Source</span>
+                        <div id="haSourceBtns" class="ha-segmented" role="group" aria-label="Filter by retailer or site"></div>
+                    </div>
+                    <div class="ha-filter-row">
+                        <span class="ha-filter-key">Category</span>
+                        <div id="haCategoryBtns" class="ha-segmented" role="group" aria-label="Filter by product category"></div>
+                    </div>
+                    <div class="ha-filter-row">
+                        <span class="ha-filter-key">Room</span>
+                        <div id="haRoomBtns" class="ha-segmented" role="group" aria-label="Filter by room"></div>
+                    </div>
+                </div>
+
+                <div id="haProductsLoading" class="loading">Loading products...</div>
+                <div id="haProductsGrid"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        (function() {
+            function escapeHtml(s) {
+                if (s == null) return '';
+                return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+            function getWebsiteDisplay(p) {
+                if (p.website_name && p.website_name.trim()) return p.website_name.trim();
+                if (p.link && p.link.includes('amazon')) return 'Amazon';
+                return '';
+            }
+            function getWebsiteKey(p) {
+                return (p.website_name || '').trim() || '(No website)';
+            }
+            function hasTag(p, name) {
+                var tags = p.tags;
+                if (!Array.isArray(tags)) return false;
+                var target = String(name).trim().toLowerCase();
+                return tags.some(function(t) { return String(t).trim().toLowerCase() === target; });
+            }
+            function getProductCategoryKey(p) {
+                if (hasTag(p, 'desk')) return 'Desk';
+                if (hasTag(p, 'rug') || hasTag(p, 'rugs')) return 'Rugs';
+                var cat = (p.category || '').trim();
+                var catLower = cat.toLowerCase();
+                if (catLower === 'desk') return 'Desk';
+                if (catLower === 'rug' || catLower === 'rugs') return 'Rugs';
+                return cat || 'Uncategorised';
+            }
+            function compareCategoryKeys(a, b) {
+                if (a === 'Desk' && b !== 'Desk') return -1;
+                if (b === 'Desk' && a !== 'Desk') return 1;
+                if (a === 'Uncategorised') return 1;
+                if (b === 'Uncategorised') return -1;
+                return a.localeCompare(b);
+            }
+
+            const loading = document.getElementById('haProductsLoading');
+            const grid = document.getElementById('haProductsGrid');
+            const filterPanelEl = document.getElementById('haFilterPanel');
+            const sourceBtnsEl = document.getElementById('haSourceBtns');
+            const categoryBtnsEl = document.getElementById('haCategoryBtns');
+            const roomBtnsEl = document.getElementById('haRoomBtns');
+
+            var all = [];
+            var currentSource = '';
+            var currentCategory = '';
+            var currentRoom = '';
+
+            var ROOM_OPTIONS = [
+                '', 'Bathroom', 'Bedroom', 'Dining Room', 'Entrance', 'Garden', 'Hallway', 'Kitchen', 'Living Room',
+                'Nursery', 'Other', 'Stairways', 'Study', 'Summerhouse'
+            ];
+
+            function markWrapRows() {
+                [sourceBtnsEl, categoryBtnsEl, roomBtnsEl].forEach(function(seg) {
+                    if (!seg) return;
+                    var buttons = seg.querySelectorAll('.ha-seg-btn');
+                    if (!buttons.length) return;
+                    var firstTop = buttons[0].offsetTop;
+                    for (var i = 0; i < buttons.length; i++) {
+                        var btn = buttons[i];
+                        if (btn.offsetTop > firstTop + 1) btn.classList.add('ha-seg--new-row');
+                        else btn.classList.remove('ha-seg--new-row');
+                    }
+                });
+            }
+
+            function buildSegments() {
+                if (!filterPanelEl) return;
+                filterPanelEl.classList.toggle('is-visible', all.length > 0);
+
+                // Source
+                var seenW = {};
+                all.forEach(function(p) { seenW[getWebsiteKey(p)] = true; });
+                var websites = Object.keys(seenW).sort(function(a, b) {
+                    if (a === '(No website)') return 1;
+                    if (b === '(No website)') return -1;
+                    return a.localeCompare(b);
+                });
+                if (currentSource && websites.indexOf(currentSource) === -1) currentSource = '';
+                sourceBtnsEl.innerHTML = '';
+                var allW = document.createElement('button');
+                allW.type = 'button';
+                allW.className = 'ha-seg-btn' + (currentSource === '' ? ' active' : '');
+                allW.textContent = 'All';
+                allW.addEventListener('click', function() { currentSource = ''; render(); });
+                sourceBtnsEl.appendChild(allW);
+                websites.forEach(function(w) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'ha-seg-btn' + (currentSource === w ? ' active' : '');
+                    b.textContent = w;
+                    b.addEventListener('click', function() { currentSource = w; render(); });
+                    sourceBtnsEl.appendChild(b);
+                });
+
+                // Category
+                var seenC = {};
+                all.forEach(function(p) { seenC[getProductCategoryKey(p)] = true; });
+                var cats = Object.keys(seenC).sort(compareCategoryKeys);
+                if (currentCategory && cats.indexOf(currentCategory) === -1) currentCategory = '';
+                categoryBtnsEl.innerHTML = '';
+                var allC = document.createElement('button');
+                allC.type = 'button';
+                allC.className = 'ha-seg-btn' + (currentCategory === '' ? ' active' : '');
+                allC.textContent = 'All';
+                allC.addEventListener('click', function() { currentCategory = ''; render(); });
+                categoryBtnsEl.appendChild(allC);
+                cats.forEach(function(c) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'ha-seg-btn' + (currentCategory === c ? ' active' : '');
+                    b.textContent = c;
+                    b.addEventListener('click', function() { currentCategory = c; render(); });
+                    categoryBtnsEl.appendChild(b);
+                });
+
+                // Room
+                if (currentRoom && ROOM_OPTIONS.indexOf(currentRoom) === -1) currentRoom = '';
+                roomBtnsEl.innerHTML = '';
+                ROOM_OPTIONS.forEach(function(r) {
+                    var label = r || 'All';
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'ha-seg-btn' + (currentRoom === r ? ' active' : '');
+                    b.textContent = label;
+                    b.addEventListener('click', function() { currentRoom = r; render(); });
+                    roomBtnsEl.appendChild(b);
+                });
+            }
+
+            function renderCard(p) {
+                var hasImage = p.image_url && p.image_url.trim();
+                var imgHtml = hasImage ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title || 'Product') + '" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\\'product-tile-image--failed\\')">' : '';
+                var title = escapeHtml(p.title || 'Product');
+                var rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+                var displayPrice = rawPrice && !rawPrice.startsWith('£') ? '£ ' + escapeHtml(rawPrice) : escapeHtml(rawPrice);
+                var price = rawPrice ? '<span class="product-tile-price">' + displayPrice + '</span>' : '';
+                var websiteDisplay = getWebsiteDisplay(p);
+                var websiteHtml = websiteDisplay ? '<span class="product-tile-website">' + escapeHtml(websiteDisplay) + '</span>' : '';
+                var link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+                var bought = !!p.bought;
+                var id = p.id;
+                var commentText = (p.comment || '').trim();
+                var commentHtml = commentText ? '<p class="ha-product-comment">' + escapeHtml(commentText) + '</p>' : '';
+                var subCat = (p.sub_category || '').trim();
+                var subCatHtml = subCat ? '<span class="ha-product-subcategory">' + escapeHtml(subCat) + '</span>' : '';
+                var removeBtn = '<button type="button" class="ha-product-remove-btn" data-id="' + id + '" title="Delete product" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>';
+                var editBtn = '<button type="button" class="ha-product-edit-btn" data-id="' + id + '" title="Edit product" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>';
+                return '<div class="ha-product-card" data-product-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener noreferrer" class="product-tile-link"><div class="product-tile-image-wrap">' + imgHtml + removeBtn + editBtn + '</div><div class="product-tile-info">' + websiteHtml + '<span class="product-tile-title">' + title + '</span>' + (subCatHtml ? subCatHtml + ' ' : '') + price + '</div></a></div><div class="ha-product-flags"><label><input type="checkbox" class="ha-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div>' + commentHtml + '</div>';
+            }
+
+            function updateProductFlag(productId, field, value) {
+                fetch('/api/products/' + productId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [field]: value })
+                }).then(function(r) {
+                    if (!r.ok) console.error('Failed to update product', productId, field, value);
+                }).catch(function(e) { console.error(e); });
+            }
+
+            function render() {
+                buildSegments();
+                var list = all.slice();
+                if (currentSource) list = list.filter(function(p) { return getWebsiteKey(p) === currentSource; });
+                if (currentRoom) list = list.filter(function(p) { return (p.room || '').trim() === currentRoom; });
+                if (currentCategory) list = list.filter(function(p) { return getProductCategoryKey(p) === currentCategory; });
+
+                var boughtItems = list.filter(function(p) { return !!p.bought; });
+                var activeItems = list.filter(function(p) { return !p.bought; });
+
+                if (activeItems.length === 0 && boughtItems.length === 0) {
+                    grid.innerHTML = '<p class="subtitle">No products match these filters.</p>';
+                    markWrapRows();
+                    requestAnimationFrame(markWrapRows);
+                    return;
+                }
+
+                var byCategory = {};
+                activeItems.forEach(function(p) {
+                    var key = getProductCategoryKey(p);
+                    if (!byCategory[key]) byCategory[key] = [];
+                    byCategory[key].push(p);
+                });
+                var categoryOrder = Object.keys(byCategory).sort(compareCategoryKeys);
+                var html = '';
+                categoryOrder.forEach(function(cat) {
+                    var productsInSection = byCategory[cat];
+                    if (!productsInSection.length) return;
+                    html += '<div class="ha-section"><h2 class="ha-section-title" data-section="' + escapeHtml(cat) + '">' + escapeHtml(cat) + '</h2><div class="ha-section-grid">';
+                    productsInSection.forEach(function(p) { html += renderCard(p); });
+                    html += '</div></div>';
+                });
+                html += '<div class="ha-section ha-section-bought"><h2 class="ha-section-title" data-section="bought">Bought</h2><div class="ha-section-grid">';
+                if (boughtItems.length) {
+                    boughtItems.forEach(function(p) { html += renderCard(p); });
+                } else {
+                    html += '<p class="ha-empty-bought">No items bought yet. Tick <strong>Bought</strong> on a product to move it here.</p>';
+                }
+                html += '</div></div>';
+                grid.innerHTML = html;
+
+                grid.querySelectorAll('.ha-bought').forEach(function(cb) {
+                    cb.addEventListener('change', function() {
+                        updateProductFlag(cb.dataset.id, 'bought', cb.checked);
+                        fetch('/api/products').then(function(r){return r.json();}).then(function(p){ all = Array.isArray(p)?p:[]; render(); });
+                    });
+                });
+                grid.querySelectorAll('.ha-section-title').forEach(function(title) {
+                    title.addEventListener('click', function() {
+                        var section = title.closest('.ha-section');
+                        if (section) {
+                            section.classList.toggle('collapsed');
+                            title.classList.toggle('collapsed');
+                        }
+                    });
+                });
+
+                markWrapRows();
+                requestAnimationFrame(markWrapRows);
+            }
+
+            fetch('/api/products')
+                .then(function(r) { return r.json(); })
+                .then(function(products) {
+                    loading.style.display = 'none';
+                    all = Array.isArray(products) ? products : [];
+                    render();
+                })
+                .catch(function() {
+                    loading.style.display = 'none';
+                    grid.innerHTML = '<p class="error">Failed to load products.</p>';
+                });
+        })();
+    </script>
+</body>
+</html>
+

@@ -69,6 +69,7 @@
                                 <option value="Furniture">Furniture</option>
                                 <option value="Kitchen">Kitchen</option>
                                 <option value="Lighting">Lighting</option>
+                                <option value="Rugs">Rugs</option>
                                 <option value="Other">Other</option>
                             </select>
                         </div>
@@ -360,6 +361,10 @@
                 btn.textContent = 'Fetch from link';
                 if (result.ok && result.data) {
                     var d = result.data;
+                    if (d.blocked) {
+                        var msg = d.blocked_reason || 'This site blocks automated previews; please fill manually.';
+                        if (statusEl) { statusEl.textContent = msg; statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
+                    }
                     if (d.title) document.getElementById('babyProductTitle').value = d.title;
                     if (d.image_url) document.getElementById('babyProductImageUrl').value = d.image_url;
                     if (d.website_name) document.getElementById('babyProductWebsiteName').value = d.website_name;

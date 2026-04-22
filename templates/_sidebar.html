@@ -16,6 +16,7 @@
             <span class="sidebar-parent-label" role="button" tabindex="0" aria-expanded="false" aria-controls="sidebar-highgate-sub">Highgate Avenue</span>
             <ul class="sidebar-sub" id="sidebar-highgate-sub">
                 <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' and not section_filter %}active{% endif %}">All</a></li>
+                <li><a href="{{ url_for('highgate_products') }}" class="{% if request.endpoint == 'highgate_products' %}active{% endif %}">Products</a></li>
                 {% if sections_order is defined and all_sections is defined %}
                     {% for sid in sections_order %}
                         {% if sid in all_sections %}

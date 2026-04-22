@@ -722,6 +722,17 @@ def hk_products():
     )
 
 
+@app.route('/products/')
+def highgate_products():
+    """Highgate Avenue products page: all products (includes is_mwh items), filterable and grouped."""
+    return render_template(
+        'highgate_products.html',
+        section_filter=None,
+        all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
+    )
+
+
 @app.route('/muswell-hill/<room_slug>/')
 def muswell_hill_room(room_slug):
     if room_slug not in MUSWELL_HILL_ROOMS:
@@ -824,6 +835,11 @@ def _title_from_url(url):
         # Habitat: /product/123 - no title in URL
         if 'habitat' in (parsed.netloc or '').lower():
             pass  # rely on og:title from fetch
+        # H&M: /en_gb/productpage.1309171001.html -> use product code as a usable label
+        if 'hm.com' in (parsed.netloc or '').lower() and segments:
+            m = re.search(r'productpage\.(\d{6,})', '/'.join(segments), re.I)
+            if m:
+                return f"H&M {m.group(1)}"
         # Dusk: /products/avery-acacia-wood-6-drawer-chest-walnut
         if 'dusk' in (parsed.netloc or '').lower():
             if 'products' in [s.lower() for s in segments] and len(segments) >= 2:
@@ -1612,7 +1628,7 @@ def _fetch_product_preview(url):
     except Exception as e:
         app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
-        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made', 'tkmaxx')
+        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made', 'tkmaxx', 'hm.com')
         if any(d in url.lower() for d in retry_domains):
             try:
                 soup = _do_fetch(user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
@@ -1621,6 +1637,20 @@ def _fetch_product_preview(url):
                 return out if out.get('title') or out.get('website_name') else None
         else:
             return out if out.get('title') or out.get('website_name') else None
+
+    # H&M frequently blocks server-side fetches (Akamai / bot protection).
+    # Detect it and return a usable fallback + signal to the UI.
+    if 'hm.com' in host:
+        try:
+            title_tag = soup.find('title')
+            title_text = (title_tag.get_text() or '').strip().lower() if title_tag else ''
+            page_text = (soup.get_text(' ', strip=True) or '').strip().lower()
+            if 'access denied' in title_text or ('access denied' in page_text and 'permission to access' in page_text):
+                out['blocked'] = True
+                out['blocked_reason'] = 'H&M blocks automated previews; please fill manually.'
+                return out
+        except Exception:
+            pass
 
     # Some retailers (incl. MADE) expose richer OG data to social-crawler UAs.
     # Only do this when we haven't got a price yet (price is extracted later) and og tags are thin.
@@ -2054,8 +2084,6 @@ def get_products():
     try:
         query = supabase.table('ha_products').select('*').order('created_at', desc=True)
         room = request.args.get('room', '').strip()
-        if room:
-            query = query.eq('room', room)
         category = request.args.get('category', '').strip()
         if category:
             query = query.eq('category', category)
@@ -2063,7 +2091,26 @@ def get_products():
         if tag:
             query = query.overlaps('tags', [tag])
         r = query.execute()
-        return jsonify(r.data or []), 200
+        rows = r.data or []
+
+        if room:
+            # Room tabs (e.g. /designs/bathroom/) use generic room names.
+            # In the DB we sometimes store more specific variants like "Bathroom 1", "Bedroom 2".
+            # Filtering with Supabase `or` + `ilike` can be brittle (encoding/escaping), so do it in Python.
+            # Some Highgate rooms also include Muswell Hill-equivalent room names
+            # (e.g. Living Room should include MWH "Front Room" products).
+            room_aliases = {
+                'living room': ['living room', 'front room', 'kitchen'],
+            }
+            room_l = room.strip().lower()
+            prefixes = room_aliases.get(room_l, [room_l])
+            def _room_match(v):
+                vv = (v or '').strip().lower()
+                # Treat specific stored variants (e.g. "Kitchen / Dining", "Bathroom 1") as part of the room tab.
+                return any(vv == p or vv.startswith(p) for p in prefixes)
+            rows = [row for row in rows if _room_match(row.get('room'))]
+
+        return jsonify(rows), 200
     except Exception as e:
         app.logger.error(f"Error fetching products: {e}")
         return jsonify([]), 200
