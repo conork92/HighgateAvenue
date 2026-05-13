@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue – Events</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260427">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260427">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+    <style>
+        :root {
+            --ev-border: #0d0d0d;
+            --ev-muted: #6b6b6b;
+            --ev-bg-soft: #f5f5f5;
+            --ev-accent: #0d0d0d;
+        }
+
+        body { background: #fff; color: #0d0d0d; }
+
+        .events-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2.5rem 2rem 4rem;
+        }
+
+        .events-header { margin-bottom: 2.5rem; }
+        .events-header h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin: 0 0 0.5rem;
+        }
+        .events-header .subtitle {
+            font-size: 0.9rem;
+            color: var(--ev-muted);
+            max-width: 60ch;
+            line-height: 1.5;
+        }
+
+        /* City selector + actions row */
+        .events-toolbar {
+            display: flex;
+            align-items: flex-end;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            border-top: 2px solid var(--ev-border);
+            border-bottom: 2px solid var(--ev-border);
+            padding: 1rem 0;
+            margin-bottom: 2.5rem;
+        }
+        .ev-field { display: flex; flex-direction: column; gap: 0.35rem; }
+        .ev-field label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--ev-muted);
+        }
+        .ev-field select,
+        .ev-field input {
+            font: inherit;
+            padding: 0.5rem 0.75rem;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+            min-width: 180px;
+            border-radius: 0;
+        }
+        .ev-toolbar-spacer { flex: 1; }
+        .ev-btn {
+            font: inherit;
+            padding: 0.6rem 1rem;
+            border: 1.5px solid var(--ev-border);
+            background: var(--ev-border);
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .ev-btn:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--ev-border); }
+        .ev-btn--ghost { background: #fff; color: var(--ev-border); }
+
+        /* Section blocks */
+        .ev-section { margin-bottom: 3.5rem; }
+        .ev-section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            border-bottom: 2px solid var(--ev-border);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .ev-section-head h2 {
+            font-size: 1.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin: 0;
+        }
+        .ev-section-head .ev-section-meta {
+            font-size: 0.75rem;
+            color: var(--ev-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* Calendar */
+        .ev-cal-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+        .ev-cal-month {
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+        }
+        .ev-cal-nav { display: flex; gap: 0.5rem; }
+        .ev-cal-nav button {
+            height: 36px;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+            font: inherit;
+            cursor: pointer;
+            padding: 0 10px;
+            min-width: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            box-sizing: border-box;
+        }
+        .ev-cal-nav .ev-cal-arrow {
+            width: 36px;
+            padding: 0;
+            flex: 0 0 auto;
+        }
+        .ev-cal-nav button:hover { background: var(--ev-bg-soft); }
+
+        .ev-cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            border: 2px solid var(--ev-border);
+        }
+        .ev-cal-dow {
+            text-align: center;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.5rem 0;
+            background: var(--ev-border);
+            color: #fff;
+            border-right: 1px solid #333;
+        }
+        .ev-cal-dow:last-child { border-right: none; }
+        .ev-cal-day {
+            min-height: 96px;
+            border-right: 1px solid var(--ev-border);
+            border-top: 1px solid var(--ev-border);
+            padding: 0.4rem 0.5rem;
+            position: relative;
+            cursor: pointer;
+            background: #fff;
+        }
+        .ev-cal-day:nth-child(7n) { border-right: none; }
+        .ev-cal-day:hover { background: var(--ev-bg-soft); }
+        .ev-cal-day--other { color: #c5c5c5; background: #fafafa; }
+        .ev-cal-day--today .ev-cal-num {
+            background: var(--ev-border);
+            color: #fff;
+            padding: 0 0.4rem;
+        }
+        .ev-cal-num {
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .ev-cal-events {
+            margin-top: 0.3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .ev-cal-pill {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 1px 4px;
+            border: 1px solid var(--ev-border);
+            background: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ev-cal-pill--concert { background: #fff3a3; }
+        .ev-cal-pill--comedy { background: #c8e6c9; }
+        .ev-cal-pill--theatre { background: #d1c4e9; }
+        .ev-cal-pill--festival { background: #ffccbc; }
+
+        /* Upcoming list */
+        .ev-list { display: flex; flex-direction: column; gap: 0; border: 2px solid var(--ev-border); }
+        .ev-list-row {
+            display: grid;
+            grid-template-columns: 70px 110px 1fr 130px 80px;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--ev-border);
+            background: #fff;
+        }
+        .ev-list-row:last-child { border-bottom: none; }
+        .ev-list-row:hover { background: var(--ev-bg-soft); }
+        .ev-list-date {
+            text-align: center;
+            border-right: 1px solid var(--ev-border);
+            padding-right: 0.75rem;
+        }
+        .ev-list-date-day {
+            font-size: 1.4rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .ev-list-date-month {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--ev-muted);
+        }
+        .ev-list-type {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.25rem 0.5rem;
+            border: 1.5px solid var(--ev-border);
+            text-align: center;
+            justify-self: start;
+        }
+        .ev-list-title { font-weight: 600; font-size: 0.95rem; }
+        .ev-list-venue { font-size: 0.8rem; color: var(--ev-muted); }
+        .ev-list-actions { display: flex; gap: 0.4rem; justify-self: end; }
+        .ev-list-actions button {
+            width: 28px; height: 28px;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.85rem;
+        }
+        .ev-list-actions button:hover { background: var(--ev-border); color: #fff; }
+
+        /* Things to do */
+        .ev-todo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0;
+            border: 2px solid var(--ev-border);
+        }
+        .ev-todo-card {
+            border-right: 1px solid var(--ev-border);
+            border-bottom: 1px solid var(--ev-border);
+            padding: 1rem 1.1rem;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+        .ev-todo-card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        .ev-todo-name {
+            font-weight: 600;
+            font-size: 1rem;
+            line-height: 1.25;
+        }
+        .ev-todo-cat {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border: 1.5px solid var(--ev-border);
+            padding: 0.15rem 0.45rem;
+            white-space: nowrap;
+        }
+        .ev-todo-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+        .ev-todo-meta label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--ev-muted);
+            font-size: 0.65rem;
+        }
+        .ev-todo-meta select,
+        .ev-todo-meta input[type="date"] {
+            font: inherit;
+            font-size: 0.8rem;
+            padding: 0.3rem 0.4rem;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+            border-radius: 0;
+            text-transform: none;
+            color: var(--ev-border);
+            letter-spacing: 0;
+        }
+        .ev-todo-card-foot {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            border-top: 1px dashed var(--ev-border);
+            padding-top: 0.6rem;
+        }
+        .ev-todo-card-foot button {
+            font: inherit;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.3rem 0.6rem;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+            cursor: pointer;
+        }
+        .ev-todo-card-foot button:hover { background: var(--ev-border); color: #fff; }
+
+        /* Empty state */
+        .ev-empty {
+            border: 2px dashed var(--ev-border);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            color: var(--ev-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* Map */
+        #evMap {
+            width: 100%;
+            height: 460px;
+            border: 2px solid var(--ev-border);
+            background: #f0f0f0;
+        }
+        .ev-map-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 0.75rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--ev-muted);
+        }
+        .ev-map-legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .ev-map-legend span::before {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border: 1.5px solid var(--ev-border);
+            display: inline-block;
+        }
+        .ev-map-legend .lg-todo::before { background: #fff; }
+        .ev-map-legend .lg-concert::before { background: #fff3a3; }
+        .ev-map-legend .lg-comedy::before { background: #c8e6c9; }
+        .ev-map-legend .lg-theatre::before { background: #d1c4e9; }
+        .ev-map-legend .lg-festival::before { background: #ffccbc; }
+        .ev-map-legend .lg-other::before { background: #ddd; }
+
+        .ev-map-marker {
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--ev-border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 700;
+            background: #fff;
+            box-shadow: 2px 2px 0 var(--ev-border);
+        }
+        .ev-map-marker.m-todo { background: #fff; }
+        .ev-map-marker.m-concert { background: #fff3a3; }
+        .ev-map-marker.m-comedy { background: #c8e6c9; }
+        .ev-map-marker.m-theatre { background: #d1c4e9; }
+        .ev-map-marker.m-festival { background: #ffccbc; }
+        .ev-map-marker.m-other { background: #ddd; }
+
+        .leaflet-popup-content {
+            font: inherit;
+            font-size: 0.85rem;
+        }
+        .leaflet-popup-content strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 0.2rem;
+        }
+        .leaflet-popup-content .ev-pop-meta {
+            font-size: 0.75rem;
+            color: var(--ev-muted);
+            margin-bottom: 0.35rem;
+        }
+        .leaflet-popup-content a {
+            display: inline-block;
+            margin-top: 0.35rem;
+            color: var(--ev-border);
+        }
+
+        /* Modal */
+        .ev-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 9999;
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 4rem 1rem 2rem;
+            overflow-y: auto;
+        }
+        .ev-modal.is-open { display: flex; }
+        .ev-modal-card {
+            background: #fff;
+            border: 2.5px solid var(--ev-border);
+            box-shadow: 8px 8px 0 var(--ev-border);
+            width: 100%;
+            max-width: 560px;
+            padding: 1.5rem 1.75rem 1.25rem;
+        }
+        .ev-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1.5px solid var(--ev-border);
+            padding-bottom: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .ev-modal-head h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .ev-modal-head button {
+            border: none;
+            background: none;
+            font-size: 1.4rem;
+            line-height: 1;
+            cursor: pointer;
+            color: var(--ev-border);
+        }
+        .ev-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem 1rem;
+        }
+        .ev-form-grid .ev-form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .ev-form-grid .ev-form-row.full { grid-column: 1 / -1; }
+        .ev-form-grid label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--ev-muted);
+        }
+        .ev-form-grid input,
+        .ev-form-grid select,
+        .ev-form-grid textarea {
+            font: inherit;
+            padding: 0.5rem 0.6rem;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+            border-radius: 0;
+        }
+        .ev-form-grid textarea { min-height: 70px; resize: vertical; }
+        .ev-form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            border-top: 1.5px solid var(--ev-border);
+            padding-top: 1rem;
+            margin-top: 1.25rem;
+        }
+        .ev-form-status {
+            font-size: 0.75rem;
+            color: var(--ev-muted);
+            flex: 1;
+        }
+        .ev-form-status.is-error { color: #b00020; }
+        .ev-form-actions .ev-btn { font-size: 0.7rem; padding: 0.55rem 1rem; }
+
+        /* Unified add modal */
+        .ev-modal-card--entry { max-width: 640px; }
+        .ev-entry-toolbar { margin-bottom: 1rem; }
+        .ev-kind-toggle {
+            display: inline-flex;
+            border: 1.5px solid var(--ev-border);
+            background: #fff;
+        }
+        .ev-kind-btn {
+            font: inherit;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.5rem 1.15rem;
+            border: none;
+            background: #fff;
+            color: var(--ev-border);
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .ev-kind-btn + .ev-kind-btn { border-left: 1.5px solid var(--ev-border); }
+        .ev-kind-btn.is-on { background: var(--ev-border); color: #fff; }
+        .ev-kind-btn:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+        .ev-import-block {
+            margin-bottom: 1.15rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px dashed var(--ev-border);
+        }
+        .ev-import-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: stretch;
+            margin-top: 0.35rem;
+        }
+        .ev-import-row input[type="url"] {
+            flex: 1;
+            min-width: 200px;
+            font: inherit;
+            padding: 0.5rem 0.65rem;
+            border: 1.5px solid var(--ev-border);
+            border-radius: 0;
+            background: #fff;
+        }
+        .ev-import-hint {
+            font-size: 0.72rem;
+            color: var(--ev-muted);
+            margin: 0.4rem 0 0;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 600px) {
+            .ev-form-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Status banner */
+        .ev-mock-notice {
+            background: #fff8c5;
+            border: 1.5px solid var(--ev-border);
+            padding: 0.75rem 1rem;
+            font-size: 0.8rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .ev-mock-notice strong {
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.7rem;
+        }
+
+        @media (max-width: 768px) {
+            .ev-cal-day { min-height: 70px; padding: 0.3rem 0.35rem; }
+            .ev-cal-pill { font-size: 0.6rem; }
+            .ev-list-row {
+                grid-template-columns: 60px 1fr;
+                grid-template-areas:
+                    "date title"
+                    "date venue"
+                    "type type"
+                    "actions actions";
+            }
+            .ev-list-date { grid-area: date; }
+            .ev-list-title { grid-area: title; }
+            .ev-list-venue { grid-area: venue; }
+            .ev-list-type { grid-area: type; }
+            .ev-list-actions { grid-area: actions; justify-self: start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="events-container">
+                <header class="events-header">
+                    <h1>Events</h1>
+                    <p class="subtitle">Concerts, comedy, theatre and festivals — plus a running list of places worth visiting in each city.</p>
+                </header>
+
+                <div class="ev-mock-notice" id="evStatusBanner" style="display: none;"></div>
+
+                <!-- City + global controls -->
+                <div class="events-toolbar">
+                    <div class="ev-field">
+                        <label for="evCity">City</label>
+                        <select id="evCity">
+                            <option value="london" selected>London</option>
+                            <option value="new-york">New York</option>
+                            <option value="paris">Paris</option>
+                            <option value="berlin">Berlin</option>
+                            <option value="tokyo">Tokyo</option>
+                            <option value="other">Other…</option>
+                        </select>
+                    </div>
+                    <div class="ev-field">
+                        <label for="evTypeFilter">Type</label>
+                        <select id="evTypeFilter">
+                            <option value="">All</option>
+                            <option value="concert">Concert</option>
+                            <option value="comedy">Comedy</option>
+                            <option value="theatre">Theatre</option>
+                            <option value="festival">Festival</option>
+                        </select>
+                    </div>
+                    <div class="ev-toolbar-spacer"></div>
+                    <button type="button" class="ev-btn" id="evAddEntryBtn">+ Add event or place</button>
+                </div>
+
+                <!-- CALENDAR -->
+                <section class="ev-section" id="evCalendarSection">
+                    <div class="ev-section-head">
+                        <h2>Calendar</h2>
+                        <span class="ev-section-meta" id="evCalendarMeta">London · 4 events this month</span>
+                    </div>
+                    <div class="ev-cal-controls">
+                        <div class="ev-cal-month" id="evCalMonth">April 2026</div>
+                        <div class="ev-cal-nav">
+                            <button type="button" class="ev-cal-arrow" id="evCalPrev" aria-label="Previous month">‹</button>
+                            <button type="button" id="evCalToday">Today</button>
+                            <button type="button" class="ev-cal-arrow" id="evCalNext" aria-label="Next month">›</button>
+                        </div>
+                    </div>
+                    <div class="ev-cal-grid" id="evCalGrid">
+                        <!-- Rendered by JS -->
+                    </div>
+                </section>
+
+                <!-- UPCOMING LIST -->
+                <section class="ev-section" id="evUpcomingSection">
+                    <div class="ev-section-head">
+                        <h2>Upcoming</h2>
+                        <span class="ev-section-meta" id="evUpcomingMeta">Next 30 days</span>
+                    </div>
+                    <div class="ev-list" id="evList">
+                        <!-- Rendered by JS -->
+                    </div>
+                </section>
+
+                <!-- THINGS TO DO -->
+                <section class="ev-section" id="evTodoSection">
+                    <div class="ev-section-head">
+                        <h2>Things to do in <span id="evTodoCity">London</span></h2>
+                        <span class="ev-section-meta" id="evTodoMeta">5 places</span>
+                    </div>
+                    <div class="ev-todo-grid" id="evTodoGrid">
+                        <!-- Rendered by JS -->
+                    </div>
+                </section>
+
+                <!-- MAP -->
+                <section class="ev-section" id="evMapSection">
+                    <div class="ev-section-head">
+                        <h2>Map</h2>
+                        <span class="ev-section-meta" id="evMapMeta">London</span>
+                    </div>
+                    <div id="evMap" role="region" aria-label="Map of events and places"></div>
+                    <div class="ev-map-legend">
+                        <span class="lg-todo">Place</span>
+                        <span class="lg-concert">Concert</span>
+                        <span class="lg-comedy">Comedy</span>
+                        <span class="lg-theatre">Theatre</span>
+                        <span class="lg-festival">Festival</span>
+                        <span class="lg-other">Other</span>
+                    </div>
+                </section>
+
+                <footer style="margin-top: 4rem; padding-top: 1.5rem; border-top: 1.5px solid var(--ev-border); font-size: 0.75rem; color: var(--ev-muted); line-height: 1.55;">
+                    Reading from <code>ha_events</code> and <code>ha_things_to_do</code>. Use <strong>Add event or place</strong> to create entries (optional DICE link fetch).
+                </footer>
+            </div>
+        </main>
+    </div>
+
+    <!-- Unified add / edit modal (event or place) -->
+    <div class="ev-modal" id="evEntryModal" role="dialog" aria-modal="true" aria-labelledby="evEntryModalTitle">
+        <div class="ev-modal-card ev-modal-card--entry">
+            <div class="ev-modal-head">
+                <h3 id="evEntryModalTitle">Add</h3>
+                <button type="button" id="evEntryModalClose" aria-label="Close">×</button>
+            </div>
+            <form id="evEntryForm">
+                <input type="hidden" id="evEventId" value="">
+                <input type="hidden" id="evThingId" value="">
+                <div class="ev-entry-toolbar">
+                    <div class="ev-kind-toggle" role="radiogroup" aria-label="What you are adding">
+                        <button type="button" class="ev-kind-btn is-on" data-kind="event" id="evKindBtnEvent" aria-pressed="true">Event</button>
+                        <button type="button" class="ev-kind-btn" data-kind="place" id="evKindBtnPlace" aria-pressed="false">Place</button>
+                    </div>
+                </div>
+                <div class="ev-form-grid">
+                    <div class="ev-form-row full">
+                        <label for="evEntryCity">City</label>
+                        <select id="evEntryCity">
+                            <option value="london">London</option>
+                            <option value="new-york">New York</option>
+                            <option value="paris">Paris</option>
+                            <option value="berlin">Berlin</option>
+                            <option value="tokyo">Tokyo</option>
+                            <option value="other">Other…</option>
+                        </select>
+                    </div>
+                    <div class="ev-form-row full">
+                        <div class="ev-import-block">
+                            <label for="evEntryImportUrl">Listing URL (optional)</label>
+                            <div class="ev-import-row">
+                                <input type="url" id="evEntryImportUrl" placeholder="https://dice.fm/event/..." autocomplete="off">
+                                <button type="button" class="btn-fetch-preview" id="evEntryFetchBtn" title="Fill fields from a DICE event page">Fetch from link</button>
+                            </div>
+                            <p class="ev-import-hint">Paste a dice.fm event link and fetch — same as “fetch from link” on products. Then pick <strong>Event</strong> or <strong>Place</strong> and save.</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="evEntryEventFields" class="ev-entry-panel">
+                    <div class="ev-form-grid">
+                        <div class="ev-form-row">
+                            <label for="evEventType">Type *</label>
+                            <select id="evEventType">
+                                <option value="concert">Concert</option>
+                                <option value="comedy">Comedy</option>
+                                <option value="theatre">Theatre</option>
+                                <option value="festival">Festival</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evEventStatus">Status</label>
+                            <select id="evEventStatus">
+                                <option value="idea">Idea</option>
+                                <option value="booked">Booked</option>
+                                <option value="attended">Attended</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evEventTitle">Title *</label>
+                            <input type="text" id="evEventTitle" placeholder="e.g. Phoebe Bridgers">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evEventDate">Date *</label>
+                            <input type="date" id="evEventDate">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evEventTime">Time</label>
+                            <input type="time" id="evEventTime">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evEventVenue">Venue</label>
+                            <input type="text" id="evEventVenue" placeholder="e.g. Roundhouse, Camden">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evEventLink">Tickets / info link</label>
+                            <input type="url" id="evEventLink" placeholder="https://...">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evEventMapLink">Google Maps link</label>
+                            <input type="url" id="evEventMapLink" placeholder="https://www.google.com/maps/place/...">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evEventAddress">Address</label>
+                            <input type="text" id="evEventAddress" placeholder="Optional human-readable address">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evEventLat">Latitude</label>
+                            <input type="number" step="any" id="evEventLat" placeholder="auto from map link">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evEventLng">Longitude</label>
+                            <input type="number" step="any" id="evEventLng" placeholder="auto from map link">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evEventNotes">Notes</label>
+                            <textarea id="evEventNotes" placeholder="Any extra notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div id="evEntryPlaceFields" class="ev-entry-panel" style="display: none;">
+                    <div class="ev-form-grid">
+                        <div class="ev-form-row full">
+                            <label for="evThingName">Name *</label>
+                            <input type="text" id="evThingName" placeholder="e.g. V&amp;A Museum">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evThingCategory">Category</label>
+                            <input type="text" id="evThingCategory" placeholder="Museum, Outdoor, Food…">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evThingLastVisited">Last visited</label>
+                            <input type="date" id="evThingLastVisited">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evThingBooked">Booked</label>
+                            <select id="evThingBooked">
+                                <option value="no">No</option>
+                                <option value="yes">Yes</option>
+                            </select>
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evThingAttended">Attended</label>
+                            <select id="evThingAttended">
+                                <option value="no">No</option>
+                                <option value="yes">Yes</option>
+                            </select>
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evThingLink">Website</label>
+                            <input type="url" id="evThingLink" placeholder="https://...">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evThingMapLink">Google Maps link</label>
+                            <input type="url" id="evThingMapLink" placeholder="https://www.google.com/maps/place/...">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evThingAddress">Address</label>
+                            <input type="text" id="evThingAddress" placeholder="Optional human-readable address">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evThingLat">Latitude</label>
+                            <input type="number" step="any" id="evThingLat" placeholder="auto from map link">
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evThingLng">Longitude</label>
+                            <input type="number" step="any" id="evThingLng" placeholder="auto from map link">
+                        </div>
+                        <div class="ev-form-row full">
+                            <label for="evThingNotes">Notes</label>
+                            <textarea id="evThingNotes" placeholder="Any extra notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="ev-form-actions">
+                    <span class="ev-form-status" id="evEntryStatusMsg"></span>
+                    <button type="button" class="ev-btn ev-btn--ghost" id="evEntryCancel">Cancel</button>
+                    <button type="submit" class="ev-btn" id="evEntrySubmit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        // ---------- State ----------
+        let currentCity = 'london';
+        let currentType = '';
+        const today = new Date(); today.setHours(0,0,0,0);
+        let viewYear = today.getFullYear();
+        let viewMonth = today.getMonth(); // 0-indexed
+        let cityEvents = [];   // events for current city (raw rows)
+        let cityTodos = [];    // things-to-do for current city
+        let isLoadingEvents = false;
+        let isLoadingTodos = false;
+
+        function showStatus(message, kind) {
+            const el = document.getElementById('evStatusBanner');
+            if (!el) return;
+            if (!message) { el.style.display = 'none'; return; }
+            el.style.display = 'flex';
+            el.style.background = kind === 'error' ? '#fde2e2' : '#fff8c5';
+            el.innerHTML = '<strong>' + (kind === 'error' ? 'Error' : 'Info') + '</strong><span>' + escapeHtml(message) + '</span>';
+        }
+
+        async function fetchEvents() {
+            isLoadingEvents = true;
+            try {
+                const url = '/api/events?city=' + encodeURIComponent(currentCity);
+                const r = await fetch(url);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const data = await r.json();
+                cityEvents = (Array.isArray(data) ? data : []).map(function(ev) {
+                    const startsAt = ev.starts_at || '';
+                    const date = startsAt ? startsAt.slice(0, 10) : '';
+                    return Object.assign({}, ev, { date: date });
+                });
+            } catch (e) {
+                console.error('Failed to load events:', e);
+                cityEvents = [];
+                showStatus('Could not load events from ha_events.', 'error');
+            } finally {
+                isLoadingEvents = false;
+            }
+        }
+
+        async function fetchTodos() {
+            isLoadingTodos = true;
+            try {
+                const url = '/api/things-to-do?city=' + encodeURIComponent(currentCity);
+                const r = await fetch(url);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                cityTodos = await r.json();
+                if (!Array.isArray(cityTodos)) cityTodos = [];
+            } catch (e) {
+                console.error('Failed to load things-to-do:', e);
+                cityTodos = [];
+                showStatus('Could not load places from ha_things_to_do.', 'error');
+            } finally {
+                isLoadingTodos = false;
+            }
+        }
+
+        // ---------- Helpers ----------
+        const TYPE_LABEL = { concert: 'Concert', comedy: 'Comedy', theatre: 'Theatre', festival: 'Festival' };
+        const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function cityLabel(slug) {
+            const el = document.querySelector('#evCity option[value="' + slug + '"]');
+            return el ? el.textContent : slug;
+        }
+        function eventsForCity() {
+            return currentType ? cityEvents.filter(function(e) { return e.type === currentType; }) : cityEvents;
+        }
+
+        // ---------- Calendar ----------
+        function renderCalendar() {
+            const grid = document.getElementById('evCalGrid');
+            const monthLabel = document.getElementById('evCalMonth');
+            grid.innerHTML = '';
+            monthLabel.textContent = MONTHS[viewMonth] + ' ' + viewYear;
+
+            DOW.forEach(function(d) {
+                const cell = document.createElement('div');
+                cell.className = 'ev-cal-dow';
+                cell.textContent = d;
+                grid.appendChild(cell);
+            });
+
+            const first = new Date(viewYear, viewMonth, 1);
+            // Monday-start offset: getDay() returns 0=Sun..6=Sat; convert to 0=Mon..6=Sun
+            const startOffset = (first.getDay() + 6) % 7;
+            const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+            const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+            const events = eventsForCity();
+            let inMonthCount = 0;
+
+            for (let i = 0; i < totalCells; i++) {
+                const dayNum = i - startOffset + 1;
+                const cell = document.createElement('div');
+                cell.className = 'ev-cal-day';
+                let cellDate;
+                if (dayNum < 1) {
+                    cellDate = new Date(viewYear, viewMonth, dayNum);
+                    cell.classList.add('ev-cal-day--other');
+                } else if (dayNum > daysInMonth) {
+                    cellDate = new Date(viewYear, viewMonth, dayNum);
+                    cell.classList.add('ev-cal-day--other');
+                } else {
+                    cellDate = new Date(viewYear, viewMonth, dayNum);
+                }
+                if (cellDate.getTime() === today.getTime()) cell.classList.add('ev-cal-day--today');
+                const iso = cellDate.toISOString().slice(0, 10);
+                cell.setAttribute('data-date', iso);
+                cell.innerHTML = '<span class="ev-cal-num">' + cellDate.getDate() + '</span><div class="ev-cal-events"></div>';
+
+                const eventsHere = events.filter(function(ev) { return ev.date === iso; });
+                if (cellDate.getMonth() === viewMonth) inMonthCount += eventsHere.length;
+                const wrap = cell.querySelector('.ev-cal-events');
+                eventsHere.forEach(function(ev) {
+                    const pill = document.createElement('div');
+                    pill.className = 'ev-cal-pill ev-cal-pill--' + (ev.type || 'other');
+                    pill.title = (ev.title || '') + (ev.venue ? ' — ' + ev.venue : '');
+                    pill.textContent = ev.title || '(untitled)';
+                    wrap.appendChild(pill);
+                });
+
+                cell.addEventListener('click', function(e) {
+                    const pillEl = e.target.closest('.ev-cal-pill');
+                    if (pillEl) {
+                        const titleHere = pillEl.title.split(' — ')[0];
+                        const match = events.find(function(ev) { return ev.date === iso && (ev.title || '(untitled)') === titleHere; });
+                        if (match) { openEventModal(match); return; }
+                    }
+                    openEventModal({ date: iso });
+                });
+                grid.appendChild(cell);
+            }
+
+            const meta = document.getElementById('evCalendarMeta');
+            meta.textContent = cityLabel(currentCity) + ' · ' + inMonthCount + ' event' + (inMonthCount === 1 ? '' : 's') + ' this month';
+        }
+
+        // ---------- Upcoming list ----------
+        function renderUpcoming() {
+            const list = document.getElementById('evList');
+            const events = eventsForCity()
+                .filter(function(e) { return e.date && new Date(e.date) >= today; })
+                .sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+            list.innerHTML = '';
+            if (!events.length) {
+                list.innerHTML = '<div class="ev-empty">No upcoming events for ' + escapeHtml(cityLabel(currentCity)) + '</div>';
+                return;
+            }
+            events.forEach(function(ev) {
+                const d = new Date(ev.date);
+                const row = document.createElement('div');
+                row.className = 'ev-list-row';
+                row.setAttribute('data-event-id', ev.id);
+                row.innerHTML = ''
+                    + '<div class="ev-list-date">'
+                    +   '<div class="ev-list-date-day">' + d.getDate() + '</div>'
+                    +   '<div class="ev-list-date-month">' + MONTHS[d.getMonth()].slice(0,3) + '</div>'
+                    + '</div>'
+                    + '<div class="ev-list-type">' + (TYPE_LABEL[ev.type] || 'Other') + '</div>'
+                    + '<div>'
+                    +   '<div class="ev-list-title">' + escapeHtml(ev.title || '(untitled)') + '</div>'
+                    +   '<div class="ev-list-venue">' + escapeHtml(ev.venue || '') + '</div>'
+                    + '</div>'
+                    + '<div class="ev-list-venue">' + d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + '</div>'
+                    + '<div class="ev-list-actions">'
+                    +   '<button type="button" data-action="edit" title="Edit" aria-label="Edit">✎</button>'
+                    +   '<button type="button" data-action="remove" title="Remove" aria-label="Remove">×</button>'
+                    + '</div>';
+                list.appendChild(row);
+            });
+        }
+
+        // ---------- Things to do ----------
+        function renderTodos() {
+            const grid = document.getElementById('evTodoGrid');
+            document.getElementById('evTodoCity').textContent = cityLabel(currentCity);
+            const todos = cityTodos;
+            document.getElementById('evTodoMeta').textContent = todos.length + ' place' + (todos.length === 1 ? '' : 's');
+            grid.innerHTML = '';
+            if (!todos.length) {
+                grid.innerHTML = '<div class="ev-empty" style="grid-column: 1/-1; border: none;">No saved places yet for ' + escapeHtml(cityLabel(currentCity)) + '</div>';
+                return;
+            }
+            todos.forEach(function(t) {
+                const card = document.createElement('div');
+                card.className = 'ev-todo-card';
+                card.setAttribute('data-thing-id', t.id);
+                const linkHtml = t.link
+                    ? '<a href="' + escapeHtml(t.link) + '" target="_blank" rel="noopener" class="ev-todo-name" style="color:inherit;text-decoration:underline;">' + escapeHtml(t.name) + '</a>'
+                    : '<span class="ev-todo-name">' + escapeHtml(t.name) + '</span>';
+                card.innerHTML = ''
+                    + '<div class="ev-todo-card-head">'
+                    +   linkHtml
+                    +   '<span class="ev-todo-cat">' + escapeHtml(t.category || 'Other') + '</span>'
+                    + '</div>'
+                    + '<div class="ev-todo-meta">'
+                    +   '<label>Booked'
+                    +     '<select data-field="booked">'
+                    +       '<option value="no"' + (t.booked ? '' : ' selected') + '>No</option>'
+                    +       '<option value="yes"' + (t.booked ? ' selected' : '') + '>Yes</option>'
+                    +     '</select>'
+                    +   '</label>'
+                    +   '<label>Attended'
+                    +     '<select data-field="attended">'
+                    +       '<option value="no"' + (t.attended ? '' : ' selected') + '>No</option>'
+                    +       '<option value="yes"' + (t.attended ? ' selected' : '') + '>Yes</option>'
+                    +     '</select>'
+                    +   '</label>'
+                    +   '<label style="grid-column: 1 / -1;">Last visited'
+                    +     '<input type="date" data-field="last_visited" value="' + escapeHtml(t.last_visited || '') + '">'
+                    +   '</label>'
+                    + '</div>'
+                    + '<div class="ev-todo-card-foot">'
+                    +   '<button type="button" data-action="edit">Edit</button>'
+                    +   '<button type="button" data-action="remove">Remove</button>'
+                    + '</div>';
+                grid.appendChild(card);
+            });
+        }
+
+        // ---------- Map ----------
+        const CITY_CENTERS = {
+            london: [51.5074, -0.1278],
+            'new-york': [40.7128, -74.0060],
+            paris: [48.8566, 2.3522],
+            berlin: [52.5200, 13.4050],
+            tokyo: [35.6762, 139.6503]
+        };
+        let mapInstance = null;
+        let mapMarkers = [];
+
+        function ensureMap() {
+            if (mapInstance) return mapInstance;
+            if (typeof L === 'undefined') return null;
+            const center = CITY_CENTERS[currentCity] || [20, 0];
+            mapInstance = L.map('evMap', { scrollWheelZoom: true }).setView(center, CITY_CENTERS[currentCity] ? 12 : 2);
+            // A cleaner, modern basemap (no API key required).
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 19,
+            }).addTo(mapInstance);
+            return mapInstance;
+        }
+        // Leaflet is loaded via `defer`, so it may not be ready when this script
+        // first runs. Retry briefly until L is available.
+        function whenLeafletReady(cb, tries) {
+            tries = tries == null ? 30 : tries;
+            if (typeof L !== 'undefined') { cb(); return; }
+            if (tries <= 0) return;
+            setTimeout(function() { whenLeafletReady(cb, tries - 1); }, 100);
+        }
+
+        function buildMarkerIcon(kind) {
+            const cls = 'ev-map-marker m-' + kind;
+            const labels = { todo: '★', concert: 'C', comedy: 'H', theatre: 'T', festival: 'F', other: '·' };
+            const ch = labels[kind] || '·';
+            return L.divIcon({
+                className: '',
+                html: '<div class="' + cls + '">' + ch + '</div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+                popupAnchor: [0, -10]
+            });
+        }
+
+        function renderMap() {
+            document.getElementById('evMapMeta').textContent = cityLabel(currentCity);
+            if (typeof L === 'undefined') {
+                // Try again once Leaflet finishes loading.
+                whenLeafletReady(renderMap);
+                return;
+            }
+            const map = ensureMap();
+            if (!map) return;
+
+            mapMarkers.forEach(function(m) { map.removeLayer(m); });
+            mapMarkers = [];
+
+            const points = [];
+            const events = eventsForCity().filter(function(ev) { return ev.latitude != null && ev.longitude != null; });
+            const todos = cityTodos.filter(function(t) { return t.latitude != null && t.longitude != null; });
+
+            events.forEach(function(ev) {
+                const lat = parseFloat(ev.latitude), lng = parseFloat(ev.longitude);
+                if (isNaN(lat) || isNaN(lng)) return;
+                const m = L.marker([lat, lng], { icon: buildMarkerIcon(ev.type || 'other') }).addTo(map);
+                const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                const popup = ''
+                    + '<strong>' + escapeHtml(ev.title || '(untitled)') + '</strong>'
+                    + '<div class="ev-pop-meta">'
+                    +   (TYPE_LABEL[ev.type] || 'Event')
+                    +   (dateStr ? ' · ' + dateStr : '')
+                    +   (ev.venue ? ' · ' + escapeHtml(ev.venue) : '')
+                    + '</div>'
+                    + (ev.address ? '<div class="ev-pop-meta">' + escapeHtml(ev.address) + '</div>' : '')
+                    + (ev.map_link ? '<a href="' + escapeHtml(ev.map_link) + '" target="_blank" rel="noopener">Open in Google Maps ↗</a>' : '');
+                m.bindPopup(popup);
+                mapMarkers.push(m);
+                points.push([lat, lng]);
+            });
+
+            todos.forEach(function(t) {
+                const lat = parseFloat(t.latitude), lng = parseFloat(t.longitude);
+                if (isNaN(lat) || isNaN(lng)) return;
+                const m = L.marker([lat, lng], { icon: buildMarkerIcon('todo') }).addTo(map);
+                const popup = ''
+                    + '<strong>' + escapeHtml(t.name || '(unnamed)') + '</strong>'
+                    + '<div class="ev-pop-meta">'
+                    +   (t.category ? escapeHtml(t.category) : 'Place')
+                    +   (t.attended ? ' · Attended' : (t.booked ? ' · Booked' : ''))
+                    + '</div>'
+                    + (t.address ? '<div class="ev-pop-meta">' + escapeHtml(t.address) + '</div>' : '')
+                    + (t.map_link ? '<a href="' + escapeHtml(t.map_link) + '" target="_blank" rel="noopener">Open in Google Maps ↗</a>' : '');
+                m.bindPopup(popup);
+                mapMarkers.push(m);
+                points.push([lat, lng]);
+            });
+
+            if (points.length > 1) {
+                map.fitBounds(points, { padding: [40, 40], maxZoom: 14 });
+            } else if (points.length === 1) {
+                map.setView(points[0], 14);
+            } else if (CITY_CENTERS[currentCity]) {
+                map.setView(CITY_CENTERS[currentCity], 12);
+            }
+            // Force a redraw in case the container was hidden when the map was created.
+            setTimeout(function() { try { map.invalidateSize(); } catch (e) {} }, 0);
+        }
+
+        // ---------- Unified entry modal (event or place + DICE fetch) ----------
+        let activeEntryKind = 'event';
+
+        function setEntryStatus(msg, isError) {
+            const el = document.getElementById('evEntryStatusMsg');
+            if (!el) return;
+            el.textContent = msg || '';
+            el.classList.toggle('is-error', !!isError);
+        }
+
+        function closeEntryModal() {
+            document.getElementById('evEntryModal').classList.remove('is-open');
+            document.body.style.overflow = '';
+        }
+
+        function setPanelDisabled(panelEl, disabled) {
+            if (!panelEl) return;
+            panelEl.querySelectorAll('input, select, textarea').forEach(function(el) {
+                el.disabled = !!disabled;
+            });
+        }
+
+        function setEntryKind(kind) {
+            activeEntryKind = kind === 'place' ? 'place' : 'event';
+            const isEvent = activeEntryKind === 'event';
+            document.getElementById('evKindBtnEvent').classList.toggle('is-on', isEvent);
+            document.getElementById('evKindBtnPlace').classList.toggle('is-on', !isEvent);
+            document.getElementById('evKindBtnEvent').setAttribute('aria-pressed', isEvent ? 'true' : 'false');
+            document.getElementById('evKindBtnPlace').setAttribute('aria-pressed', isEvent ? 'false' : 'true');
+            const evFields = document.getElementById('evEntryEventFields');
+            const plFields = document.getElementById('evEntryPlaceFields');
+            evFields.style.display = isEvent ? 'block' : 'none';
+            plFields.style.display = isEvent ? 'none' : 'block';
+            setPanelDisabled(evFields, !isEvent);
+            setPanelDisabled(plFields, isEvent);
+            document.getElementById('evEntrySubmit').textContent = isEvent ? 'Save event' : 'Save place';
+        }
+
+        function applyEventPayloadToFields(ev) {
+            ev = ev || {};
+            document.getElementById('evEventType').value = ev.type || 'concert';
+            document.getElementById('evEventStatus').value = ev.status || 'idea';
+            document.getElementById('evEventTitle').value = ev.title || '';
+            var datePart = ev.date || '';
+            var timePart = '';
+            if (ev.starts_at && String(ev.starts_at).length >= 16) {
+                datePart = String(ev.starts_at).slice(0, 10);
+                timePart = String(ev.starts_at).slice(11, 16);
+            }
+            document.getElementById('evEventDate').value = datePart;
+            document.getElementById('evEventTime').value = timePart;
+            document.getElementById('evEventVenue').value = ev.venue || '';
+            document.getElementById('evEventLink').value = ev.link || '';
+            document.getElementById('evEventMapLink').value = ev.map_link || '';
+            document.getElementById('evEventAddress').value = ev.address || '';
+            document.getElementById('evEventLat').value = ev.latitude != null ? ev.latitude : '';
+            document.getElementById('evEventLng').value = ev.longitude != null ? ev.longitude : '';
+            document.getElementById('evEventNotes').value = ev.notes || '';
+            if (ev.city) document.getElementById('evEntryCity').value = ev.city;
+        }
+
+        function applyPlacePayloadToFields(t) {
+            t = t || {};
+            document.getElementById('evThingName').value = t.name || '';
+            document.getElementById('evThingCategory').value = t.category || '';
+            document.getElementById('evThingLastVisited').value = t.last_visited || '';
+            document.getElementById('evThingBooked').value = t.booked ? 'yes' : 'no';
+            document.getElementById('evThingAttended').value = t.attended ? 'yes' : 'no';
+            document.getElementById('evThingLink').value = t.link || '';
+            document.getElementById('evThingMapLink').value = t.map_link || '';
+            document.getElementById('evThingAddress').value = t.address || '';
+            document.getElementById('evThingLat').value = t.latitude != null ? t.latitude : '';
+            document.getElementById('evThingLng').value = t.longitude != null ? t.longitude : '';
+            document.getElementById('evThingNotes').value = t.notes || '';
+            if (t.city) document.getElementById('evEntryCity').value = t.city;
+        }
+
+        function openEntryModal(kind, preset) {
+            kind = kind === 'place' ? 'place' : 'event';
+            preset = preset || {};
+            document.getElementById('evEntryImportUrl').value = '';
+            document.getElementById('evEntryCity').value = document.getElementById('evCity').value || currentCity;
+            document.getElementById('evEventId').value = '';
+            document.getElementById('evThingId').value = '';
+            setEntryStatus('', false);
+            var titleEl = document.getElementById('evEntryModalTitle');
+            if (kind === 'event') {
+                titleEl.textContent = (preset.id ? 'Edit' : 'Add') + ' event';
+                if (preset.id) document.getElementById('evEventId').value = String(preset.id);
+                applyEventPayloadToFields(preset);
+                if (!preset.id && preset.date) document.getElementById('evEventDate').value = preset.date;
+            } else {
+                titleEl.textContent = (preset.id ? 'Edit' : 'Add') + ' place';
+                if (preset.id) document.getElementById('evThingId').value = String(preset.id);
+                applyPlacePayloadToFields(preset);
+            }
+            setEntryKind(kind);
+            document.getElementById('evEntryModal').classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() {
+                var focusId = kind === 'event' ? 'evEventTitle' : 'evThingName';
+                var el = document.getElementById(focusId);
+                if (el && !el.disabled) el.focus();
+            }, 50);
+        }
+
+        function openEventModal(ev) {
+            openEntryModal('event', ev || {});
+        }
+
+        function openThingModal(t) {
+            openEntryModal('place', t || {});
+        }
+
+        document.getElementById('evKindBtnEvent').addEventListener('click', function() { setEntryKind('event'); });
+        document.getElementById('evKindBtnPlace').addEventListener('click', function() { setEntryKind('place'); });
+
+        document.getElementById('evEntryModalClose').addEventListener('click', closeEntryModal);
+        document.getElementById('evEntryCancel').addEventListener('click', closeEntryModal);
+        document.getElementById('evEntryModal').addEventListener('click', function(e) {
+            if (e.target.id === 'evEntryModal') closeEntryModal();
+        });
+
+        document.getElementById('evEntryFetchBtn').addEventListener('click', async function() {
+            var url = (document.getElementById('evEntryImportUrl').value || '').trim();
+            if (!url) {
+                setEntryStatus('Paste a dice.fm event URL first.', true);
+                return;
+            }
+            var btn = document.getElementById('evEntryFetchBtn');
+            var prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            try {
+                var r = await fetch('/api/import/dice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                var data = await r.json().catch(function() { return {}; });
+                if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+                applyEventPayloadToFields(data.event || {});
+                applyPlacePayloadToFields(data.place || {});
+                if (data.event && data.event.city) document.getElementById('evEntryCity').value = data.event.city;
+                setEntryStatus('Loaded from link. Pick Event or Place, then save.', false);
+            } catch (err) {
+                console.error('DICE fetch failed:', err);
+                setEntryStatus(err.message || 'Could not fetch this URL.', true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        });
+
+        function readNumber(id) {
+            const v = document.getElementById(id).value;
+            if (v === '' || v == null) return null;
+            const n = parseFloat(v);
+            return isNaN(n) ? null : n;
+        }
+
+        document.getElementById('evEntryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var cityVal = (document.getElementById('evEntryCity').value || '').trim().toLowerCase() || currentCity;
+
+            if (activeEntryKind === 'event') {
+                var id = document.getElementById('evEventId').value;
+                var date = document.getElementById('evEventDate').value;
+                var time = document.getElementById('evEventTime').value;
+                if (!date) { setEntryStatus('Date is required.', true); return; }
+                var startsAt = time ? (date + 'T' + time + ':00') : (date + 'T00:00:00');
+                var payload = {
+                    city: cityVal,
+                    type: document.getElementById('evEventType').value,
+                    status: document.getElementById('evEventStatus').value,
+                    title: document.getElementById('evEventTitle').value.trim(),
+                    starts_at: startsAt,
+                    venue: document.getElementById('evEventVenue').value.trim(),
+                    link: document.getElementById('evEventLink').value.trim(),
+                    map_link: document.getElementById('evEventMapLink').value.trim(),
+                    address: document.getElementById('evEventAddress').value.trim(),
+                    notes: document.getElementById('evEventNotes').value.trim()
+                };
+                var lat = readNumber('evEventLat');
+                var lng = readNumber('evEventLng');
+                if (lat !== null) payload.latitude = lat;
+                if (lng !== null) payload.longitude = lng;
+                if (!payload.title) { setEntryStatus('Title is required.', true); return; }
+                var method = id ? 'PATCH' : 'POST';
+                var reqUrl = id ? '/api/events/' + encodeURIComponent(id) : '/api/events';
+                try {
+                    setEntryStatus('Saving…', false);
+                    var r = await fetch(reqUrl, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!r.ok) {
+                        var err = await r.json().catch(function() { return {}; });
+                        throw new Error(err.error || ('HTTP ' + r.status));
+                    }
+                    closeEntryModal();
+                    document.getElementById('evCity').value = cityVal;
+                    currentCity = cityVal;
+                    await loadAll();
+                } catch (err) {
+                    console.error('Save event failed:', err);
+                    setEntryStatus(err.message || 'Could not save event.', true);
+                }
+            } else {
+                var tid = document.getElementById('evThingId').value;
+                var pload = {
+                    city: cityVal,
+                    name: document.getElementById('evThingName').value.trim(),
+                    category: document.getElementById('evThingCategory').value.trim(),
+                    last_visited: document.getElementById('evThingLastVisited').value || null,
+                    booked: document.getElementById('evThingBooked').value === 'yes',
+                    attended: document.getElementById('evThingAttended').value === 'yes',
+                    link: document.getElementById('evThingLink').value.trim(),
+                    map_link: document.getElementById('evThingMapLink').value.trim(),
+                    address: document.getElementById('evThingAddress').value.trim(),
+                    notes: document.getElementById('evThingNotes').value.trim()
+                };
+                var tlat = readNumber('evThingLat');
+                var tlng = readNumber('evThingLng');
+                if (tlat !== null) pload.latitude = tlat;
+                if (tlng !== null) pload.longitude = tlng;
+                if (!pload.name) { setEntryStatus('Name is required.', true); return; }
+                var tmethod = tid ? 'PATCH' : 'POST';
+                var turl = tid ? '/api/things-to-do/' + encodeURIComponent(tid) : '/api/things-to-do';
+                try {
+                    setEntryStatus('Saving…', false);
+                    var r2 = await fetch(turl, { method: tmethod, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pload) });
+                    if (!r2.ok) {
+                        var err2 = await r2.json().catch(function() { return {}; });
+                        throw new Error(err2.error || ('HTTP ' + r2.status));
+                    }
+                    closeEntryModal();
+                    document.getElementById('evCity').value = cityVal;
+                    currentCity = cityVal;
+                    await loadAll();
+                } catch (err2) {
+                    console.error('Save place failed:', err2);
+                    setEntryStatus(err2.message || 'Could not save place.', true);
+                }
+            }
+        });
+
+        // ---------- Wire up ----------
+        function renderAll() { renderMap(); renderCalendar(); renderUpcoming(); renderTodos(); }
+
+        async function loadAll() {
+            await Promise.all([fetchEvents(), fetchTodos()]);
+            renderAll();
+        }
+
+        document.getElementById('evCity').addEventListener('change', async function(e) {
+            currentCity = e.target.value;
+            // City changed → re-center map.
+            if (mapInstance && CITY_CENTERS[currentCity]) {
+                mapInstance.setView(CITY_CENTERS[currentCity], 12);
+            }
+            await loadAll();
+        });
+        document.getElementById('evTypeFilter').addEventListener('change', function(e) { currentType = e.target.value; renderMap(); renderCalendar(); renderUpcoming(); });
+        document.getElementById('evCalPrev').addEventListener('click', function() { viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } renderCalendar(); });
+        document.getElementById('evCalNext').addEventListener('click', function() { viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } renderCalendar(); });
+        document.getElementById('evCalToday').addEventListener('click', function() { viewYear = today.getFullYear(); viewMonth = today.getMonth(); renderCalendar(); });
+        document.getElementById('evAddEntryBtn').addEventListener('click', function() { openEntryModal('event', {}); });
+
+        // Inline edits for things-to-do (booked / attended / last_visited persist via PATCH).
+        document.getElementById('evTodoGrid').addEventListener('change', async function(e) {
+            const card = e.target.closest('.ev-todo-card');
+            if (!card) return;
+            const id = card.getAttribute('data-thing-id');
+            const field = e.target.getAttribute('data-field');
+            if (!id || !field) return;
+            let payload = {};
+            if (field === 'booked') payload.booked = e.target.value === 'yes';
+            else if (field === 'attended') payload.attended = e.target.value === 'yes';
+            else if (field === 'last_visited') payload.last_visited = e.target.value || null;
+            else return;
+            try {
+                const r = await fetch('/api/things-to-do/' + encodeURIComponent(id), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const updated = await r.json();
+                cityTodos = cityTodos.map(function(t) { return String(t.id) === String(id) ? Object.assign({}, t, updated) : t; });
+            } catch (err) {
+                console.error('Failed to update thing-to-do:', err);
+                showStatus('Could not save change. Please try again.', 'error');
+            }
+        });
+
+        document.getElementById('evTodoGrid').addEventListener('click', async function(e) {
+            const card = e.target.closest('.ev-todo-card');
+            if (!card) return;
+            const id = card.getAttribute('data-thing-id');
+            if (!id) return;
+
+            const editBtn = e.target.closest('button[data-action="edit"]');
+            if (editBtn) {
+                const t = cityTodos.find(function(x) { return String(x.id) === String(id); });
+                if (t) openThingModal(t);
+                return;
+            }
+
+            const removeBtn = e.target.closest('button[data-action="remove"]');
+            if (!removeBtn) return;
+            if (!confirm('Remove this place?')) return;
+            try {
+                const r = await fetch('/api/things-to-do/' + encodeURIComponent(id), { method: 'DELETE' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                cityTodos = cityTodos.filter(function(t) { return String(t.id) !== String(id); });
+                renderTodos();
+                renderMap();
+            } catch (err) {
+                console.error('Failed to delete thing-to-do:', err);
+                showStatus('Could not delete place. Please try again.', 'error');
+            }
+        });
+
+        // Edit / remove buttons in upcoming list.
+        document.getElementById('evList').addEventListener('click', async function(e) {
+            const row = e.target.closest('.ev-list-row');
+            if (!row) return;
+            const id = row.getAttribute('data-event-id');
+            if (!id) return;
+
+            const editBtn = e.target.closest('button[data-action="edit"]');
+            if (editBtn) {
+                const ev = cityEvents.find(function(x) { return String(x.id) === String(id); });
+                if (ev) openEventModal(ev);
+                return;
+            }
+
+            const removeBtn = e.target.closest('button[data-action="remove"]');
+            if (!removeBtn) return;
+            if (!confirm('Remove this event?')) return;
+            try {
+                const r = await fetch('/api/events/' + encodeURIComponent(id), { method: 'DELETE' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                cityEvents = cityEvents.filter(function(ev) { return String(ev.id) !== String(id); });
+                renderCalendar();
+                renderUpcoming();
+                renderMap();
+            } catch (err) {
+                console.error('Failed to delete event:', err);
+                showStatus('Could not delete event. Please try again.', 'error');
+            }
+        });
+
+        loadAll();
+    })();
+    </script>
+</body>
+</html>
