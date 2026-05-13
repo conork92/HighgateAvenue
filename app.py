@@ -2,7 +2,7 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for, a
 from flask_cors import CORS
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -417,6 +417,12 @@ def jobs():
 def work():
     """Work / job hunt page: thoughts and jobs seen."""
     return render_template('work.html')
+
+
+@app.route('/events/')
+def events():
+    """Events page: calendar of upcoming events + curated things to do per city."""
+    return render_template('events.html')
 
 
 @app.route('/api/work-thoughts', methods=['GET'], strict_slashes=False)
@@ -2546,6 +2552,320 @@ def serve_gcp_image(image_path):
         )
     except Exception as e:
         app.logger.error(f"Error serving image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------- Events (ha_events) ----------
+
+EVENT_TYPES = {'concert', 'comedy', 'theatre', 'festival', 'other'}
+EVENT_STATUSES = {'idea', 'booked', 'attended', 'cancelled'}
+
+
+def _normalise_tags(value):
+    if isinstance(value, list):
+        return [str(t).strip() for t in value if str(t).strip()]
+    if isinstance(value, str):
+        return [t.strip() for t in value.split(',') if t.strip()]
+    return []
+
+
+def _coords_from_map_link(url):
+    """Best-effort extraction of (lat, lng) from a Google/Apple Maps URL.
+    Returns (None, None) if no valid coords are found.
+    Short URLs (goo.gl/maps, maps.app.goo.gl) cannot be resolved without
+    an HTTP redirect; users should fall back to manual lat/lng entry."""
+    import re
+    if not url:
+        return None, None
+    url = str(url).strip()
+    if not url:
+        return None, None
+    patterns = [
+        # /@lat,lng,zoom in /maps/place/.../@... or /maps/@...
+        r'/@(-?\d+\.\d+),(-?\d+\.\d+)',
+        # !3dlat!4dlng – Google sometimes includes the place's exact coords here
+        r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)',
+        # ?q=lat,lng or &q=lat,lng or ?ll=... or &ll=... or ?destination=...
+        r'[?&](?:q|ll|destination|center)=(-?\d+\.\d+),(-?\d+\.\d+)',
+        # Fallback: any "lat,lng" pair in the path or query
+        r'(-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})',
+    ]
+    for pat in patterns:
+        m = re.search(pat, url)
+        if not m:
+            continue
+        try:
+            lat = float(m.group(1))
+            lng = float(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
+            return lat, lng
+    return None, None
+
+
+def _resolve_coords(data, existing=None):
+    """Decide what to write for latitude/longitude/map_link based on incoming data.
+    - If lat/lng provided explicitly, use them.
+    - Else if map_link provided, try to parse coords from it.
+    - existing (dict) is used to detect "map_link unchanged" on PATCH.
+    Returns dict subset to merge into payload."""
+    out = {}
+    has_lat = 'latitude' in data and data.get('latitude') not in ('', None)
+    has_lng = 'longitude' in data and data.get('longitude') not in ('', None)
+    if has_lat:
+        try: out['latitude'] = float(data['latitude'])
+        except (TypeError, ValueError): out['latitude'] = None
+    if has_lng:
+        try: out['longitude'] = float(data['longitude'])
+        except (TypeError, ValueError): out['longitude'] = None
+
+    if 'map_link' in data:
+        link = (data.get('map_link') or '').strip() or None
+        out['map_link'] = link
+        if link and not (has_lat and has_lng):
+            lat, lng = _coords_from_map_link(link)
+            if lat is not None and lng is not None:
+                out.setdefault('latitude', lat)
+                out.setdefault('longitude', lng)
+    return out
+
+
+@app.route('/api/events', methods=['GET'])
+def get_events():
+    """List events from ha_events. Optional query: city=, type=, status=, upcoming=1."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        query = supabase.table('ha_events').select('*').order('starts_at', desc=False)
+        city = request.args.get('city', '').strip().lower()
+        if city:
+            query = query.eq('city', city)
+        type_ = request.args.get('type', '').strip().lower()
+        if type_ and type_ in EVENT_TYPES:
+            query = query.eq('type', type_)
+        status = request.args.get('status', '').strip().lower()
+        if status and status in EVENT_STATUSES:
+            query = query.eq('status', status)
+        if request.args.get('upcoming') == '1':
+            query = query.gte('starts_at', datetime.now(timezone.utc).isoformat())
+        r = query.execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching events: {e}")
+        return jsonify([]), 200
+
+
+@app.route('/api/events', methods=['POST'])
+def create_event():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        title = (data.get('title') or '').strip()
+        starts_at = (data.get('starts_at') or '').strip()
+        type_ = (data.get('type') or '').strip().lower()
+        if not title:
+            return jsonify({'error': 'Title is required'}), 400
+        if not starts_at:
+            return jsonify({'error': 'starts_at is required'}), 400
+        if type_ not in EVENT_TYPES:
+            return jsonify({'error': f'type must be one of {sorted(EVENT_TYPES)}'}), 400
+        status = (data.get('status') or 'idea').strip().lower()
+        if status not in EVENT_STATUSES:
+            status = 'idea'
+        payload = {
+            'city': (data.get('city') or 'london').strip().lower(),
+            'type': type_,
+            'title': title,
+            'venue': (data.get('venue') or '').strip() or None,
+            'starts_at': starts_at,
+            'ends_at': (data.get('ends_at') or '').strip() or None,
+            'link': (data.get('link') or '').strip() or None,
+            'address': (data.get('address') or '').strip() or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'status': status,
+            'tags': _normalise_tags(data.get('tags')),
+        }
+        payload.update(_resolve_coords(data))
+        r = supabase.table('ha_events').insert(payload).execute()
+        return jsonify((r.data or [{}])[0]), 201
+    except Exception as e:
+        app.logger.error(f"Error creating event: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/events/<int:event_id>', methods=['PATCH'])
+def update_event(event_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        if 'city' in data: payload['city'] = (data.get('city') or '').strip().lower() or None
+        if 'type' in data:
+            t = (data.get('type') or '').strip().lower()
+            if t and t not in EVENT_TYPES:
+                return jsonify({'error': f'type must be one of {sorted(EVENT_TYPES)}'}), 400
+            payload['type'] = t or None
+        if 'title' in data: payload['title'] = (data.get('title') or '').strip() or None
+        if 'venue' in data: payload['venue'] = (data.get('venue') or '').strip() or None
+        if 'starts_at' in data: payload['starts_at'] = (data.get('starts_at') or '').strip() or None
+        if 'ends_at' in data: payload['ends_at'] = (data.get('ends_at') or '').strip() or None
+        if 'link' in data: payload['link'] = (data.get('link') or '').strip() or None
+        if 'address' in data: payload['address'] = (data.get('address') or '').strip() or None
+        if 'notes' in data: payload['notes'] = (data.get('notes') or '').strip() or None
+        if 'status' in data:
+            s = (data.get('status') or '').strip().lower()
+            if s and s not in EVENT_STATUSES:
+                return jsonify({'error': f'status must be one of {sorted(EVENT_STATUSES)}'}), 400
+            payload['status'] = s or None
+        if 'tags' in data: payload['tags'] = _normalise_tags(data.get('tags'))
+        payload.update(_resolve_coords(data))
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        payload['updated_at'] = datetime.now(timezone.utc).isoformat()
+        r = supabase.table('ha_events').update(payload).eq('id', event_id).execute()
+        return jsonify((r.data or [{}])[0]), 200
+    except Exception as e:
+        app.logger.error(f"Error updating event {event_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+def delete_event(event_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_events').delete().eq('id', event_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f"Error deleting event {event_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------- Import helpers (dice.fm) ----------
+
+@app.route('/api/import/dice', methods=['POST'])
+def import_from_dice_url():
+    """POST JSON body with url for dice.fm event page; returns event and place payloads."""
+    try:
+        from dice_import import fetch_dice_event, place_payload_from_dice_event
+    except ImportError as e:
+        app.logger.error('dice_import unavailable: %s', e)
+        return jsonify({'error': 'Import helper not available'}), 503
+    data = request.get_json() or {}
+    url = (data.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    try:
+        ev = fetch_dice_event(url)
+        place = place_payload_from_dice_event(ev)
+        return jsonify({'event': ev, 'place': place}), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.exception('import_from_dice_url failed')
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------- Things to do (ha_things_to_do) ----------
+
+@app.route('/api/things-to-do', methods=['GET'])
+def get_things_to_do():
+    """List places from ha_things_to_do. Optional query: city=, category=, attended=1, booked=1."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        query = supabase.table('ha_things_to_do').select('*').order('created_at', desc=True)
+        city = request.args.get('city', '').strip().lower()
+        if city:
+            query = query.eq('city', city)
+        category = request.args.get('category', '').strip()
+        if category:
+            query = query.eq('category', category)
+        if request.args.get('attended') == '1':
+            query = query.eq('attended', True)
+        if request.args.get('booked') == '1':
+            query = query.eq('booked', True)
+        r = query.execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching things-to-do: {e}")
+        return jsonify([]), 200
+
+
+@app.route('/api/things-to-do', methods=['POST'])
+def create_thing_to_do():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        last_visited = (data.get('last_visited') or '').strip() or None
+        payload = {
+            'city': (data.get('city') or 'london').strip().lower(),
+            'name': name,
+            'category': (data.get('category') or '').strip() or None,
+            'link': (data.get('link') or '').strip() or None,
+            'address': (data.get('address') or '').strip() or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'booked': bool(data.get('booked', False)),
+            'attended': bool(data.get('attended', False)),
+            'last_visited': last_visited,
+            'tags': _normalise_tags(data.get('tags')),
+        }
+        payload.update(_resolve_coords(data))
+        r = supabase.table('ha_things_to_do').insert(payload).execute()
+        return jsonify((r.data or [{}])[0]), 201
+    except Exception as e:
+        app.logger.error(f"Error creating thing-to-do: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/things-to-do/<int:thing_id>', methods=['PATCH'])
+def update_thing_to_do(thing_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        if 'city' in data: payload['city'] = (data.get('city') or '').strip().lower() or None
+        if 'name' in data: payload['name'] = (data.get('name') or '').strip() or None
+        if 'category' in data: payload['category'] = (data.get('category') or '').strip() or None
+        if 'link' in data: payload['link'] = (data.get('link') or '').strip() or None
+        if 'address' in data: payload['address'] = (data.get('address') or '').strip() or None
+        if 'notes' in data: payload['notes'] = (data.get('notes') or '').strip() or None
+        if 'booked' in data: payload['booked'] = bool(data.get('booked'))
+        if 'attended' in data: payload['attended'] = bool(data.get('attended'))
+        if 'last_visited' in data:
+            lv = (data.get('last_visited') or '').strip()
+            payload['last_visited'] = lv or None
+        if 'tags' in data: payload['tags'] = _normalise_tags(data.get('tags'))
+        payload.update(_resolve_coords(data))
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        payload['updated_at'] = datetime.now(timezone.utc).isoformat()
+        r = supabase.table('ha_things_to_do').update(payload).eq('id', thing_id).execute()
+        return jsonify((r.data or [{}])[0]), 200
+    except Exception as e:
+        app.logger.error(f"Error updating thing-to-do {thing_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/things-to-do/<int:thing_id>', methods=['DELETE'])
+def delete_thing_to_do(thing_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_things_to_do').delete().eq('id', thing_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f"Error deleting thing-to-do {thing_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 
