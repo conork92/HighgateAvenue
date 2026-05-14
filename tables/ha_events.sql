@@ -17,6 +17,7 @@ create table if not exists ha_events (
   longitude double precision,
   notes text,
   status text not null default 'idea' check (status in ('idea', 'booked', 'attended', 'cancelled')),
+  attendance text check (attendance is null or attendance in ('going', 'want_to_go')),
   tags text[] default '{}',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -27,6 +28,7 @@ comment on column ha_events.city is 'City slug (e.g. london, new-york, paris).';
 comment on column ha_events.type is 'Event type: concert | comedy | theatre | festival | other.';
 comment on column ha_events.starts_at is 'Event start time in UTC.';
 comment on column ha_events.status is 'idea | booked | attended | cancelled.';
+comment on column ha_events.attendance is 'going | want_to_go | null (personal intent).';
 comment on column ha_events.map_link is 'Google Maps URL (or any map link).';
 comment on column ha_events.address is 'Optional human-readable address.';
 comment on column ha_events.latitude is 'WGS84 latitude (auto-extracted from map_link when possible).';

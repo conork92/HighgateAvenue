@@ -2559,6 +2559,7 @@ def serve_gcp_image(image_path):
 
 EVENT_TYPES = {'concert', 'comedy', 'theatre', 'festival', 'other'}
 EVENT_STATUSES = {'idea', 'booked', 'attended', 'cancelled'}
+EVENT_ATTENDANCE = {'going', 'want_to_go'}
 
 
 def _normalise_tags(value):
@@ -2674,6 +2675,9 @@ def create_event():
         status = (data.get('status') or 'idea').strip().lower()
         if status not in EVENT_STATUSES:
             status = 'idea'
+        att_raw = (data.get('attendance') or '').strip().lower() or None
+        if att_raw and att_raw not in EVENT_ATTENDANCE:
+            return jsonify({'error': f'attendance must be one of {sorted(EVENT_ATTENDANCE)} or omitted'}), 400
         payload = {
             'city': (data.get('city') or 'london').strip().lower(),
             'type': type_,
@@ -2687,6 +2691,8 @@ def create_event():
             'status': status,
             'tags': _normalise_tags(data.get('tags')),
         }
+        if att_raw:
+            payload['attendance'] = att_raw
         payload.update(_resolve_coords(data))
         r = supabase.table('ha_events').insert(payload).execute()
         return jsonify((r.data or [{}])[0]), 201
@@ -2721,6 +2727,11 @@ def update_event(event_id):
                 return jsonify({'error': f'status must be one of {sorted(EVENT_STATUSES)}'}), 400
             payload['status'] = s or None
         if 'tags' in data: payload['tags'] = _normalise_tags(data.get('tags'))
+        if 'attendance' in data:
+            a = (data.get('attendance') or '').strip().lower()
+            if a and a not in EVENT_ATTENDANCE:
+                return jsonify({'error': f'attendance must be one of {sorted(EVENT_ATTENDANCE)}'}), 400
+            payload['attendance'] = a or None
         payload.update(_resolve_coords(data))
         if not payload:
             return jsonify({'error': 'No fields to update'}), 400
@@ -2744,11 +2755,13 @@ def delete_event(event_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ---------- Import helpers (dice.fm) ----------
+# ---------- Import helpers (DICE, Songkick, …) ----------
+
 
 @app.route('/api/import/dice', methods=['POST'])
-def import_from_dice_url():
-    """POST JSON body with url for dice.fm event page; returns event and place payloads."""
+@app.route('/api/import/event-url', methods=['POST'])
+def import_event_listing_url():
+    """POST JSON { url } — supports dice.fm and songkick.com concert pages; returns { event, place }."""
     try:
         from dice_import import fetch_dice_event, place_payload_from_dice_event
     except ImportError as e:
@@ -2758,8 +2771,19 @@ def import_from_dice_url():
     url = (data.get('url') or '').strip()
     if not url:
         return jsonify({'error': 'url is required'}), 400
+    host = (urlparse(url).netloc or '').lower()
     try:
-        ev = fetch_dice_event(url)
+        if 'songkick.com' in host:
+            try:
+                from songkick_import import fetch_songkick_event
+            except ImportError as e:
+                app.logger.error('songkick_import unavailable: %s', e)
+                return jsonify({'error': 'Songkick import not available'}), 503
+            ev = fetch_songkick_event(url)
+        elif 'dice.fm' in host:
+            ev = fetch_dice_event(url)
+        else:
+            return jsonify({'error': 'Unsupported URL. Use a dice.fm or songkick.com concert link.'}), 400
         place = place_payload_from_dice_event(ev)
         return jsonify({'event': ev, 'place': place}), 200
     except ValueError as e:
@@ -2767,7 +2791,7 @@ def import_from_dice_url():
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
-        app.logger.exception('import_from_dice_url failed')
+        app.logger.exception('import_event_listing_url failed')
         return jsonify({'error': str(e)}), 500
 
 
