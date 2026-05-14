@@ -202,6 +202,20 @@
         .ev-cal-pill--comedy { background: #c8e6c9; }
         .ev-cal-pill--theatre { background: #d1c4e9; }
         .ev-cal-pill--festival { background: #ffccbc; }
+        .ev-cal-pill--going-flag { box-shadow: inset 3px 0 0 #2e7d32; }
+        .ev-cal-pill--want-flag { box-shadow: inset 3px 0 0 #1565c0; }
+        .ev-att-badge {
+            display: inline-block;
+            margin-left: 0.45rem;
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.1rem 0.35rem;
+            border: 1px solid var(--ev-border);
+            vertical-align: middle;
+        }
+        .ev-att-badge--going { background: #e8f5e9; }
+        .ev-att-badge--want { background: #e3f2fd; }
 
         /* Upcoming list */
         .ev-list { display: flex; flex-direction: column; gap: 0; border: 2px solid var(--ev-border); }
@@ -736,10 +750,10 @@
                         <div class="ev-import-block">
                             <label for="evEntryImportUrl">Listing URL (optional)</label>
                             <div class="ev-import-row">
-                                <input type="url" id="evEntryImportUrl" placeholder="https://dice.fm/event/..." autocomplete="off">
-                                <button type="button" class="btn-fetch-preview" id="evEntryFetchBtn" title="Fill fields from a DICE event page">Fetch from link</button>
+                                <input type="url" id="evEntryImportUrl" placeholder="https://dice.fm/… or songkick.com/…" autocomplete="off">
+                                <button type="button" class="btn-fetch-preview" id="evEntryFetchBtn" title="Fill from a DICE or Songkick concert page">Fetch from link</button>
                             </div>
-                            <p class="ev-import-hint">Paste a dice.fm event link and fetch — same as “fetch from link” on products. Then pick <strong>Event</strong> or <strong>Place</strong> and save.</p>
+                            <p class="ev-import-hint">Paste a <strong>dice.fm</strong> or <strong>songkick.com</strong> concert URL (same idea as product “fetch from link”). Then choose Event or Place and save.</p>
                         </div>
                     </div>
                 </div>
@@ -762,6 +776,14 @@
                                 <option value="booked">Booked</option>
                                 <option value="attended">Attended</option>
                                 <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="ev-form-row">
+                            <label for="evEventAttendance">I’m</label>
+                            <select id="evEventAttendance">
+                                <option value="">—</option>
+                                <option value="going">Going</option>
+                                <option value="want_to_go">Want to go</option>
                             </select>
                         </div>
                         <div class="ev-form-row full">
@@ -947,6 +969,16 @@
             return currentType ? cityEvents.filter(function(e) { return e.type === currentType; }) : cityEvents;
         }
 
+        /** YYYY-MM-DD in the viewer's local timezone. Do not use toISOString().slice(0,10) for calendar cells:
+         *  local midnight converts to the previous UTC date in positive offsets (e.g. UK summer), so events
+         *  match the wrong column (e.g. 26th vs 27th). */
+        function localDateISO(d) {
+            var y = d.getFullYear();
+            var m = d.getMonth() + 1;
+            var day = d.getDate();
+            return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+        }
+
         // ---------- Calendar ----------
         function renderCalendar() {
             const grid = document.getElementById('evCalGrid');
@@ -984,7 +1016,7 @@
                     cellDate = new Date(viewYear, viewMonth, dayNum);
                 }
                 if (cellDate.getTime() === today.getTime()) cell.classList.add('ev-cal-day--today');
-                const iso = cellDate.toISOString().slice(0, 10);
+                const iso = localDateISO(cellDate);
                 cell.setAttribute('data-date', iso);
                 cell.innerHTML = '<span class="ev-cal-num">' + cellDate.getDate() + '</span><div class="ev-cal-events"></div>';
 
@@ -994,6 +1026,8 @@
                 eventsHere.forEach(function(ev) {
                     const pill = document.createElement('div');
                     pill.className = 'ev-cal-pill ev-cal-pill--' + (ev.type || 'other');
+                    if (ev.attendance === 'going') pill.classList.add('ev-cal-pill--going-flag');
+                    if (ev.attendance === 'want_to_go') pill.classList.add('ev-cal-pill--want-flag');
                     pill.title = (ev.title || '') + (ev.venue ? ' — ' + ev.venue : '');
                     pill.textContent = ev.title || '(untitled)';
                     wrap.appendChild(pill);
@@ -1031,6 +1065,12 @@
                 const row = document.createElement('div');
                 row.className = 'ev-list-row';
                 row.setAttribute('data-event-id', ev.id);
+                var attBadge = '';
+                if (ev.attendance === 'going') {
+                    attBadge = '<span class="ev-att-badge ev-att-badge--going">Going</span>';
+                } else if (ev.attendance === 'want_to_go') {
+                    attBadge = '<span class="ev-att-badge ev-att-badge--want">Want to go</span>';
+                }
                 row.innerHTML = ''
                     + '<div class="ev-list-date">'
                     +   '<div class="ev-list-date-day">' + d.getDate() + '</div>'
@@ -1038,7 +1078,7 @@
                     + '</div>'
                     + '<div class="ev-list-type">' + (TYPE_LABEL[ev.type] || 'Other') + '</div>'
                     + '<div>'
-                    +   '<div class="ev-list-title">' + escapeHtml(ev.title || '(untitled)') + '</div>'
+                    +   '<div class="ev-list-title">' + escapeHtml(ev.title || '(untitled)') + attBadge + '</div>'
                     +   '<div class="ev-list-venue">' + escapeHtml(ev.venue || '') + '</div>'
                     + '</div>'
                     + '<div class="ev-list-venue">' + d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + '</div>'
@@ -1265,6 +1305,8 @@
             document.getElementById('evEventLat').value = ev.latitude != null ? ev.latitude : '';
             document.getElementById('evEventLng').value = ev.longitude != null ? ev.longitude : '';
             document.getElementById('evEventNotes').value = ev.notes || '';
+            document.getElementById('evEventAttendance').value =
+                (ev.attendance === 'going' || ev.attendance === 'want_to_go') ? ev.attendance : '';
             if (ev.city) document.getElementById('evEntryCity').value = ev.city;
         }
 
@@ -1333,7 +1375,7 @@
         document.getElementById('evEntryFetchBtn').addEventListener('click', async function() {
             var url = (document.getElementById('evEntryImportUrl').value || '').trim();
             if (!url) {
-                setEntryStatus('Paste a dice.fm event URL first.', true);
+                setEntryStatus('Paste a DICE or Songkick concert URL first.', true);
                 return;
             }
             var btn = document.getElementById('evEntryFetchBtn');
@@ -1341,7 +1383,7 @@
             btn.disabled = true;
             btn.textContent = 'Fetching…';
             try {
-                var r = await fetch('/api/import/dice', {
+                var r = await fetch('/api/import/event-url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
@@ -1353,7 +1395,7 @@
                 if (data.event && data.event.city) document.getElementById('evEntryCity').value = data.event.city;
                 setEntryStatus('Loaded from link. Pick Event or Place, then save.', false);
             } catch (err) {
-                console.error('DICE fetch failed:', err);
+                console.error('Listing fetch failed:', err);
                 setEntryStatus(err.message || 'Could not fetch this URL.', true);
             } finally {
                 btn.disabled = false;
@@ -1390,6 +1432,8 @@
                     address: document.getElementById('evEventAddress').value.trim(),
                     notes: document.getElementById('evEventNotes').value.trim()
                 };
+                var attv = (document.getElementById('evEventAttendance').value || '').trim();
+                if (attv) payload.attendance = attv;
                 var lat = readNumber('evEventLat');
                 var lng = readNumber('evEventLng');
                 if (lat !== null) payload.latitude = lat;

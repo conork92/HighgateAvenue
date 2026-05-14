@@ -183,12 +183,8 @@ def _json_ld_decode_stream(raw: str) -> Iterator[Any]:
         i = j
 
 
-def fetch_dice_event(url: str) -> dict[str, Any]:
-    """Return a dict suitable for POST /api/events (fields may be omitted if empty)."""
-    if "dice.fm" not in urlparse(url).netloc.lower():
-        raise ValueError("URL must be a dice.fm link")
-
-    html_body = _fetch_html(url)
+def find_music_event_node(html_body: str) -> dict[str, Any] | None:
+    """First schema.org MusicEvent (or compatible) with startDate in JSON-LD script tags."""
     event_node: dict[str, Any] | None = None
     for m in _LD_JSON_SCRIPT_RE.finditer(html_body):
         raw = html.unescape(m.group(1).strip())
@@ -214,19 +210,21 @@ def fetch_dice_event(url: str) -> dict[str, Any]:
                 break
         if event_node:
             break
+    return event_node
 
-    if not event_node:
-        raise RuntimeError(
-            "No event JSON-LD found on this page. Use a dice.fm event URL, or fill the form manually."
-        )
 
+def build_event_payload_from_ld_node(event_node: dict[str, Any], page_url: str) -> dict[str, Any]:
+    """Map schema.org event node to ha_events-style dict."""
     title = _as_str(event_node.get("name")) or "(untitled)"
     starts_at = _as_str(event_node.get("startDate"))
     if not starts_at:
         raise RuntimeError("Event data had no start time.")
 
-    ends_at = _as_str(event_node.get("endDate"))
-    page_url = _as_str(event_node.get("url")) or url
+    ends_raw = _as_str(event_node.get("endDate"))
+    # Date-only endDate (e.g. Songkick) is not a useful timestamptz; omit unless it has a time.
+    ends_at = ends_raw if (ends_raw and "T" in ends_raw) else None
+
+    link = _as_str(event_node.get("url")) or page_url
 
     venue, address, lat, lng = _place_fields(event_node.get("location"))
     city = _guess_city_slug(address, venue)
@@ -243,7 +241,7 @@ def fetch_dice_event(url: str) -> dict[str, Any]:
         "venue": venue,
         "starts_at": starts_at,
         "ends_at": ends_at,
-        "link": page_url,
+        "link": link,
         "map_link": map_link,
         "address": address,
         "status": "idea",
@@ -254,6 +252,20 @@ def fetch_dice_event(url: str) -> dict[str, Any]:
         payload["longitude"] = lng
 
     return {k: v for k, v in payload.items() if v not in (None, "", [])}
+
+
+def fetch_dice_event(url: str) -> dict[str, Any]:
+    """Return a dict suitable for POST /api/events (fields may be omitted if empty)."""
+    if "dice.fm" not in urlparse(url).netloc.lower():
+        raise ValueError("URL must be a dice.fm link")
+
+    html_body = _fetch_html(url)
+    event_node = find_music_event_node(html_body)
+    if not event_node:
+        raise RuntimeError(
+            "No event JSON-LD found on this page. Use a dice.fm event URL, or fill the form manually."
+        )
+    return build_event_payload_from_ld_node(event_node, url)
 
 
 def place_payload_from_dice_event(ev: dict[str, Any]) -> dict[str, Any]:
