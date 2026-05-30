@@ -349,6 +349,7 @@
                             <select id="mwhProductCategory" name="category">
                                 <option value="">—</option>
                                 <option value="Appliance">Appliance</option>
+                                <option value="Auction">Auction</option>
                                 <option value="Art">Art</option>
                                 <option value="Baby">Baby</option>
                                 <option value="Bathroom">Bathroom</option>
@@ -391,6 +392,12 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="mwhProductIsMwh" name="is_mwh" value="1" checked>
                                 <span>Is MWH (show on this page)</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="mwhProductIsPresent" name="is_present" value="1">
+                                <span>Show on Presents page</span>
                             </label>
                         </div>
                         <div class="form-actions">
@@ -442,6 +449,30 @@
             var mwhCurrentWebsite = '';
             var mwhCurrentCategory = '';
             var mwhCurrentRoom = '';
+
+            function hasActiveProductFilters() {
+                return !!(mwhCurrentWebsite || mwhCurrentCategory || mwhCurrentRoom);
+            }
+            function clearProductFilters() {
+                mwhCurrentWebsite = '';
+                mwhCurrentCategory = '';
+                mwhCurrentRoom = '';
+            }
+            function scrollToProductId(id) {
+                if (!id || !grid) return;
+                requestAnimationFrame(function() {
+                    var card = grid.querySelector('[data-product-id="' + id + '"]');
+                    if (!card) return;
+                    var section = card.closest('.mwh-section');
+                    if (section) {
+                        section.classList.remove('collapsed');
+                        var title = section.querySelector('.mwh-section-title');
+                        if (title) title.classList.remove('collapsed');
+                    }
+                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+            }
+
             var MWH_ROOM_FILTER_OPTIONS = [
                 { value: '', label: 'All' },
                 { value: 'Front Room', label: 'Front Room' },
@@ -637,7 +668,17 @@
                 var boughtItems = listToShow.filter(function(p) { return !!p.bought; });
                 var activeItems = listToShow.filter(function(p) { return !p.bought && !p.x_remove; });
                 if (activeItems.length === 0 && boughtItems.length === 0) {
-                    grid.innerHTML = '<p class="subtitle">No products match these filters. Try another source, category, room, or clear filters.</p>';
+                    var filterHint = hasActiveProductFilters()
+                        ? ' <button type="button" class="upload-btn" id="mwhClearFiltersBtn" style="margin-top:0.75rem;"><span>Clear all filters</span></button>'
+                        : '';
+                    grid.innerHTML = '<p class="subtitle">No products match these filters. Try another source, category, room, or clear filters.' + filterHint + '</p>';
+                    var clearBtn = document.getElementById('mwhClearFiltersBtn');
+                    if (clearBtn) {
+                        clearBtn.addEventListener('click', function() {
+                            clearProductFilters();
+                            renderProductList(mwhProductList);
+                        });
+                    }
                     markMwhSegmentWrapRows();
                     requestAnimationFrame(markMwhSegmentWrapRows);
                     return;
@@ -739,6 +780,7 @@
                         document.getElementById('mwhProductTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
                         document.getElementById('mwhProductComment').value = p.comment || '';
                         document.getElementById('mwhProductIsMwh').checked = !!p.is_mwh;
+                        document.getElementById('mwhProductIsPresent').checked = !!p.is_present;
                         if (modal) modal.style.display = 'flex';
                         document.body.style.overflow = 'hidden';
                         if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
@@ -774,6 +816,7 @@
                 document.getElementById('mwhSubmitProduct').textContent = 'Add Product';
                 if (form) form.reset();
                 document.getElementById('mwhProductIsMwh').checked = true;
+                document.getElementById('mwhProductIsPresent').checked = false;
                 if (modal) modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
@@ -851,6 +894,7 @@
                         website_name: (document.getElementById('mwhProductWebsiteName').value || '').trim() || null,
                         tags: tags,
                         is_mwh: isMwh,
+                        is_present: !!document.getElementById('mwhProductIsPresent').checked,
                         comment: (document.getElementById('mwhProductComment').value || '').trim() || null
                     };
                     var submitBtn = document.getElementById('mwhSubmitProduct');
@@ -870,15 +914,22 @@
                             if (statusEl) { statusEl.textContent = result.data && result.data.error ? result.data.error : (editId ? 'Failed to save.' : 'Failed to add product'); statusEl.className = 'upload-status error'; statusEl.style.display = 'block'; }
                             return;
                         }
-                        if (statusEl) { statusEl.textContent = editId ? 'Saved.' : 'Product added.'; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
+                        var addedMsg = editId ? 'Saved.' : 'Product added.';
+                        if (!editId && !isMwh) {
+                            addedMsg = 'Product saved. It is on All Products (/products/) — tick Is MWH here to list it on this page.';
+                        }
+                        if (statusEl) { statusEl.textContent = addedMsg; statusEl.className = 'upload-status success'; statusEl.style.display = 'block'; }
+                        var savedId = (!editId && result.data && result.data.id) ? result.data.id : null;
+                        if (!editId) clearProductFilters();
                         closeProductModal();
                         loading.style.display = 'block';
-                        return fetch('/api/muswell-hill-products').then(function(r) { return r.json(); });
-                    }).then(function(products) {
+                        return fetch('/api/muswell-hill-products').then(function(r) { return r.json().then(function(products) { return { products: products, savedId: savedId }; }); });
+                    }).then(function(res) {
                         loading.style.display = 'none';
-                        if (Array.isArray(products)) {
-                            mwhProductList = products;
+                        if (res && Array.isArray(res.products)) {
+                            mwhProductList = res.products;
                             renderProductList(mwhProductList);
+                            if (res.savedId) scrollToProductId(res.savedId);
                         }
                     }).catch(function(err) {
                         if (submitBtn) submitBtn.disabled = false;

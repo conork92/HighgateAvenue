@@ -126,7 +126,7 @@
                 .then(r => r.json())
                 .then(function(products) {
                     if (!products || products.length === 0) {
-                        list.innerHTML = '<p class="room-ideas-empty">No products linked to this room yet. <a href="/muswell-hill/products/">Add products</a> and set their room to see them here.</p>';
+                        list.innerHTML = '<p class="room-ideas-empty">No products linked to this room yet. <a href="/products/">Add products</a> and set their room to see them here.</p>';
                         return;
                     }
                     list.innerHTML = products.map(function(p) {

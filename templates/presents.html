@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue – Presents</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260530">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260530">
+    <style>
+        .pr-product-card { display: flex; flex-direction: column; position: relative; min-height: 0; }
+        .pr-product-card .product-tile { flex: 1; min-height: 0; }
+        .pr-product-flags {
+            display: flex; gap: 0.6rem; margin-top: 0.5rem; padding: 0.5rem 0 0;
+            border-top: 1px solid rgba(0,0,0,0.08); align-items: center;
+        }
+        .pr-product-flags label { display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
+        .pr-product-flags input[type="checkbox"] { width: 1rem; height: 1rem; }
+        .pr-section { margin-bottom: 2.5rem; }
+        .pr-section-title {
+            font-size: 1.125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+            margin-bottom: 1rem; padding-bottom: 0.5rem; padding-right: 2rem; border-bottom: 2px solid #000;
+            cursor: pointer; position: relative; user-select: none;
+        }
+        .pr-section-title::after { content: '−'; position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-weight: 700; }
+        .pr-section-title.collapsed::after { content: '+'; }
+        .pr-section-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.25rem; align-items: start;
+        }
+        .pr-section.collapsed .pr-section-grid { display: none; }
+        .pr-person-pill {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--gray-dark, #666); margin-left: 0.35rem;
+        }
+        .pr-product-comment {
+            font-size: 0.8125rem; color: var(--gray-dark, #666); margin: 0.5rem 0 0;
+            padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.06); white-space: pre-wrap;
+        }
+        .product-tile-image-wrap { position: relative; }
+        .pr-product-remove-btn, .pr-product-edit-btn {
+            position: absolute; width: 32px; height: 32px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.95); border: 1px solid rgba(0,0,0,0.3);
+            border-radius: 4px; cursor: pointer; z-index: 10;
+        }
+        .pr-product-remove-btn { top: 0.5rem; left: 0.5rem; }
+        .pr-product-edit-btn { top: 0.5rem; right: 0.5rem; }
+        .pr-filter-panel {
+            display: none; flex-direction: column; border: 2px solid #000;
+            margin: 2rem 0 0; background: #fff;
+        }
+        .pr-filter-panel.is-visible { display: flex; }
+        .pr-filter-row {
+            display: flex; align-items: stretch; min-height: 2.75rem; border-bottom: 1px solid #000;
+        }
+        .pr-filter-row:last-child { border-bottom: none; }
+        .pr-filter-key {
+            flex: 0 0 6.5rem; display: flex; align-items: center; padding: 0 0.75rem 0 1rem;
+            font-size: 0.625rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+            background: #f0f0f0; border-right: 1px solid #000;
+        }
+        .pr-segmented { flex: 1; display: flex; flex-wrap: wrap; min-width: 0; }
+        .pr-segmented .pr-seg-btn {
+            flex: 1 1 auto; min-width: 3.25rem; padding: 0.65rem 0.85rem;
+            font-size: 0.6875rem; font-weight: 600; font-family: inherit; letter-spacing: 0.1em;
+            text-transform: uppercase; border: none; border-right: 1px solid rgba(0,0,0,0.22);
+            background: #fff; cursor: pointer;
+        }
+        .pr-segmented .pr-seg-btn:last-child { border-right: none; }
+        .pr-segmented .pr-seg-btn.active { background: #000; color: #fff; }
+        .pr-empty-bought { grid-column: 1 / -1; color: var(--gray-dark, #666); font-size: 0.9375rem; padding: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Presents</h1>
+                    <p class="subtitle">Gift ideas with <strong>Show on Presents page</strong> ticked. Group by person; filter by shop or category; use <strong>Fetch from link</strong> for auction lots and shops. Untick that box on edit to remove from this list.</p>
+                    <button type="button" id="prAddBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add present</span></button>
+                </header>
+
+                <div id="prFilterPanel" class="pr-filter-panel" aria-label="Present filters">
+                    <div class="pr-filter-row">
+                        <span class="pr-filter-key">Person</span>
+                        <div id="prPersonBtns" class="pr-segmented" role="group"></div>
+                    </div>
+                    <div class="pr-filter-row">
+                        <span class="pr-filter-key">Shop</span>
+                        <div id="prShopBtns" class="pr-segmented" role="group"></div>
+                    </div>
+                    <div class="pr-filter-row">
+                        <span class="pr-filter-key">Category</span>
+                        <div id="prCategoryBtns" class="pr-segmented" role="group"></div>
+                    </div>
+                </div>
+
+                <div id="prLoading" class="loading">Loading presents…</div>
+                <div id="prGrid"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="prModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal" id="prModalClose" aria-label="Close">&times;</span>
+            <h2 id="prModalTitle">Add present</h2>
+            <form id="prForm">
+                <div class="form-group">
+                    <label for="prLink">Link *</label>
+                    <input type="url" id="prLink" required placeholder="https://the-saleroom.com/…, southgateauctionrooms.com, Amazon…">
+                    <button type="button" id="prFetchBtn" class="btn-fetch-preview" style="margin-top: 0.5rem;">Fetch from link</button>
+                </div>
+                <div class="form-group">
+                    <label for="prPresentFor">For (person)</label>
+                    <input type="text" id="prPresentFor" placeholder="e.g. Mum, Alex, Secret Santa">
+                </div>
+                <div class="form-group">
+                    <label for="prWebsiteName">Shop / site</label>
+                    <input type="text" id="prWebsiteName" placeholder="e.g. Southgate Auction Rooms">
+                </div>
+                <div class="form-group">
+                    <label for="prTitle">Title</label>
+                    <input type="text" id="prTitle" placeholder="Product or event name">
+                </div>
+                <div class="form-group">
+                    <label for="prImageUrl">Image URL</label>
+                    <input type="url" id="prImageUrl" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                    <label for="prPrice">Price / guide</label>
+                    <input type="text" id="prPrice" placeholder="e.g. £200 – £300">
+                </div>
+                <div class="form-group">
+                    <label for="prCategory">Category</label>
+                    <select id="prCategory">
+                        <option value="">—</option>
+                        <option value="Auction">Auction</option>
+                        <option value="Art">Art</option>
+                        <option value="Books">Books</option>
+                        <option value="Clothing">Clothing</option>
+                        <option value="Concert">Concert</option>
+                        <option value="Experience">Experience</option>
+                        <option value="Food &amp; Drink">Food &amp; Drink</option>
+                        <option value="Jewellery">Jewellery</option>
+                        <option value="Homeware">Homeware</option>
+                        <option value="Tech">Tech</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="prComment">Notes</label>
+                    <textarea id="prComment" rows="2" placeholder="Lot number, sizing, etc."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="prIsPresent" name="is_present" value="1" checked>
+                        <span>Show on Presents page</span>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" id="prCancel">Cancel</button>
+                    <button type="submit" class="btn-submit" id="prSubmit">Save</button>
+                </div>
+                <input type="hidden" id="prEditingId" value="">
+            </form>
+            <div id="prStatus" class="upload-status" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function getShopKey(p) {
+            return (p.website_name || '').trim() || '(No shop)';
+        }
+        function getPersonKey(p) {
+            var n = (p.present_for || '').trim();
+            return n || '(Unassigned)';
+        }
+        function getCategoryKey(p) {
+            return (p.category || '').trim() || 'Uncategorised';
+        }
+        function comparePersonKeys(a, b) {
+            if (a === '(Unassigned)') return 1;
+            if (b === '(Unassigned)') return -1;
+            return a.localeCompare(b);
+        }
+
+        var all = [];
+        var currentPerson = '';
+        var currentShop = '';
+        var currentCategory = '';
+
+        var loading = document.getElementById('prLoading');
+        var grid = document.getElementById('prGrid');
+        var filterPanel = document.getElementById('prFilterPanel');
+        var personBtns = document.getElementById('prPersonBtns');
+        var shopBtns = document.getElementById('prShopBtns');
+        var categoryBtns = document.getElementById('prCategoryBtns');
+        var modal = document.getElementById('prModal');
+        var form = document.getElementById('prForm');
+        var statusEl = document.getElementById('prStatus');
+
+        function buildSegment(container, values, current, onPick) {
+            container.innerHTML = '';
+            var allBtn = document.createElement('button');
+            allBtn.type = 'button';
+            allBtn.className = 'pr-seg-btn' + (current === '' ? ' active' : '');
+            allBtn.textContent = 'All';
+            allBtn.addEventListener('click', function() { onPick(''); });
+            container.appendChild(allBtn);
+            values.forEach(function(v) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'pr-seg-btn' + (current === v ? ' active' : '');
+                b.textContent = v;
+                b.addEventListener('click', function() { onPick(v); });
+                container.appendChild(b);
+            });
+        }
+
+        function buildFilters() {
+            if (!all.length) {
+                filterPanel.classList.remove('is-visible');
+                return;
+            }
+            filterPanel.classList.add('is-visible');
+            var people = {};
+            var shops = {};
+            var cats = {};
+            all.forEach(function(p) {
+                people[getPersonKey(p)] = true;
+                shops[getShopKey(p)] = true;
+                cats[getCategoryKey(p)] = true;
+            });
+            var personList = Object.keys(people).sort(comparePersonKeys);
+            var shopList = Object.keys(shops).sort(function(a, b) {
+                if (a === '(No shop)') return 1;
+                if (b === '(No shop)') return -1;
+                return a.localeCompare(b);
+            });
+            var catList = Object.keys(cats).sort(function(a, b) {
+                if (a === 'Uncategorised') return 1;
+                if (b === 'Uncategorised') return -1;
+                return a.localeCompare(b);
+            });
+            if (currentPerson && personList.indexOf(currentPerson) === -1) currentPerson = '';
+            if (currentShop && shopList.indexOf(currentShop) === -1) currentShop = '';
+            if (currentCategory && catList.indexOf(currentCategory) === -1) currentCategory = '';
+            buildSegment(personBtns, personList, currentPerson, function(v) { currentPerson = v; render(); });
+            buildSegment(shopBtns, shopList, currentShop, function(v) { currentShop = v; render(); });
+            buildSegment(categoryBtns, catList, currentCategory, function(v) { currentCategory = v; render(); });
+        }
+
+        function renderCard(p) {
+            var hasImage = p.image_url && p.image_url.trim();
+            var imgHtml = hasImage ? '<img src="' + escapeHtml(p.image_url) + '" alt="" class="product-tile-image" loading="lazy" onerror="this.parentElement.classList.add(\'product-tile-image--failed\')">' : '';
+            var title = escapeHtml(p.title || 'Present');
+            var rawPrice = (p.price && p.price.trim()) ? p.price.trim() : '';
+            var price = rawPrice ? '<span class="product-tile-price">' + escapeHtml(rawPrice.startsWith('£') ? rawPrice : '£ ' + rawPrice) + '</span>' : '';
+            var shop = getShopKey(p);
+            var shopHtml = shop !== '(No shop)' ? '<span class="product-tile-website">' + escapeHtml(shop) + '</span>' : '';
+            var link = (p.link && p.link.trim()) ? escapeHtml(p.link) : '#';
+            var person = getPersonKey(p);
+            var personHtml = person !== '(Unassigned)' ? '<span class="pr-person-pill">' + escapeHtml(person) + '</span>' : '';
+            var comment = (p.comment || '').trim();
+            var commentHtml = comment ? '<p class="pr-product-comment">' + escapeHtml(comment) + '</p>' : '';
+            var id = p.id;
+            var bought = !!p.bought;
+            return '<div class="pr-product-card" data-id="' + id + '"><div class="product-tile"><a href="' + link + '" target="_blank" rel="noopener" class="product-tile-link"><div class="product-tile-image-wrap">'
+                + imgHtml
+                + '<button type="button" class="pr-product-remove-btn" data-id="' + id + '" aria-label="Delete">×</button>'
+                + '<button type="button" class="pr-product-edit-btn" data-id="' + id + '" aria-label="Edit">✎</button>'
+                + '</div><div class="product-tile-info">' + shopHtml + '<span class="product-tile-title">' + title + personHtml + '</span> ' + price + '</div></a></div>'
+                + '<div class="pr-product-flags"><label><input type="checkbox" class="pr-bought" data-id="' + id + '" ' + (bought ? 'checked' : '') + '> Bought</label></div>'
+                + commentHtml + '</div>';
+        }
+
+        function render() {
+            buildFilters();
+            var list = all.slice();
+            if (currentPerson) list = list.filter(function(p) { return getPersonKey(p) === currentPerson; });
+            if (currentShop) list = list.filter(function(p) { return getShopKey(p) === currentShop; });
+            if (currentCategory) list = list.filter(function(p) { return getCategoryKey(p) === currentCategory; });
+
+            var bought = list.filter(function(p) { return p.bought; });
+            var active = list.filter(function(p) { return !p.bought; });
+
+            if (!active.length && !bought.length) {
+                grid.innerHTML = '<p class="subtitle">No presents match these filters. Add one with the button above.</p>';
+                return;
+            }
+
+            var byPerson = {};
+            active.forEach(function(p) {
+                var k = getPersonKey(p);
+                if (!byPerson[k]) byPerson[k] = [];
+                byPerson[k].push(p);
+            });
+            var personOrder = Object.keys(byPerson).sort(comparePersonKeys);
+            var html = '';
+            personOrder.forEach(function(person) {
+                html += '<div class="pr-section"><h2 class="pr-section-title">' + escapeHtml(person) + '</h2><div class="pr-section-grid">';
+                byPerson[person].forEach(function(p) { html += renderCard(p); });
+                html += '</div></div>';
+            });
+            html += '<div class="pr-section"><h2 class="pr-section-title">Bought</h2><div class="pr-section-grid">';
+            if (bought.length) {
+                bought.forEach(function(p) { html += renderCard(p); });
+            } else {
+                html += '<p class="pr-empty-bought">Nothing bought yet — tick <strong>Bought</strong> on a card to move it here.</p>';
+            }
+            html += '</div></div>';
+            grid.innerHTML = html;
+
+            grid.querySelectorAll('.pr-bought').forEach(function(cb) {
+                cb.addEventListener('change', function() {
+                    fetch('/api/products/' + cb.dataset.id, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bought: cb.checked })
+                    }).then(function() { return loadAll(); });
+                });
+            });
+            grid.querySelectorAll('.pr-product-remove-btn').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (!confirm('Remove this present?')) return;
+                    fetch('/api/products/' + btn.dataset.id, { method: 'DELETE' }).then(function() { loadAll(); });
+                });
+            });
+            grid.querySelectorAll('.pr-product-edit-btn').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    var p = all.find(function(x) { return String(x.id) === String(btn.dataset.id); });
+                    if (p) openModal(p);
+                });
+            });
+            grid.querySelectorAll('.pr-section-title').forEach(function(t) {
+                t.addEventListener('click', function() {
+                    var s = t.closest('.pr-section');
+                    if (s) { s.classList.toggle('collapsed'); t.classList.toggle('collapsed'); }
+                });
+            });
+        }
+
+        function openModal(preset) {
+            preset = preset || {};
+            document.getElementById('prEditingId').value = preset.id || '';
+            document.getElementById('prModalTitle').textContent = preset.id ? 'Edit present' : 'Add present';
+            document.getElementById('prSubmit').textContent = preset.id ? 'Save changes' : 'Save';
+            document.getElementById('prLink').value = preset.link || '';
+            document.getElementById('prPresentFor').value = preset.present_for || '';
+            document.getElementById('prWebsiteName').value = preset.website_name || '';
+            document.getElementById('prTitle').value = preset.title || '';
+            document.getElementById('prImageUrl').value = preset.image_url || '';
+            document.getElementById('prPrice').value = preset.price || '';
+            document.getElementById('prCategory').value = preset.category || '';
+            document.getElementById('prComment').value = preset.comment || '';
+            document.getElementById('prIsPresent').checked = preset.id
+                ? !!preset.is_present
+                : true;
+            statusEl.style.display = 'none';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        function closeModal() {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+            form.reset();
+            document.getElementById('prEditingId').value = '';
+        }
+
+        document.getElementById('prAddBtn').addEventListener('click', function() { openModal({}); });
+        document.getElementById('prModalClose').addEventListener('click', closeModal);
+        document.getElementById('prCancel').addEventListener('click', closeModal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+
+        document.getElementById('prFetchBtn').addEventListener('click', function() {
+            var url = (document.getElementById('prLink').value || '').trim();
+            if (!url) return;
+            var btn = document.getElementById('prFetchBtn');
+            var prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            fetch('/api/products/preview?url=' + encodeURIComponent(url))
+                .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+                .then(function(res) {
+                    var d = res.d || {};
+                    if (d.blocked && statusEl) {
+                        statusEl.textContent = d.blocked_reason || 'Preview blocked; fill in manually.';
+                        statusEl.className = 'upload-status error';
+                        statusEl.style.display = 'block';
+                    }
+                    if (d.title) document.getElementById('prTitle').value = d.title;
+                    if (d.image_url) document.getElementById('prImageUrl').value = d.image_url;
+                    if (d.website_name) document.getElementById('prWebsiteName').value = d.website_name;
+                    if (d.price) document.getElementById('prPrice').value = d.price;
+                    if (d.category) document.getElementById('prCategory').value = d.category;
+                })
+                .catch(function(e) { console.error(e); })
+                .finally(function() { btn.disabled = false; btn.textContent = prev; });
+        });
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var id = document.getElementById('prEditingId').value;
+            var payload = {
+                link: document.getElementById('prLink').value.trim(),
+                present_for: document.getElementById('prPresentFor').value.trim() || null,
+                website_name: document.getElementById('prWebsiteName').value.trim() || null,
+                title: document.getElementById('prTitle').value.trim() || null,
+                image_url: document.getElementById('prImageUrl').value.trim() || null,
+                price: document.getElementById('prPrice').value.trim() || null,
+                category: document.getElementById('prCategory').value.trim() || null,
+                comment: document.getElementById('prComment').value.trim() || null,
+                is_present: !!document.getElementById('prIsPresent').checked
+            };
+            if (!payload.link) return;
+            var url = id ? '/api/products/' + encodeURIComponent(id) : '/api/presents';
+            var method = id ? 'PATCH' : 'POST';
+            statusEl.style.display = 'block';
+            statusEl.className = 'upload-status loading';
+            statusEl.textContent = 'Saving…';
+            fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+                .then(function(res) {
+                    if (!res.ok) throw new Error((res.d && res.d.error) || 'Save failed');
+                    closeModal();
+                    return loadAll();
+                })
+                .catch(function(err) {
+                    statusEl.textContent = err.message || 'Could not save';
+                    statusEl.className = 'upload-status error';
+                });
+        });
+
+        function loadAll() {
+            return fetch('/api/presents')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    loading.style.display = 'none';
+                    all = Array.isArray(data) ? data : [];
+                    render();
+                })
+                .catch(function() {
+                    loading.style.display = 'none';
+                    grid.innerHTML = '<p class="error">Failed to load presents.</p>';
+                });
+        }
+
+        loadAll();
+    })();
+    </script>
+</body>
+</html>
