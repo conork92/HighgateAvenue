@@ -425,6 +425,12 @@ def events():
     return render_template('events.html')
 
 
+@app.route('/presents/')
+def presents():
+    """Gift ideas: ha_products with is_present, grouped by recipient."""
+    return render_template('presents.html')
+
+
 @app.route('/api/work-thoughts', methods=['GET'], strict_slashes=False)
 def get_work_thoughts():
     """List all work thoughts from ha_work_thoughts. Optional query: category=."""
@@ -730,7 +736,7 @@ def hk_products():
 
 @app.route('/products/')
 def highgate_products():
-    """Highgate Avenue products page: all products (includes is_mwh items), filterable and grouped."""
+    """All products: same UI as Muswell Hill products page, without MWH-only filter."""
     return render_template(
         'highgate_products.html',
         section_filter=None,
@@ -967,6 +973,10 @@ def _website_name_from_url(url):
             return 'Made'
         if 'dunelm' in host_lower:
             return 'Dunelm'
+        if 'the-saleroom.com' in host_lower or host_lower.endswith('saleroom.com'):
+            return 'The Saleroom'
+        if 'southgateauctionrooms.com' in host_lower:
+            return 'Southgate Auction Rooms'
         if 'wayfair' in host_lower:
             return 'Wayfair'
         if 'tkmaxx' in host_lower or 'tk maxx' in host_lower:
@@ -1596,6 +1606,31 @@ def _tkmaxx_fetch_product_soup(url):
     return None
 
 
+def _auction_gbp_estimate_from_text(text):
+    """Parse auction estimate / guide price ranges into £lo – £hi."""
+    if not text:
+        return None
+    est = re.search(
+        r"Auctioneer'?s estimate\s*([\d,]+)\s*GBP\s*[-–]\s*([\d,]+)\s*GBP",
+        text,
+        re.I,
+    )
+    if est:
+        lo = est.group(1).replace(',', '')
+        hi = est.group(2).replace(',', '')
+        return f'£{lo} – £{hi}'
+    gp = re.search(
+        r'Guide price:\s*£?\s*([\d,]+)\s*[-–]\s*£?\s*([\d,]+)',
+        text,
+        re.I,
+    )
+    if gp:
+        lo = gp.group(1).replace(',', '')
+        hi = gp.group(2).replace(',', '')
+        return f'£{lo} – £{hi}'
+    return None
+
+
 def _fetch_product_preview(url):
     """Fetch a URL and extract title, image_url, website_name, price. Returns dict (at least title from URL + website_name)."""
     if not url or not url.startswith(('http://', 'https://')):
@@ -1634,7 +1669,10 @@ def _fetch_product_preview(url):
     except Exception as e:
         app.logger.warning(f"Product preview fetch failed for {url[:80]}: {e}")
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
-        retry_domains = ('amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made', 'tkmaxx', 'hm.com')
+        retry_domains = (
+            'amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made', 'tkmaxx', 'hm.com',
+            'the-saleroom.com', 'saleroom.com',
+        )
         if any(d in url.lower() for d in retry_domains):
             try:
                 soup = _do_fetch(user_agent='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
@@ -2037,6 +2075,82 @@ def _fetch_product_preview(url):
                     price = best[1]
         except Exception:
             pass
+    # Southgate Auction Rooms: guide price range on lot pages
+    if not price and 'southgateauctionrooms.com' in host:
+        try:
+            out['website_name'] = out.get('website_name') or 'Southgate Auction Rooms'
+            if not out.get('category'):
+                out['category'] = 'Auction'
+            h1 = soup.find('h1')
+            if h1 and h1.get_text(strip=True):
+                out['title'] = h1.get_text(strip=True)
+            text = soup.get_text(' ', strip=True)
+            price = _auction_gbp_estimate_from_text(text)
+            if not price:
+                m = re.search(r'Guide price:\s*(£[^\n|]+)', text, re.I)
+                if m:
+                    price = m.group(1).strip()
+            if not out.get('image_url'):
+                for img in soup.find_all('img', src=True):
+                    src = (img.get('src') or '').strip()
+                    if not src or 'ajax-loader' in src or 'logo' in src.lower():
+                        continue
+                    if '/wp-content/uploads/' in src:
+                        out['image_url'] = _normalize_image_url(src)
+                        break
+        except Exception:
+            pass
+    # The Saleroom (e.g. Southgate Auction Rooms online catalogue)
+    if 'the-saleroom.com' in host or host.endswith('saleroom.com'):
+        try:
+            if not out.get('category'):
+                out['category'] = 'Auction'
+            if 'southgate' in url.lower():
+                out['website_name'] = 'Southgate Auction Rooms (The Saleroom)'
+            else:
+                out['website_name'] = out.get('website_name') or 'The Saleroom'
+            h1 = soup.find('h1')
+            if h1 and h1.get_text(strip=True):
+                out['title'] = h1.get_text(strip=True)
+            text = soup.get_text(' ', strip=True)
+            if not price:
+                price = _auction_gbp_estimate_from_text(text)
+            if not price:
+                for script in soup.find_all('script', type='application/ld+json'):
+                    if not script.string:
+                        continue
+                    try:
+                        data = json.loads(script.string)
+                    except Exception:
+                        continue
+                    nodes = data if isinstance(data, list) else [data]
+                    for node in nodes:
+                        if not isinstance(node, dict):
+                            continue
+                        if node.get('@type') == 'Product' and node.get('name') and not out.get('title'):
+                            out['title'] = str(node['name']).strip()
+                        off = node.get('offers')
+                        if isinstance(off, dict):
+                            low = off.get('lowPrice') or off.get('price')
+                            high = off.get('highPrice') or low
+                            if low is not None:
+                                price = f'£{low} – £{high}' if high and str(high) != str(low) else f'£{low}'
+                                break
+                    if price:
+                        break
+            if not out.get('image_url'):
+                for img in soup.find_all('img'):
+                    src = (img.get('src') or img.get('data-src') or img.get('data-lazy-src') or '').strip()
+                    if not src or 'logo' in src.lower() or 'ajax-loader' in src:
+                        continue
+                    if any(
+                        token in src.lower()
+                        for token in ('bidspotter', 'saleroom', 'lot-image', 'cloudfront', '/lots/')
+                    ):
+                        out['image_url'] = _normalize_image_url(src)
+                        break
+        except Exception:
+            pass
     if not price:
         try:
             text = soup.get_text()
@@ -2080,6 +2194,44 @@ def product_preview():
             'website_name': _website_name_from_url(url),
         }
     return jsonify(data), 200
+
+
+PRESENT_PRODUCT_TAG = 'present'
+
+
+def _product_has_tag(row, tag_name):
+    tags = row.get('tags')
+    if not isinstance(tags, list):
+        return False
+    target = str(tag_name).strip().lower()
+    return any(str(t).strip().lower() == target for t in tags)
+
+
+def _is_present_product(row):
+    """True if row should appear on the Presents page."""
+    if _coerce_bool(row.get('is_present'), default=False):
+        return True
+    if _product_has_tag(row, PRESENT_PRODUCT_TAG):
+        return True
+    if (row.get('present_for') or '').strip():
+        return True
+    return False
+
+
+def _normalize_product_tags(tags, ensure=None):
+    if isinstance(tags, list):
+        out = [str(t).strip() for t in tags if str(t).strip()]
+    elif isinstance(tags, str):
+        out = [t.strip() for t in tags.split(',') if t.strip()]
+    else:
+        out = []
+    if ensure:
+        lower = {t.lower() for t in out}
+        for tag in ensure:
+            if tag.lower() not in lower:
+                out.append(tag)
+                lower.add(tag.lower())
+    return out
 
 
 @app.route('/api/products')
@@ -2171,6 +2323,11 @@ def create_product():
             'bought': _coerce_bool(data.get('bought'), default=False),
             'comment': (data.get('comment') or '').strip() or None,
         }
+        present_for = (data.get('present_for') or '').strip()
+        if present_for:
+            payload['present_for'] = present_for
+        if 'is_present' in data:
+            payload['is_present'] = _coerce_bool(data.get('is_present'), default=False)
         r = supabase.table('ha_products').insert(payload).execute()
         rows = r.data or []
         return jsonify(rows[0] if rows else payload), 201
@@ -2236,12 +2393,18 @@ def update_product(product_id):
             update_data['website_name'] = (data.get('website_name') or '').strip() or None
         if 'comment' in data:
             update_data['comment'] = (data.get('comment') or '').strip() or None
+        if 'present_for' in data:
+            update_data['present_for'] = (data.get('present_for') or '').strip() or None
+        if 'is_present' in data:
+            update_data['is_present'] = _coerce_bool(data.get('is_present'), default=False)
+        elif 'present_for' in data:
+            update_data['is_present'] = True
         if 'tags' in data:
-            tags = data['tags']
-            if isinstance(tags, list):
-                update_data['tags'] = [str(t).strip() for t in tags if str(t).strip()]
-            else:
-                update_data['tags'] = [t.strip() for t in (tags or '').split(',') if t.strip()]
+            ensure_present = update_data.get('is_present') or 'present_for' in data
+            update_data['tags'] = _normalize_product_tags(
+                data['tags'],
+                ensure=[PRESENT_PRODUCT_TAG] if ensure_present else None,
+            )
         if not update_data:
             return jsonify({'error': 'No fields to update'}), 400
         r = supabase.table('ha_products').update(update_data).eq('id', product_id).execute()
@@ -2261,6 +2424,89 @@ def delete_product(product_id):
         return '', 204
     except Exception as e:
         app.logger.error(f"Error deleting product: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/presents')
+def get_presents():
+    """Products with is_present=true. Optional query: person=, category=, source= (website_name)."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        try:
+            r = supabase.table('ha_products').select('*').eq('is_present', True).order('created_at', desc=True).execute()
+            rows = r.data or []
+        except Exception as col_err:
+            app.logger.info(f"Presents is_present query failed ({col_err}), using legacy filter")
+            r = supabase.table('ha_products').select('*').order('created_at', desc=True).execute()
+            rows = [row for row in (r.data or []) if _is_present_product(row)]
+        person = (request.args.get('person') or '').strip()
+        category = (request.args.get('category') or '').strip()
+        source = (request.args.get('source') or '').strip()
+        if person:
+            if person == '(Unassigned)':
+                rows = [row for row in rows if not (row.get('present_for') or '').strip()]
+            else:
+                rows = [row for row in rows if (row.get('present_for') or '').strip() == person]
+        if category:
+            rows = [row for row in rows if (row.get('category') or '').strip() == category]
+        if source:
+            if source == '(No shop)':
+                rows = [row for row in rows if not (row.get('website_name') or '').strip()]
+            else:
+                rows = [row for row in rows if (row.get('website_name') or '').strip() == source]
+        return jsonify(rows), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching presents: {e}")
+        return jsonify([]), 200
+
+
+@app.route('/api/presents', methods=['POST'])
+def create_present():
+    """Create a ha_products row with is_present=true (same fields as products + present_for)."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        link = (data.get('link') or '').strip()
+        if not link:
+            return jsonify({'error': 'Link is required'}), 400
+        tags = _normalize_product_tags(data.get('tags'), ensure=[PRESENT_PRODUCT_TAG])
+        category = (data.get('category') or '').strip() or None
+        if not category and (
+            'southgateauctionrooms.com' in link.lower()
+            or 'the-saleroom.com' in link.lower()
+        ):
+            category = 'Auction'
+        payload = {
+            'link': link,
+            'title': (data.get('title') or '').strip() or None,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'price': (data.get('price') or '').strip() or None,
+            'category': category,
+            'sub_category': (data.get('sub_category') or '').strip() or None,
+            'room': (data.get('room') or '').strip() or None,
+            'website_name': (data.get('website_name') or '').strip() or None,
+            'tags': tags,
+            'is_mwh': False,
+            'is_present': _coerce_bool(data.get('is_present'), default=True),
+            'project': 'Highgate Avenue',
+            'bought': _coerce_bool(data.get('bought'), default=False),
+            'comment': (data.get('comment') or '').strip() or None,
+            'present_for': (data.get('present_for') or '').strip() or None,
+        }
+        try:
+            r = supabase.table('ha_products').insert(payload).execute()
+        except Exception as insert_err:
+            if 'is_present' in str(insert_err).lower() or 'PGRST' in str(insert_err):
+                payload.pop('is_present', None)
+                r = supabase.table('ha_products').insert(payload).execute()
+            else:
+                raise
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating present: {e}")
         return jsonify({'error': str(e)}), 500
 
 

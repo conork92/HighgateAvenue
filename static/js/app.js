@@ -269,6 +269,8 @@ function initProductModal(section, grid, loadingEl) {
         document.getElementById('productTags').value = Array.isArray(p.tags) ? (p.tags || []).join(', ') : (p.tags || '');
         const isMwh = document.getElementById('productIsMwh');
         if (isMwh) isMwh.checked = !!p.is_mwh;
+        const isPresent = document.getElementById('productIsPresent');
+        if (isPresent) isPresent.checked = !!p.is_present;
     }
 
     addBtn.addEventListener('click', () => {
@@ -387,6 +389,8 @@ function initProductModal(section, grid, loadingEl) {
         const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
         const isMwhEl = document.getElementById('productIsMwh');
         const isMwh = isMwhEl ? isMwhEl.checked : false;
+        const isPresentEl = document.getElementById('productIsPresent');
+        const isPresent = isPresentEl ? isPresentEl.checked : false;
         // Auto-detect project: if is_mwh is checked, it's Muswell Hill; otherwise Highgate Avenue
         const project = isMwh ? 'Muswell Hill' : 'Highgate Avenue';
         
@@ -400,6 +404,7 @@ function initProductModal(section, grid, loadingEl) {
             website_name: (document.getElementById('productWebsiteName').value || '').trim() || null,
             tags,
             is_mwh: isMwh,
+            is_present: isPresent,
             project: project
         };
         submitBtn.disabled = true;
