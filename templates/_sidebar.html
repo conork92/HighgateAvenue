@@ -48,6 +48,9 @@
             <a href="{{ url_for('highgate_products') }}" class="{% if request.endpoint == 'highgate_products' %}active{% endif %}">Products</a>
         </li>
         <li>
+            <a href="{{ url_for('baby_products_page') }}" class="{% if request.endpoint == 'baby_products_page' %}active{% endif %}">Baby</a>
+        </li>
+        <li>
             <a href="{{ url_for('presents') }}" class="{% if request.endpoint == 'presents' %}active{% endif %}">Presents</a>
         </li>
         <li>

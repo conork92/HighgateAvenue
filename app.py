@@ -13,7 +13,7 @@ import requests
 import hmac
 import hashlib
 import base64
-from urllib.parse import quote, urlparse, unquote
+from urllib.parse import quote, urlparse, unquote, parse_qs
 from io import BytesIO
 import re
 import boto3
@@ -745,6 +745,17 @@ def highgate_products():
     )
 
 
+@app.route('/baby/')
+def baby_products_page():
+    """Baby products: grouped by type (Clothes, Toys, etc.)."""
+    return render_template(
+        'baby_products.html',
+        section_filter=None,
+        all_sections=DESIGN_SECTIONS,
+        sections_order=DESIGN_SECTIONS_ORDER,
+    )
+
+
 @app.route('/muswell-hill/<room_slug>/')
 def muswell_hill_room(room_slug):
     if room_slug not in MUSWELL_HILL_ROOMS:
@@ -899,6 +910,15 @@ def _title_from_url(url):
                 raw = re.sub(r'[-_]+', ' ', unquote(base)).strip()
                 if len(raw) > 2:
                     return raw[:200].title()
+        # Temu: /uk/product-slug-g-603686810058174.html
+        if 'temu.com' in (parsed.netloc or '').lower():
+            m = re.search(r'/([^/]+)-g-\d+\.html', path, re.I)
+            if m:
+                slug = m.group(1)
+                raw = re.sub(r'--+', ' & ', slug)
+                raw = re.sub(r'-+', ' ', raw).strip()
+                if len(raw) > 3:
+                    return raw[:200].title()
         # Urban Outfitters: /en-gb/shop/.../spindle-arch-storage-shelf
         if 'urbanoutfitters' in (parsed.netloc or '').lower() and segments:
             for seg in reversed(segments):
@@ -987,6 +1007,10 @@ def _website_name_from_url(url):
             return 'Next'
         if 'hm.com' in host_lower or (host_lower.startswith('hm.') or host_lower == 'hm'):
             return 'H&M'
+        if 'etsy.com' in host_lower:
+            return 'Etsy'
+        if 'temu.com' in host_lower:
+            return 'Temu'
         part = host.split('.')[-2] if '.' in host else host
         if part:
             return part[:1].upper() + part[1:].lower()
@@ -1606,6 +1630,117 @@ def _tkmaxx_fetch_product_soup(url):
     return None
 
 
+def _temu_title_from_path(path):
+    """Readable title from Temu product slug (…-g-123.html)."""
+    m = re.search(r'/([^/]+)-g-\d+\.html', path or '', re.I)
+    if not m:
+        return None
+    slug = m.group(1)
+    raw = re.sub(r'--+', ' & ', slug)
+    raw = re.sub(r'-+', ' ', raw).strip()
+    return raw[:200].title() if len(raw) > 3 else None
+
+
+def _temu_preview_from_url(url):
+    """Temu often embeds gallery image (and hints) in the URL query string."""
+    out = {}
+    try:
+        parsed = urlparse(url)
+        if 'temu.com' not in (parsed.netloc or '').lower():
+            return out
+        out['website_name'] = 'Temu'
+        title = _temu_title_from_path(parsed.path)
+        if title:
+            out['title'] = title
+        qs = parse_qs(parsed.query, keep_blank_values=False)
+        for key in ('top_gallery_url', 'gallery_url', 'img_url', 'image_url'):
+            for val in qs.get(key) or []:
+                img = unquote((val or '').strip())
+                if img.startswith('http') and ('kwcdn' in img or 'temu' in img.lower()):
+                    out['image_url'] = _normalize_image_url(img)
+                    break
+            if out.get('image_url'):
+                break
+        ext_vals = qs.get('_oak_rec_ext_1') or []
+        if ext_vals and not out.get('price'):
+            raw_ext = (ext_vals[0] or '').strip()
+            price_minor = None
+            if raw_ext.isdigit():
+                price_minor = int(raw_ext)
+            else:
+                try:
+                    padded = raw_ext + '=' * (-len(raw_ext) % 4)
+                    decoded = base64.b64decode(padded).decode('utf-8', errors='ignore').strip()
+                    if decoded.isdigit():
+                        price_minor = int(decoded)
+                except Exception:
+                    pass
+            if price_minor is not None and price_minor > 0:
+                if price_minor >= 100:
+                    out['price'] = f'£{price_minor / 100:.2f}'.replace('.00', '')
+                else:
+                    out['price'] = f'£{price_minor}'
+    except Exception:
+        pass
+    return out
+
+
+def _temu_images_from_html(html_text):
+    """Find product gallery URLs in Temu page HTML (often JS-rendered)."""
+    if not html_text:
+        return None
+    skip = ('logo', 'avatar', 'icon', 'sprite', 'placeholder', 'blank', 'loading')
+    patterns = [
+        r'https://img[a-z0-9-]*\.kwcdn\.com/local-goods-img/[^\s"\'<>\\]+',
+        r'https://img[a-z0-9-]*\.kwcdn\.com/goods-img/[^\s"\'<>\\]+',
+        r'https://img[a-z0-9-]*\.kwcdn\.com/[^\s"\'<>\\]+\.(?:jpe?g|webp|png)',
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, html_text, re.I):
+            candidate = match.group(0).rstrip('\\')
+            lower = candidate.lower()
+            if any(token in lower for token in skip):
+                continue
+            return _normalize_image_url(candidate)
+    return None
+
+
+def _price_from_json_ld_scripts(soup):
+    """Extract a display price from JSON-LD Product nodes."""
+    try:
+        for script in soup.find_all('script', type='application/ld+json'):
+            if not script.string:
+                continue
+            try:
+                data = json.loads(script.string)
+            except Exception:
+                continue
+            nodes = data if isinstance(data, list) else [data]
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+                off = None
+                if node.get('@type') == 'Product':
+                    off = node.get('offers')
+                elif node.get('@type') == 'Offer':
+                    off = node
+                if isinstance(off, list) and off:
+                    off = off[0]
+                if isinstance(off, dict):
+                    cur = (off.get('priceCurrency') or 'GBP').upper()
+                    sym = '£' if cur == 'GBP' else ('$' if cur == 'USD' else '£')
+                    low = off.get('lowPrice') or off.get('price')
+                    high = off.get('highPrice')
+                    if low is not None:
+                        low_s = str(low).replace(',', '')
+                        if high is not None and str(high) != str(low):
+                            return f'{sym}{low_s} – {sym}{str(high).replace(",", "")}'
+                        return f'{sym}{low_s}'
+    except Exception:
+        pass
+    return None
+
+
 def _auction_gbp_estimate_from_text(text):
     """Parse auction estimate / guide price ranges into £lo – £hi."""
     if not text:
@@ -1644,6 +1779,11 @@ def _fetch_product_preview(url):
 
     host = (urlparse(url).netloc or '').lower()
 
+    if 'temu.com' in host:
+        for key, val in _temu_preview_from_url(url).items():
+            if val and not out.get(key):
+                out[key] = val
+
     def _do_fetch(user_agent=None, timeout=None):
         headers = {
             'User-Agent': user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -1671,7 +1811,7 @@ def _fetch_product_preview(url):
         # Retry with a different User-Agent for known retailers (sometimes returns different HTML)
         retry_domains = (
             'amazon', 'habitat', 'ikea', 'wayfair', 'hulalahome', 'made.com', 'made', 'tkmaxx', 'hm.com',
-            'the-saleroom.com', 'saleroom.com',
+            'the-saleroom.com', 'saleroom.com', 'etsy.com', 'temu.com',
         )
         if any(d in url.lower() for d in retry_domains):
             try:
@@ -2151,6 +2291,72 @@ def _fetch_product_preview(url):
                         break
         except Exception:
             pass
+    # Etsy listings
+    if 'etsy.com' in host:
+        try:
+            out['website_name'] = out.get('website_name') or 'Etsy'
+            if not out.get('category'):
+                out['category'] = 'Baby'
+            h1 = soup.find('h1')
+            if h1 and h1.get_text(strip=True):
+                out['title'] = h1.get_text(strip=True)
+            if not price:
+                price = _price_from_json_ld_scripts(soup)
+            if not price:
+                text = soup.get_text(' ', strip=True)
+                m = re.search(r'(?:Price:|Now)\s*£\s*([\d,]+(?:\.\d{2})?)', text, re.I)
+                if m:
+                    price = '£' + m.group(1)
+            if not out.get('image_url'):
+                for img in soup.find_all('img'):
+                    src = (img.get('src') or img.get('data-src') or '').strip()
+                    if src and ('etsystatic' in src or 'etsyimg' in src):
+                        out['image_url'] = _normalize_image_url(src)
+                        break
+        except Exception:
+            pass
+    # Temu product pages (gallery image often only in URL query or inline JSON)
+    if 'temu.com' in host:
+        try:
+            out['website_name'] = out.get('website_name') or 'Temu'
+            if not out.get('title'):
+                title_from_path = _temu_title_from_path(urlparse(url).path)
+                if title_from_path:
+                    out['title'] = title_from_path
+            if not out.get('title'):
+                og_t = soup.find('meta', property='og:title')
+                if og_t and og_t.get('content'):
+                    out['title'] = og_t['content'].strip()
+            if not price:
+                price = _price_from_json_ld_scripts(soup)
+            if not price and out.get('price'):
+                price = out['price']
+            if not price:
+                text = soup.get_text(' ', strip=True)
+                m = re.search(r'£\s*([\d,]+(?:\.\d{2})?)', text)
+                if m:
+                    price = '£' + m.group(1)
+            if not out.get('image_url'):
+                og_img = soup.find('meta', property='og:image')
+                if og_img and og_img.get('content') and 'kwcdn' in og_img['content']:
+                    out['image_url'] = _normalize_image_url(og_img['content'])
+            if not out.get('image_url'):
+                for img in soup.find_all('img'):
+                    src = (img.get('src') or img.get('data-src') or img.get('data-original') or '').strip()
+                    if src and 'kwcdn.com' in src and 'logo' not in src.lower():
+                        out['image_url'] = _normalize_image_url(src)
+                        break
+            if not out.get('image_url'):
+                html_img = _temu_images_from_html(str(soup))
+                if html_img:
+                    out['image_url'] = html_img
+            if not out.get('image_url'):
+                for key, val in _temu_preview_from_url(url).items():
+                    if key == 'image_url' and val:
+                        out['image_url'] = val
+                        break
+        except Exception:
+            pass
     if not price:
         try:
             text = soup.get_text()
@@ -2197,6 +2403,7 @@ def product_preview():
 
 
 PRESENT_PRODUCT_TAG = 'present'
+BABY_PRODUCT_TAG = 'baby'
 
 
 def _product_has_tag(row, tag_name):
@@ -2214,6 +2421,17 @@ def _is_present_product(row):
     if _product_has_tag(row, PRESENT_PRODUCT_TAG):
         return True
     if (row.get('present_for') or '').strip():
+        return True
+    return False
+
+
+def _is_baby_product(row):
+    """True if row should appear on the Baby page."""
+    if _coerce_bool(row.get('is_baby'), default=False):
+        return True
+    if _product_has_tag(row, BABY_PRODUCT_TAG):
+        return True
+    if (row.get('category') or '').strip().lower() == 'baby':
         return True
     return False
 
@@ -2328,6 +2546,8 @@ def create_product():
             payload['present_for'] = present_for
         if 'is_present' in data:
             payload['is_present'] = _coerce_bool(data.get('is_present'), default=False)
+        if 'is_baby' in data:
+            payload['is_baby'] = _coerce_bool(data.get('is_baby'), default=False)
         r = supabase.table('ha_products').insert(payload).execute()
         rows = r.data or []
         return jsonify(rows[0] if rows else payload), 201
@@ -2399,6 +2619,10 @@ def update_product(product_id):
             update_data['is_present'] = _coerce_bool(data.get('is_present'), default=False)
         elif 'present_for' in data:
             update_data['is_present'] = True
+        if 'is_baby' in data:
+            update_data['is_baby'] = _coerce_bool(data.get('is_baby'), default=False)
+        elif 'sub_category' in data and (data.get('category') or '').strip().lower() == 'baby':
+            update_data['is_baby'] = True
         if 'tags' in data:
             ensure_present = update_data.get('is_present') or 'present_for' in data
             update_data['tags'] = _normalize_product_tags(
@@ -2507,6 +2731,91 @@ def create_present():
         return jsonify(rows[0] if rows else payload), 201
     except Exception as e:
         app.logger.error(f"Error creating present: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/baby-products')
+def get_baby_products():
+    """Baby products (is_baby). Optional query: type= (sub_category), source=, room=."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        try:
+            r = supabase.table('ha_products').select('*').eq('is_baby', True).order('created_at', desc=True).execute()
+            rows = r.data or []
+        except Exception as col_err:
+            app.logger.info(f'Baby is_baby query failed ({col_err}), using legacy filter')
+            r = supabase.table('ha_products').select('*').order('created_at', desc=True).execute()
+            rows = [row for row in (r.data or []) if _is_baby_product(row)]
+        baby_type = (request.args.get('type') or request.args.get('sub_category') or '').strip()
+        source = (request.args.get('source') or '').strip()
+        room = (request.args.get('room') or '').strip()
+        if baby_type:
+            if baby_type == '(Uncategorised)':
+                rows = [row for row in rows if not (row.get('sub_category') or '').strip()]
+            else:
+                rows = [row for row in rows if (row.get('sub_category') or '').strip() == baby_type]
+        if source:
+            if source == '(No shop)':
+                rows = [row for row in rows if not (row.get('website_name') or '').strip()]
+            else:
+                rows = [row for row in rows if (row.get('website_name') or '').strip() == source]
+        if room:
+            if room == '(No room)':
+                rows = [row for row in rows if not (row.get('room') or '').strip()]
+            else:
+                rl = room.lower()
+                rows = [row for row in rows if (row.get('room') or '').strip().lower() == rl]
+        return jsonify(rows), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching baby products: {e}")
+        return jsonify([]), 200
+
+
+@app.route('/api/baby-products', methods=['POST'])
+def create_baby_product():
+    """Create a ha_products row for the Baby page."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        link = (data.get('link') or '').strip()
+        if not link:
+            return jsonify({'error': 'Link is required'}), 400
+        tags = _normalize_product_tags(data.get('tags'), ensure=[BABY_PRODUCT_TAG])
+        sub_category = (data.get('sub_category') or '').strip() or None
+        payload = {
+            'link': link,
+            'title': (data.get('title') or '').strip() or None,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'price': (data.get('price') or '').strip() or None,
+            'category': 'Baby',
+            'sub_category': sub_category,
+            'room': (data.get('room') or '').strip() or None,
+            'website_name': (data.get('website_name') or '').strip() or None,
+            'tags': tags,
+            'is_mwh': _coerce_bool(data.get('is_mwh'), default=False),
+            'is_baby': _coerce_bool(data.get('is_baby'), default=True),
+            'is_present': _coerce_bool(data.get('is_present'), default=False),
+            'project': (data.get('project') or '').strip() or 'Highgate Avenue',
+            'bought': _coerce_bool(data.get('bought'), default=False),
+            'comment': (data.get('comment') or '').strip() or None,
+        }
+        present_for = (data.get('present_for') or '').strip()
+        if present_for:
+            payload['present_for'] = present_for
+        try:
+            r = supabase.table('ha_products').insert(payload).execute()
+        except Exception as insert_err:
+            if 'is_baby' in str(insert_err).lower() or 'PGRST' in str(insert_err):
+                payload.pop('is_baby', None)
+                r = supabase.table('ha_products').insert(payload).execute()
+            else:
+                raise
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f"Error creating baby product: {e}")
         return jsonify({'error': str(e)}), 500
 
 
