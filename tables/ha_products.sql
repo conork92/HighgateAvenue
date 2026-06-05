@@ -20,6 +20,7 @@ create table if not exists ha_products (
   comment text,
   present_for text,
   is_present boolean not null default false,
+  is_baby boolean not null default false,
   created_at timestamptz default now()
 );
 
@@ -32,6 +33,7 @@ comment on column ha_products.comment is 'Optional notes or comments for the pro
 comment on column ha_products.sub_category is 'Free-text sub category (e.g. for Baby page filters)';
 comment on column ha_products.present_for is 'Recipient for present items (free text)';
 comment on column ha_products.is_present is 'True when item should appear on Presents page';
+comment on column ha_products.is_baby is 'True when item should appear on Baby page (sub_category = type e.g. Clothes, Toys)';
 
 -- If table already exists, add columns in Supabase SQL Editor:
 -- alter table ha_products add column if not exists website_name text;
