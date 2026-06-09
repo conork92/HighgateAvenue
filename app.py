@@ -425,6 +425,12 @@ def events():
     return render_template('events.html')
 
 
+@app.route('/cars/')
+def cars():
+    """Cars shortlist with Autotrader import."""
+    return render_template('cars.html')
+
+
 @app.route('/presents/')
 def presents():
     """Gift ideas: ha_products with is_present, grouped by recipient."""
@@ -480,6 +486,230 @@ def delete_work_thought(thought_id):
         return jsonify({'ok': True}), 200
     except Exception as e:
         app.logger.error(f"Error deleting work thought: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _autotrader_advert_id_from_url(url):
+    if not url:
+        return None
+    m = re.search(r'autotrader\.co\.uk/car-details/(\d+)', url, re.I)
+    return m.group(1) if m else None
+
+
+def _autotrader_spec_value(specs, spec_key):
+    if not isinstance(specs, list):
+        return None
+    key_upper = (spec_key or '').upper()
+    for item in specs:
+        if isinstance(item, dict) and (item.get('specKey') or '').upper() == key_upper:
+            val = (item.get('value') or '').strip()
+            return val or None
+    return None
+
+
+def _fetch_autotrader_car(url):
+    """Fetch car listing details from Autotrader product-page API."""
+    advert_id = _autotrader_advert_id_from_url(url)
+    if not advert_id:
+        return None
+    api_url = f'https://www.autotrader.co.uk/product-page/v1/advert/{advert_id}?channel=cars'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+    }
+    try:
+        r = requests.get(api_url, headers=headers, timeout=18)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        app.logger.warning(f'Autotrader fetch failed for {advert_id}: {e}')
+        return {'link': url, 'advert_id': advert_id, 'website_name': 'Autotrader'}
+    heading = data.get('heading') or {}
+    title = (heading.get('title') or '').strip() or None
+    derivative = (heading.get('subTitle') or '').strip() or None
+    price_block = heading.get('priceBreakdown') or {}
+    price_obj = price_block.get('price') if isinstance(price_block.get('price'), dict) else {}
+    price_amount = price_obj.get('price')
+    price = price_obj.get('priceFormatted') or (f'£{int(price_amount):,}' if price_amount else None)
+    if not price and (data.get('gallery') or {}).get('price'):
+        price = data['gallery']['price']
+    specs = data.get('keySpecification') or (data.get('overview') or {}).get('keySpecification') or []
+    ctx = (data.get('advertTrackingData') or {}).get('advertContext') or {}
+    vehicle_ctx = (data.get('advertTrackingData') or {}).get('vehicleContext') or {}
+    nav = (data.get('navigation') or {}).get('backToSearch') or {}
+    mileage = _autotrader_spec_value(specs, 'MILEAGE')
+    mileage_amount = ctx.get('mileage')
+    if mileage_amount is None and mileage:
+        m = re.search(r'([\d,]+)', mileage)
+        if m:
+            try:
+                mileage_amount = int(m.group(1).replace(',', ''))
+            except ValueError:
+                pass
+    gallery = data.get('gallery') or {}
+    image_url = None
+    images = gallery.get('images') or []
+    if images and isinstance(images[0], dict):
+        raw_img = (images[0].get('url') or '').strip()
+        if raw_img:
+            image_url = raw_img.replace('{resize}', 'w800')
+    contact = data.get('contactDetails') or {}
+    seller_name = (contact.get('advertiserName') or (data.get('seller') or {}).get('name') or '').strip() or None
+    seller_location = ', '.join(
+        p for p in [
+            (contact.get('advertiserTown') or '').strip(),
+            (contact.get('advertiserCounty') or '').strip(),
+        ] if p
+    ) or None
+    return {
+        'link': url.split('?')[0] if '?' in url else url,
+        'advert_id': advert_id,
+        'title': title,
+        'derivative': derivative,
+        'make': (nav.get('make') or ctx.get('make') or '').strip() or None,
+        'model': (nav.get('model') or ctx.get('model') or '').strip() or None,
+        'year': ctx.get('year'),
+        'price': price,
+        'price_amount': price_amount,
+        'mileage': mileage,
+        'mileage_amount': mileage_amount,
+        'fuel_type': _autotrader_spec_value(specs, 'FUELTYPE') or (nav.get('fuel') or '').strip() or None,
+        'body_type': _autotrader_spec_value(specs, 'BODYTYPE') or (vehicle_ctx.get('bodyType') or '').strip() or None,
+        'transmission': _autotrader_spec_value(specs, 'GEARBOX') or (vehicle_ctx.get('transmission') or '').strip() or None,
+        'colour': _autotrader_spec_value(specs, 'BODYCOLOUR') or (vehicle_ctx.get('colour') or '').strip() or None,
+        'engine': _autotrader_spec_value(specs, 'ENGINESIZELITRES'),
+        'owners': _autotrader_spec_value(specs, 'OWNERS'),
+        'registration': _autotrader_spec_value(specs, 'REGISTRATION'),
+        'seller_name': seller_name,
+        'seller_location': seller_location,
+        'image_url': image_url,
+        'website_name': 'Autotrader',
+    }
+
+
+@app.route('/api/cars/preview')
+def car_preview():
+    """GET ?url=... — fetch Autotrader listing fields."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Invalid URL'}), 400
+    if 'autotrader.co.uk' not in url.lower():
+        return jsonify({'error': 'Only Autotrader UK car-details links are supported for now'}), 400
+    data = _fetch_autotrader_car(url)
+    if not data:
+        return jsonify({'error': 'Could not parse Autotrader URL'}), 400
+    return jsonify(data), 200
+
+
+@app.route('/api/cars', methods=['GET'], strict_slashes=False)
+def get_cars():
+    """List cars from ha_cars. Optional query: status=."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        query = supabase.table('ha_cars').select('*').order('created_at', desc=True)
+        status = (request.args.get('status') or '').strip()
+        if status:
+            query = query.eq('status', status)
+        r = query.execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f'Error fetching cars: {e}')
+        return jsonify([]), 200
+
+
+@app.route('/api/cars', methods=['POST'], strict_slashes=False)
+def create_car():
+    """Create a car row in ha_cars."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        link = (data.get('link') or '').strip()
+        if not link:
+            return jsonify({'error': 'Link is required'}), 400
+        payload = {
+            'link': link,
+            'advert_id': (data.get('advert_id') or _autotrader_advert_id_from_url(link) or '').strip() or None,
+            'title': (data.get('title') or '').strip() or None,
+            'derivative': (data.get('derivative') or '').strip() or None,
+            'make': (data.get('make') or '').strip() or None,
+            'model': (data.get('model') or '').strip() or None,
+            'year': data.get('year') if data.get('year') not in (None, '') else None,
+            'price': (data.get('price') or '').strip() or None,
+            'price_amount': data.get('price_amount'),
+            'mileage': (data.get('mileage') or '').strip() or None,
+            'mileage_amount': data.get('mileage_amount'),
+            'fuel_type': (data.get('fuel_type') or '').strip() or None,
+            'body_type': (data.get('body_type') or '').strip() or None,
+            'transmission': (data.get('transmission') or '').strip() or None,
+            'colour': (data.get('colour') or '').strip() or None,
+            'engine': (data.get('engine') or '').strip() or None,
+            'owners': (data.get('owners') or '').strip() or None,
+            'registration': (data.get('registration') or '').strip() or None,
+            'seller_name': (data.get('seller_name') or '').strip() or None,
+            'seller_location': (data.get('seller_location') or '').strip() or None,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'status': (data.get('status') or 'Considering').strip() or 'Considering',
+            'notes': (data.get('notes') or '').strip() or None,
+        }
+        r = supabase.table('ha_cars').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f'Error creating car: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/cars/<int:car_id>', methods=['PATCH'])
+def update_car(car_id):
+    """Update a car listing."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        update_data = {}
+        fields = (
+            'link', 'advert_id', 'title', 'derivative', 'make', 'model', 'year',
+            'price', 'price_amount', 'mileage', 'mileage_amount', 'fuel_type', 'body_type',
+            'transmission', 'colour', 'engine', 'owners', 'registration',
+            'seller_name', 'seller_location', 'image_url', 'status', 'notes',
+        )
+        for field in fields:
+            if field in data:
+                val = data[field]
+                if field in ('year', 'mileage_amount'):
+                    update_data[field] = val if val not in (None, '') else None
+                elif field == 'price_amount':
+                    update_data[field] = val
+                else:
+                    update_data[field] = (val or '').strip() if isinstance(val, str) else val
+                    if isinstance(val, str) and field != 'status' and not (val or '').strip():
+                        update_data[field] = None
+        if 'status' in data:
+            update_data['status'] = (data.get('status') or 'Considering').strip() or 'Considering'
+        if not update_data:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_cars').update(update_data).eq('id', car_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else update_data), 200
+    except Exception as e:
+        app.logger.error(f'Error updating car: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/cars/<int:car_id>', methods=['DELETE'])
+def delete_car(car_id):
+    """Delete a car listing."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_cars').delete().eq('id', car_id).execute()
+        return '', 204
+    except Exception as e:
+        app.logger.error(f'Error deleting car: {e}')
         return jsonify({'error': str(e)}), 500
 
 

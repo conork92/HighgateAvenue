@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue - Cars</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260211">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260211">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cars.css') }}?v=20260609">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="container">
+                <header>
+                    <h1>Cars</h1>
+                    <p class="subtitle">Shortlist cars you’re looking at. Paste an <a href="https://www.autotrader.co.uk/" target="_blank" rel="noopener">Autotrader</a> link and use <strong>Fetch from link</strong> to fill in the details.</p>
+                    <button type="button" id="carAddBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add car</span></button>
+                </header>
+
+                <div class="cars-toolbar">
+                    <div class="filter-group">
+                        <label for="carStatusFilter">Status</label>
+                        <select id="carStatusFilter" class="filter-select">
+                            <option value="">All</option>
+                            <option value="Considering">Considering</option>
+                            <option value="Shortlist">Shortlist</option>
+                            <option value="Rejected">Rejected</option>
+                            <option value="Bought">Bought</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="carLoading" class="loading">Loading cars…</div>
+                <div id="carTableWrap" class="cars-table-wrap" style="display: none;">
+                    <table class="cars-table" id="carTable">
+                        <thead>
+                            <tr>
+                                <th>Photo</th>
+                                <th>Car</th>
+                                <th>Price</th>
+                                <th>Mileage</th>
+                                <th>Fuel</th>
+                                <th>Body</th>
+                                <th>Seller</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="carTableBody"></tbody>
+                    </table>
+                </div>
+                <p id="carEmpty" class="cars-empty" style="display: none;">No cars yet. Add an Autotrader listing with the button above.</p>
+            </div>
+        </main>
+    </div>
+
+    <div id="carModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal" id="carModalClose" aria-label="Close">&times;</span>
+            <h2 id="carModalTitle">Add car</h2>
+            <form id="carForm">
+                <div class="form-group">
+                    <label for="carLink">Autotrader link *</label>
+                    <input type="url" id="carLink" required placeholder="https://www.autotrader.co.uk/car-details/…">
+                    <button type="button" id="carFetchBtn" class="btn-fetch-preview" style="margin-top: 0.5rem;">Fetch from link</button>
+                </div>
+                <div class="form-group">
+                    <label for="carTitle">Title</label>
+                    <input type="text" id="carTitle" placeholder="e.g. 2022 Kia Sportage">
+                </div>
+                <div class="form-group">
+                    <label for="carDerivative">Derivative / trim</label>
+                    <input type="text" id="carDerivative" placeholder="e.g. 1.6 T-GDi GT-Line Auto">
+                </div>
+                <div class="form-group">
+                    <label for="carPrice">Price</label>
+                    <input type="text" id="carPrice" placeholder="e.g. £20,300">
+                </div>
+                <div class="form-group">
+                    <label for="carMileage">Mileage</label>
+                    <input type="text" id="carMileage" placeholder="e.g. 40,425 miles">
+                </div>
+                <div class="form-group">
+                    <label for="carFuel">Fuel</label>
+                    <input type="text" id="carFuel" placeholder="e.g. Petrol Hybrid">
+                </div>
+                <div class="form-group">
+                    <label for="carBody">Body type</label>
+                    <input type="text" id="carBody" placeholder="e.g. SUV">
+                </div>
+                <div class="form-group">
+                    <label for="carTransmission">Transmission</label>
+                    <input type="text" id="carTransmission" placeholder="e.g. Automatic">
+                </div>
+                <div class="form-group">
+                    <label for="carSeller">Seller</label>
+                    <input type="text" id="carSeller" placeholder="Dealer name">
+                </div>
+                <div class="form-group">
+                    <label for="carSellerLocation">Seller location</label>
+                    <input type="text" id="carSellerLocation" placeholder="Town / area">
+                </div>
+                <div class="form-group">
+                    <label for="carImageUrl">Image URL</label>
+                    <input type="url" id="carImageUrl" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                    <label for="carStatus">Status</label>
+                    <select id="carStatus">
+                        <option value="Considering">Considering</option>
+                        <option value="Shortlist">Shortlist</option>
+                        <option value="Rejected">Rejected</option>
+                        <option value="Bought">Bought</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="carNotes">Notes</label>
+                    <textarea id="carNotes" rows="2" placeholder="PCP quote, viewing date, pros/cons…"></textarea>
+                </div>
+                <input type="hidden" id="carEditingId" value="">
+                <input type="hidden" id="carAdvertId" value="">
+                <input type="hidden" id="carMake" value="">
+                <input type="hidden" id="carModel" value="">
+                <input type="hidden" id="carYear" value="">
+                <input type="hidden" id="carPriceAmount" value="">
+                <input type="hidden" id="carMileageAmount" value="">
+                <input type="hidden" id="carColour" value="">
+                <input type="hidden" id="carEngine" value="">
+                <input type="hidden" id="carOwners" value="">
+                <input type="hidden" id="carRegistration" value="">
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" id="carCancel">Cancel</button>
+                    <button type="submit" class="btn-submit" id="carSubmit">Save</button>
+                </div>
+            </form>
+            <div id="carStatusMsg" class="upload-status" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function statusClass(status) {
+            var s = (status || '').toLowerCase();
+            if (s === 'shortlist') return 'cars-status--shortlist';
+            if (s === 'rejected') return 'cars-status--rejected';
+            if (s === 'bought') return 'cars-status--bought';
+            return '';
+        }
+
+        var all = [];
+        var loading = document.getElementById('carLoading');
+        var tableWrap = document.getElementById('carTableWrap');
+        var tableBody = document.getElementById('carTableBody');
+        var emptyEl = document.getElementById('carEmpty');
+        var statusFilter = document.getElementById('carStatusFilter');
+        var modal = document.getElementById('carModal');
+        var form = document.getElementById('carForm');
+        var statusMsg = document.getElementById('carStatusMsg');
+
+        function fillForm(c) {
+            c = c || {};
+            document.getElementById('carEditingId').value = c.id || '';
+            document.getElementById('carAdvertId').value = c.advert_id || '';
+            document.getElementById('carLink').value = c.link || '';
+            document.getElementById('carTitle').value = c.title || '';
+            document.getElementById('carDerivative').value = c.derivative || '';
+            document.getElementById('carPrice').value = c.price || '';
+            document.getElementById('carMileage').value = c.mileage || '';
+            document.getElementById('carFuel').value = c.fuel_type || '';
+            document.getElementById('carBody').value = c.body_type || '';
+            document.getElementById('carTransmission').value = c.transmission || '';
+            document.getElementById('carSeller').value = c.seller_name || '';
+            document.getElementById('carSellerLocation').value = c.seller_location || '';
+            document.getElementById('carImageUrl').value = c.image_url || '';
+            document.getElementById('carStatus').value = c.status || 'Considering';
+            document.getElementById('carNotes').value = c.notes || '';
+            document.getElementById('carMake').value = c.make || '';
+            document.getElementById('carModel').value = c.model || '';
+            document.getElementById('carYear').value = c.year || '';
+            document.getElementById('carPriceAmount').value = c.price_amount || '';
+            document.getElementById('carMileageAmount').value = c.mileage_amount || '';
+            document.getElementById('carColour').value = c.colour || '';
+            document.getElementById('carEngine').value = c.engine || '';
+            document.getElementById('carOwners').value = c.owners || '';
+            document.getElementById('carRegistration').value = c.registration || '';
+        }
+
+        function openModal(c) {
+            document.getElementById('carModalTitle').textContent = (c && c.id) ? 'Edit car' : 'Add car';
+            document.getElementById('carSubmit').textContent = (c && c.id) ? 'Save changes' : 'Save';
+            fillForm(c || {});
+            statusMsg.style.display = 'none';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+            form.reset();
+            document.getElementById('carEditingId').value = '';
+            statusMsg.style.display = 'none';
+        }
+
+        function render() {
+            var list = all.slice();
+            var sf = (statusFilter.value || '').trim();
+            if (sf) list = list.filter(function(c) { return (c.status || 'Considering') === sf; });
+
+            loading.style.display = 'none';
+            if (!all.length) {
+                tableWrap.style.display = 'none';
+                emptyEl.style.display = 'block';
+                emptyEl.textContent = 'No cars yet. Add an Autotrader listing with the button above.';
+                return;
+            }
+            emptyEl.style.display = 'none';
+            if (!list.length) {
+                tableWrap.style.display = 'none';
+                emptyEl.style.display = 'block';
+                emptyEl.textContent = 'No cars match this status filter.';
+                return;
+            }
+            tableWrap.style.display = 'block';
+            tableBody.innerHTML = list.map(function(c) {
+                var img = (c.image_url || '').trim();
+                var imgHtml = img
+                    ? '<img src="' + escapeHtml(img) + '" alt="" class="cars-thumb" loading="lazy" onerror="this.outerHTML=\'<span class=\\\'cars-thumb--empty\\\'>No photo</span>\'">'
+                    : '<span class="cars-thumb--empty">No photo</span>';
+                var title = escapeHtml(c.title || 'Car');
+                var deriv = (c.derivative || '').trim();
+                var seller = [c.seller_name, c.seller_location].filter(Boolean).join(' · ');
+                var st = c.status || 'Considering';
+                var link = (c.link || '#').trim();
+                return '<tr data-id="' + c.id + '">'
+                    + '<td>' + imgHtml + '</td>'
+                    + '<td class="cars-title-cell"><strong>' + title + '</strong>'
+                    + (deriv ? '<span>' + escapeHtml(deriv) + '</span>' : '')
+                    + (c.registration ? '<span>' + escapeHtml(c.registration) + '</span>' : '')
+                    + '</td>'
+                    + '<td class="cars-price">' + escapeHtml(c.price || '—') + '</td>'
+                    + '<td>' + escapeHtml(c.mileage || '—') + '</td>'
+                    + '<td>' + escapeHtml(c.fuel_type || '—') + '</td>'
+                    + '<td>' + escapeHtml(c.body_type || '—') + '</td>'
+                    + '<td>' + escapeHtml(seller || '—') + '</td>'
+                    + '<td><span class="cars-status ' + statusClass(st) + '">' + escapeHtml(st) + '</span></td>'
+                    + '<td><div class="cars-actions">'
+                    + '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener">View</a>'
+                    + '<button type="button" class="car-edit-btn" data-id="' + c.id + '">Edit</button>'
+                    + '<button type="button" class="car-del-btn" data-id="' + c.id + '">Delete</button>'
+                    + '</div></td>'
+                    + '</tr>';
+            }).join('');
+
+            tableBody.querySelectorAll('.car-edit-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var c = all.find(function(x) { return String(x.id) === String(btn.dataset.id); });
+                    if (c) openModal(c);
+                });
+            });
+            tableBody.querySelectorAll('.car-del-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (!confirm('Remove this car from your list?')) return;
+                    fetch('/api/cars/' + btn.dataset.id, { method: 'DELETE' }).then(function() { loadAll(); });
+                });
+            });
+        }
+
+        function loadAll() {
+            loading.style.display = 'block';
+            return fetch('/api/cars')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    all = Array.isArray(data) ? data : [];
+                    render();
+                })
+                .catch(function() {
+                    loading.style.display = 'none';
+                    emptyEl.style.display = 'block';
+                    emptyEl.textContent = 'Failed to load cars.';
+                });
+        }
+
+        document.getElementById('carAddBtn').addEventListener('click', function() { openModal({}); });
+        document.getElementById('carModalClose').addEventListener('click', closeModal);
+        document.getElementById('carCancel').addEventListener('click', closeModal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+        statusFilter.addEventListener('change', render);
+
+        document.getElementById('carFetchBtn').addEventListener('click', function() {
+            var url = document.getElementById('carLink').value.trim();
+            if (!url) return;
+            var btn = document.getElementById('carFetchBtn');
+            var prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            fetch('/api/cars/preview?url=' + encodeURIComponent(url))
+                .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+                .then(function(res) {
+                    if (!res.ok) throw new Error((res.d && res.d.error) || 'Fetch failed');
+                    var d = res.d;
+                    if (d.link) document.getElementById('carLink').value = d.link;
+                    if (d.advert_id) document.getElementById('carAdvertId').value = d.advert_id;
+                    if (d.title) document.getElementById('carTitle').value = d.title;
+                    if (d.derivative) document.getElementById('carDerivative').value = d.derivative;
+                    if (d.price) document.getElementById('carPrice').value = d.price;
+                    if (d.mileage) document.getElementById('carMileage').value = d.mileage;
+                    if (d.fuel_type) document.getElementById('carFuel').value = d.fuel_type;
+                    if (d.body_type) document.getElementById('carBody').value = d.body_type;
+                    if (d.transmission) document.getElementById('carTransmission').value = d.transmission;
+                    if (d.seller_name) document.getElementById('carSeller').value = d.seller_name;
+                    if (d.seller_location) document.getElementById('carSellerLocation').value = d.seller_location;
+                    if (d.image_url) document.getElementById('carImageUrl').value = d.image_url;
+                    if (d.make) document.getElementById('carMake').value = d.make;
+                    if (d.model) document.getElementById('carModel').value = d.model;
+                    if (d.year) document.getElementById('carYear').value = d.year;
+                    if (d.price_amount != null) document.getElementById('carPriceAmount').value = d.price_amount;
+                    if (d.mileage_amount != null) document.getElementById('carMileageAmount').value = d.mileage_amount;
+                    if (d.colour) document.getElementById('carColour').value = d.colour;
+                    if (d.engine) document.getElementById('carEngine').value = d.engine;
+                    if (d.owners) document.getElementById('carOwners').value = d.owners;
+                    if (d.registration) document.getElementById('carRegistration').value = d.registration;
+                })
+                .catch(function(err) {
+                    statusMsg.style.display = 'block';
+                    statusMsg.className = 'upload-status error';
+                    statusMsg.textContent = err.message || 'Could not fetch listing';
+                })
+                .finally(function() {
+                    btn.disabled = false;
+                    btn.textContent = prev;
+                });
+        });
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var id = document.getElementById('carEditingId').value;
+            var yearVal = document.getElementById('carYear').value;
+            var priceAmt = document.getElementById('carPriceAmount').value;
+            var mileageAmt = document.getElementById('carMileageAmount').value;
+            var payload = {
+                link: document.getElementById('carLink').value.trim(),
+                advert_id: document.getElementById('carAdvertId').value.trim() || null,
+                title: document.getElementById('carTitle').value.trim() || null,
+                derivative: document.getElementById('carDerivative').value.trim() || null,
+                make: document.getElementById('carMake').value.trim() || null,
+                model: document.getElementById('carModel').value.trim() || null,
+                year: yearVal ? parseInt(yearVal, 10) : null,
+                price: document.getElementById('carPrice').value.trim() || null,
+                price_amount: priceAmt ? parseFloat(priceAmt) : null,
+                mileage: document.getElementById('carMileage').value.trim() || null,
+                mileage_amount: mileageAmt ? parseInt(mileageAmt, 10) : null,
+                fuel_type: document.getElementById('carFuel').value.trim() || null,
+                body_type: document.getElementById('carBody').value.trim() || null,
+                transmission: document.getElementById('carTransmission').value.trim() || null,
+                colour: document.getElementById('carColour').value.trim() || null,
+                engine: document.getElementById('carEngine').value.trim() || null,
+                owners: document.getElementById('carOwners').value.trim() || null,
+                registration: document.getElementById('carRegistration').value.trim() || null,
+                seller_name: document.getElementById('carSeller').value.trim() || null,
+                seller_location: document.getElementById('carSellerLocation').value.trim() || null,
+                image_url: document.getElementById('carImageUrl').value.trim() || null,
+                status: document.getElementById('carStatus').value,
+                notes: document.getElementById('carNotes').value.trim() || null
+            };
+            if (!payload.link) return;
+            var url = id ? '/api/cars/' + encodeURIComponent(id) : '/api/cars';
+            var method = id ? 'PATCH' : 'POST';
+            statusMsg.style.display = 'block';
+            statusMsg.className = 'upload-status loading';
+            statusMsg.textContent = 'Saving…';
+            fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+                .then(function(res) {
+                    if (!res.ok) throw new Error((res.d && res.d.error) || 'Save failed');
+                    closeModal();
+                    return loadAll();
+                })
+                .catch(function(err) {
+                    statusMsg.className = 'upload-status error';
+                    statusMsg.textContent = err.message || 'Save failed';
+                });
+        });
+
+        loadAll();
+    })();
+    </script>
+</body>
+</html>
