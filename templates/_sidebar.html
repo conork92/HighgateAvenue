@@ -57,6 +57,9 @@
             <a href="{{ url_for('events') }}" class="{% if request.endpoint == 'events' %}active{% endif %}">Events</a>
         </li>
         <li>
+            <a href="{{ url_for('restaurants') }}" class="{% if request.endpoint == 'restaurants' %}active{% endif %}">Restaurants</a>
+        </li>
+        <li>
             <a href="{{ url_for('cars') }}" class="{% if request.endpoint == 'cars' %}active{% endif %}">Cars</a>
         </li>
         <li>
