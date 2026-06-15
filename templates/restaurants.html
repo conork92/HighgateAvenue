@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue – Restaurants</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260614">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260614">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+    <style>
+        :root {
+            --r-border: #0d0d0d;
+            --r-muted:  #6b6b6b;
+            --r-soft:   #f5f5f5;
+            --r-accent: #0d0d0d;
+            --r-deal:   #fff8c5;
+        }
+        body { background: #fff; color: #0d0d0d; }
+
+        .r-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2.5rem 2rem 4rem;
+        }
+
+        /* Header */
+        .r-header { margin-bottom: 2.5rem; }
+        .r-header h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin: 0 0 0.4rem;
+        }
+        .r-header .subtitle {
+            font-size: 0.9rem;
+            color: var(--r-muted);
+        }
+
+        /* Toolbar */
+        .r-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            border-top: 2px solid var(--r-border);
+            border-bottom: 2px solid var(--r-border);
+            padding: 0.85rem 0;
+            margin-bottom: 2.5rem;
+        }
+        .r-toolbar-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--r-muted);
+            white-space: nowrap;
+        }
+        .r-day-btns { display: flex; gap: 0; flex-wrap: wrap; }
+        .r-day-btn {
+            font: inherit;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.4rem 0.75rem;
+            border: 1.5px solid var(--r-border);
+            background: #fff;
+            color: var(--r-border);
+            cursor: pointer;
+            margin-right: -1.5px;
+            transition: background 0.12s, color 0.12s;
+        }
+        .r-day-btn:last-child { margin-right: 0; }
+        .r-day-btn.is-on { background: var(--r-border); color: #fff; }
+        .r-day-btn:hover:not(.is-on) { background: var(--r-soft); }
+        .r-filter-select {
+            font: inherit;
+            font-size: 0.78rem;
+            padding: 0.4rem 0.65rem;
+            border: 1.5px solid var(--r-border);
+            background: #fff;
+            min-width: 10rem;
+            max-width: 14rem;
+        }
+        .r-spacer { flex: 1; }
+        .r-btn {
+            font: inherit;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.55rem 1rem;
+            border: 1.5px solid var(--r-border);
+            background: var(--r-border);
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.12s, box-shadow 0.12s;
+        }
+        .r-btn:hover { transform: translate(-2px,-2px); box-shadow: 4px 4px 0 var(--r-border); }
+        .r-btn--ghost { background: #fff; color: var(--r-border); }
+
+        /* Deals section */
+        .r-section { margin-bottom: 3rem; }
+        .r-section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--r-border);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+        .r-section-head h2 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin: 0;
+        }
+        .r-section-meta {
+            font-size: 0.72rem;
+            color: var(--r-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* Deals banner */
+        .r-deals-banner {
+            background: var(--r-deal);
+            border: 1.5px solid var(--r-border);
+            padding: 1.1rem 1.25rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .r-deals-banner-icon { font-size: 1.3rem; }
+        .r-deals-banner-text { font-size: 0.85rem; font-weight: 600; }
+        .r-deals-banner-sub { font-size: 0.75rem; color: var(--r-muted); margin-top: 0.1rem; }
+
+        /* Restaurant grid */
+        .r-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 0;
+            border: 2px solid var(--r-border);
+        }
+        .r-card {
+            border-right: 1px solid var(--r-border);
+            border-bottom: 1px solid var(--r-border);
+            padding: 1rem 1.1rem;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .r-card.has-deal-today { background: #fffef5; }
+        .r-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+        .r-card-name {
+            font-weight: 700;
+            font-size: 1rem;
+            line-height: 1.25;
+        }
+        .r-card-name a { color: inherit; text-decoration: underline; }
+        .r-card-cuisine {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border: 1.5px solid var(--r-border);
+            padding: 0.15rem 0.45rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .r-card-meta {
+            font-size: 0.78rem;
+            color: var(--r-muted);
+            line-height: 1.4;
+        }
+        .r-card-meta a { color: var(--r-muted); }
+        .r-deal-row {
+            background: var(--r-deal);
+            border: 1px solid #e8d800;
+            padding: 0.5rem 0.65rem;
+            font-size: 0.8rem;
+            line-height: 1.35;
+        }
+        .r-deal-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--r-muted);
+            margin-bottom: 0.2rem;
+        }
+        .r-deal-days {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 0.35rem;
+        }
+        .r-deal-day {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 1px 6px;
+            border: 1px solid var(--r-border);
+            background: #fff;
+        }
+        .r-deal-day.is-today { background: var(--r-border); color: #fff; }
+        .r-card-foot {
+            display: flex;
+            gap: 0.4rem;
+            justify-content: flex-end;
+            border-top: 1px dashed var(--r-border);
+            padding-top: 0.55rem;
+            margin-top: auto;
+        }
+        .r-card-foot button {
+            font: inherit;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.3rem 0.6rem;
+            border: 1.5px solid var(--r-border);
+            background: #fff;
+            cursor: pointer;
+        }
+        .r-card-foot button:hover { background: var(--r-border); color: #fff; }
+
+        /* Empty state */
+        .r-empty {
+            grid-column: 1 / -1;
+            border: none;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            color: var(--r-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* Modal */
+        .r-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 9999;
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 3rem 1rem 2rem;
+            overflow-y: auto;
+        }
+        .r-modal.is-open { display: flex; }
+        .r-modal-card {
+            background: #fff;
+            border: 2.5px solid var(--r-border);
+            box-shadow: 8px 8px 0 var(--r-border);
+            width: 100%;
+            max-width: 580px;
+            padding: 1.5rem 1.75rem 1.25rem;
+        }
+        .r-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1.5px solid var(--r-border);
+            padding-bottom: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .r-modal-head h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .r-modal-head button {
+            border: none;
+            background: none;
+            font-size: 1.4rem;
+            line-height: 1;
+            cursor: pointer;
+            color: var(--r-border);
+        }
+
+        /* Form */
+        .r-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem 1rem;
+            margin-bottom: 1rem;
+        }
+        .r-form-row { display: flex; flex-direction: column; gap: 0.3rem; }
+        .r-form-row.full { grid-column: 1 / -1; }
+        .r-form-row label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--r-muted);
+        }
+        .r-form-row input,
+        .r-form-row select,
+        .r-form-row textarea {
+            font: inherit;
+            padding: 0.5rem 0.6rem;
+            border: 1.5px solid var(--r-border);
+            background: #fff;
+            border-radius: 0;
+        }
+        .r-form-row textarea { min-height: 60px; resize: vertical; }
+
+        /* URL fetch row */
+        .r-fetch-block {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px dashed var(--r-border);
+        }
+        .r-fetch-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: stretch;
+            margin-top: 0.35rem;
+        }
+        .r-fetch-row input[type="url"] {
+            flex: 1;
+            font: inherit;
+            padding: 0.5rem 0.65rem;
+            border: 1.5px solid var(--r-border);
+            background: #fff;
+            border-radius: 0;
+        }
+        .r-fetch-hint {
+            font-size: 0.72rem;
+            color: var(--r-muted);
+            margin: 0.35rem 0 0;
+        }
+
+        /* Deal days checkboxes */
+        .r-days-check {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.35rem;
+        }
+        .r-days-check label {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            padding: 0.3rem 0.6rem;
+            border: 1.5px solid var(--r-border);
+            user-select: none;
+        }
+        .r-days-check input[type="checkbox"] { display: none; }
+        .r-days-check label.is-checked { background: var(--r-border); color: #fff; }
+
+        /* Form actions */
+        .r-form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            border-top: 1.5px solid var(--r-border);
+            padding-top: 1rem;
+            margin-top: 0.5rem;
+        }
+        .r-form-status {
+            font-size: 0.75rem;
+            color: var(--r-muted);
+            flex: 1;
+        }
+        .r-form-status.is-error { color: #b00020; }
+
+        /* Map */
+        #rMap {
+            width: 100%;
+            height: 420px;
+            border: 2px solid var(--r-border);
+            background: #f0f0f0;
+        }
+        .r-map-marker {
+            width: 26px;
+            height: 26px;
+            border: 2px solid var(--r-border);
+            border-radius: 50%;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            box-shadow: 2px 2px 0 var(--r-border);
+        }
+        .r-map-marker.has-deal { background: var(--r-deal); }
+        .r-map-hint {
+            font-size: 0.75rem;
+            color: var(--r-muted);
+            margin-top: 0.65rem;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 600px) {
+            .r-form-grid { grid-template-columns: 1fr; }
+            .r-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="r-container">
+                <header class="r-header">
+                    <h1>Restaurants</h1>
+                    <p class="subtitle">Save local restaurants and track their deals by day of the week.</p>
+                </header>
+
+                <!-- Toolbar -->
+                <div class="r-toolbar">
+                    <span class="r-toolbar-label">Deals on</span>
+                    <div class="r-day-btns" id="rDayBtns">
+                        <button type="button" class="r-day-btn" data-day="">All</button>
+                        <button type="button" class="r-day-btn" data-day="monday">Mon</button>
+                        <button type="button" class="r-day-btn" data-day="tuesday">Tue</button>
+                        <button type="button" class="r-day-btn" data-day="wednesday">Wed</button>
+                        <button type="button" class="r-day-btn" data-day="thursday">Thu</button>
+                        <button type="button" class="r-day-btn" data-day="friday">Fri</button>
+                        <button type="button" class="r-day-btn" data-day="saturday">Sat</button>
+                        <button type="button" class="r-day-btn" data-day="sunday">Sun</button>
+                    </div>
+                    <span class="r-toolbar-label">Cuisine</span>
+                    <select id="rCuisineFilter" class="r-filter-select" aria-label="Filter by cuisine">
+                        <option value="">All</option>
+                    </select>
+                    <div class="r-spacer"></div>
+                    <button type="button" class="r-btn" id="rAddBtn">+ Add restaurant</button>
+                </div>
+
+                <!-- Map -->
+                <section class="r-section" id="rMapSection">
+                    <div class="r-section-head">
+                        <h2>Map</h2>
+                        <span class="r-section-meta" id="rMapMeta">0 on map</span>
+                    </div>
+                    <div id="rMap" role="region" aria-label="Map of restaurants"></div>
+                    <p class="r-map-hint" id="rMapHint">Tap a pin to open details. Restaurants need a Google Maps link (use <strong>Fetch details</strong> when adding) so we can place them on the map.</p>
+                </section>
+
+                <!-- Today's deals -->
+                <section class="r-section" id="rTodaySection">
+                    <div class="r-section-head">
+                        <h2>Today's deals <span id="rTodayDay"></span></h2>
+                        <span class="r-section-meta" id="rTodayMeta"></span>
+                    </div>
+                    <div class="r-grid" id="rTodayGrid">
+                        <!-- rendered by JS -->
+                    </div>
+                </section>
+
+                <!-- All restaurants -->
+                <section class="r-section" id="rAllSection">
+                    <div class="r-section-head">
+                        <h2 id="rAllTitle">All restaurants</h2>
+                        <span class="r-section-meta" id="rAllMeta"></span>
+                    </div>
+                    <div class="r-grid" id="rAllGrid">
+                        <!-- rendered by JS -->
+                    </div>
+                </section>
+
+                <footer style="margin-top: 3rem; padding-top: 1.25rem; border-top: 1.5px solid var(--r-border); font-size: 0.75rem; color: var(--r-muted); line-height: 1.55;">
+                    Reading from <code>ha_restaurants</code>. Paste a Google Maps link when adding to auto-fill details.
+                </footer>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add / Edit modal -->
+    <div class="r-modal" id="rModal" role="dialog" aria-modal="true" aria-labelledby="rModalTitle">
+        <div class="r-modal-card">
+            <div class="r-modal-head">
+                <h3 id="rModalTitle">Add restaurant</h3>
+                <button type="button" id="rModalClose" aria-label="Close">×</button>
+            </div>
+            <form id="rForm">
+                <input type="hidden" id="rRestaurantId">
+                <input type="hidden" id="rLatitude">
+                <input type="hidden" id="rLongitude">
+
+                <!-- Google Maps fetch -->
+                <div class="r-fetch-block">
+                    <label style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--r-muted);">Google Maps link</label>
+                    <div class="r-fetch-row">
+                        <input type="url" id="rMapsUrl" placeholder="https://maps.app.goo.gl/… or google.com/maps/place/…" autocomplete="off">
+                        <button type="button" class="r-btn" id="rFetchBtn">Fetch details</button>
+                    </div>
+                    <p class="r-fetch-hint">Paste a Google Maps link and click Fetch to auto-fill the name and location. You can then edit anything before saving.</p>
+                </div>
+
+                <div class="r-form-grid">
+                    <div class="r-form-row full">
+                        <label for="rName">Name *</label>
+                        <input type="text" id="rName" placeholder="e.g. The Bull">
+                    </div>
+                    <div class="r-form-row full">
+                        <label for="rCuisineSelect">Cuisine</label>
+                        <select id="rCuisineSelect">
+                            <option value="">—</option>
+                        </select>
+                        <input type="text" id="rCuisineCustom" placeholder="Or type your own…" style="margin-top:0.35rem;">
+                    </div>
+                    <div class="r-form-row">
+                        <label for="rPhone">Phone</label>
+                        <input type="text" id="rPhone" placeholder="+44 20 ...">
+                    </div>
+                    <div class="r-form-row full">
+                        <label for="rAddress">Address</label>
+                        <input type="text" id="rAddress" placeholder="Full address">
+                    </div>
+                    <div class="r-form-row full">
+                        <label for="rWebsite">Website</label>
+                        <input type="url" id="rWebsite" placeholder="https://...">
+                    </div>
+                    <div class="r-form-row full">
+                        <label for="rNotes">Notes</label>
+                        <textarea id="rNotes" placeholder="Parking, dress code, must-try dishes…"></textarea>
+                    </div>
+                </div>
+
+                <!-- Deal section -->
+                <div style="border: 1.5px solid var(--r-border); padding: 0.85rem 1rem; background: #fffef5; margin-bottom: 1rem;">
+                    <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--r-muted);margin-bottom:0.6rem;">Deal (optional)</div>
+                    <div class="r-form-row" style="margin-bottom:0.75rem;">
+                        <label for="rDeal">Deal description</label>
+                        <input type="text" id="rDeal" placeholder="e.g. 50% off mains, 2-for-1 cocktails">
+                    </div>
+                    <div>
+                        <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--r-muted);margin-bottom:0.35rem;">Deal days</div>
+                        <div class="r-days-check" id="rDealDays">
+                            <label data-day="monday"><input type="checkbox" value="monday">Mon</label>
+                            <label data-day="tuesday"><input type="checkbox" value="tuesday">Tue</label>
+                            <label data-day="wednesday"><input type="checkbox" value="wednesday">Wed</label>
+                            <label data-day="thursday"><input type="checkbox" value="thursday">Thu</label>
+                            <label data-day="friday"><input type="checkbox" value="friday">Fri</label>
+                            <label data-day="saturday"><input type="checkbox" value="saturday">Sat</label>
+                            <label data-day="sunday"><input type="checkbox" value="sunday">Sun</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="r-form-actions">
+                    <span class="r-form-status" id="rFormStatus"></span>
+                    <button type="button" class="r-btn r-btn--ghost" id="rCancelBtn">Cancel</button>
+                    <button type="submit" class="r-btn" id="rSubmitBtn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        // ---------- State ----------
+        const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+        const DAY_SHORT = { sunday:'Sun', monday:'Mon', tuesday:'Tue', wednesday:'Wed', thursday:'Thu', friday:'Fri', saturday:'Sat' };
+        const todayName = DAYS[new Date().getDay()]; // e.g. 'saturday'
+        const MAP_DEFAULT = [51.5715, -0.1458]; // Highgate
+        const CUISINES = [
+            'British / Pub',
+            'Italian',
+            'French',
+            'Spanish',
+            'Greek',
+            'Turkish',
+            'Indian',
+            'Chinese',
+            'Japanese / Sushi',
+            'Thai',
+            'Vietnamese',
+            'Korean',
+            'Middle Eastern',
+            'Mexican',
+            'American',
+            'Pizza',
+            'Cafe / Brunch',
+            'Seafood',
+            'Steakhouse',
+            'Vegetarian / Vegan',
+            'Fusion'
+        ];
+        let filterDay = '';
+        let filterCuisine = '';
+        let restaurantData = [];  // full list from server
+        let mapInstance = null;
+        let mapMarkers = [];
+
+        // ---------- Helpers ----------
+        function escHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+            });
+        }
+        function setStatus(msg, isErr) {
+            const el = document.getElementById('rFormStatus');
+            if (!el) return;
+            el.textContent = msg || '';
+            el.classList.toggle('is-error', !!isErr);
+        }
+
+        function initCuisineSelect() {
+            const sel = document.getElementById('rCuisineSelect');
+            if (!sel || sel.options.length > 1) return;
+            CUISINES.forEach(function(c) {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                sel.appendChild(opt);
+            });
+        }
+
+        function getCuisineValue() {
+            const custom = (document.getElementById('rCuisineCustom').value || '').trim();
+            if (custom) return custom;
+            return (document.getElementById('rCuisineSelect').value || '').trim();
+        }
+
+        function setCuisineValue(value) {
+            const sel = document.getElementById('rCuisineSelect');
+            const custom = document.getElementById('rCuisineCustom');
+            const v = (value || '').trim();
+            custom.value = '';
+            if (!v) {
+                sel.value = '';
+                return;
+            }
+            if (CUISINES.indexOf(v) !== -1) {
+                sel.value = v;
+                return;
+            }
+            sel.value = '';
+            custom.value = v;
+        }
+
+        function uniqueCuisinesFromData() {
+            const seen = {};
+            restaurantData.forEach(function(r) {
+                const c = (r.cuisine || '').trim();
+                if (c) seen[c] = true;
+            });
+            return Object.keys(seen).sort(function(a, b) { return a.localeCompare(b); });
+        }
+
+        function initCuisineFilter() {
+            const sel = document.getElementById('rCuisineFilter');
+            if (!sel) return;
+            const prev = filterCuisine;
+            sel.innerHTML = '<option value="">All</option>';
+            uniqueCuisinesFromData().forEach(function(c) {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                sel.appendChild(opt);
+            });
+            if (prev && Array.from(sel.options).some(function(o) { return o.value === prev; })) {
+                sel.value = prev;
+            } else {
+                filterCuisine = '';
+                sel.value = '';
+            }
+        }
+
+        function filteredRestaurants() {
+            let list = restaurantData.slice();
+            if (filterDay) {
+                list = list.filter(function(r) {
+                    return Array.isArray(r.deal_days) && r.deal_days.indexOf(filterDay) !== -1;
+                });
+            }
+            if (filterCuisine) {
+                list = list.filter(function(r) {
+                    return (r.cuisine || '').trim() === filterCuisine;
+                });
+            }
+            return list;
+        }
+
+        // ---------- Fetch data ----------
+        async function loadRestaurants() {
+            try {
+                const r = await fetch('/api/restaurants');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                restaurantData = await r.json();
+                if (!Array.isArray(restaurantData)) restaurantData = [];
+            } catch (e) {
+                console.error('Could not load restaurants:', e);
+                restaurantData = [];
+            }
+            initCuisineFilter();
+            renderAll();
+        }
+
+        // ---------- Render ----------
+        function hasDealToday(rest) {
+            return Array.isArray(rest.deal_days) && rest.deal_days.includes(todayName) && !!rest.deal;
+        }
+
+        function buildCard(rest, highlightToday) {
+            const card = document.createElement('div');
+            card.className = 'r-card' + (highlightToday && hasDealToday(rest) ? ' has-deal-today' : '');
+            card.setAttribute('data-id', rest.id);
+
+            // Head: name + cuisine badge
+            const nameHtml = rest.google_maps_link
+                ? '<a href="' + escHtml(rest.google_maps_link) + '" target="_blank" rel="noopener">' + escHtml(rest.name) + '</a>'
+                : escHtml(rest.name);
+
+            let metaLines = [];
+            if (rest.address) metaLines.push(escHtml(rest.address));
+            if (rest.phone)   metaLines.push('<a href="tel:' + escHtml(rest.phone) + '">' + escHtml(rest.phone) + '</a>');
+            if (rest.website) metaLines.push('<a href="' + escHtml(rest.website) + '" target="_blank" rel="noopener">Website ↗</a>');
+            if (rest.notes)   metaLines.push(escHtml(rest.notes));
+
+            let dealHtml = '';
+            if (rest.deal) {
+                const daysHtml = (rest.deal_days || []).map(function(d) {
+                    const isToday = d === todayName;
+                    return '<span class="r-deal-day' + (isToday ? ' is-today' : '') + '">' + escHtml(DAY_SHORT[d] || d) + '</span>';
+                }).join('');
+                dealHtml = '<div class="r-deal-row">'
+                    + '<div class="r-deal-label">Deal</div>'
+                    + escHtml(rest.deal)
+                    + (daysHtml ? '<div class="r-deal-days">' + daysHtml + '</div>' : '')
+                    + '</div>';
+            }
+
+            card.innerHTML = ''
+                + '<div class="r-card-head">'
+                +   '<div class="r-card-name">' + nameHtml + '</div>'
+                +   (rest.cuisine ? '<span class="r-card-cuisine">' + escHtml(rest.cuisine) + '</span>' : '')
+                + '</div>'
+                + (metaLines.length ? '<div class="r-card-meta">' + metaLines.join('<br>') + '</div>' : '')
+                + dealHtml
+                + '<div class="r-card-foot">'
+                +   '<button type="button" data-action="edit">Edit</button>'
+                +   '<button type="button" data-action="delete">Delete</button>'
+                + '</div>';
+            return card;
+        }
+
+        function renderAll() {
+            const visible = filteredRestaurants();
+            // Today's deals
+            const todayDeals = visible.filter(hasDealToday);
+            const todayGrid = document.getElementById('rTodayGrid');
+            const todaySection = document.getElementById('rTodaySection');
+            const todayMeta = document.getElementById('rTodayMeta');
+            const todayDay = document.getElementById('rTodayDay');
+            todayDay.textContent = '— ' + (DAY_SHORT[todayName] || todayName);
+            todayMeta.textContent = todayDeals.length + ' deal' + (todayDeals.length === 1 ? '' : 's');
+            todayGrid.innerHTML = '';
+            if (!todayDeals.length) {
+                todaySection.style.display = filterDay ? 'none' : 'block';
+                todayGrid.innerHTML = '<div class="r-empty">No deals on today (' + escHtml(todayName) + ')</div>';
+            } else {
+                todaySection.style.display = 'block';
+                todayDeals.forEach(function(r) { todayGrid.appendChild(buildCard(r, false)); });
+            }
+
+            // All / filtered restaurants
+            const allTitle = document.getElementById('rAllTitle');
+            const allMeta = document.getElementById('rAllMeta');
+            const allGrid = document.getElementById('rAllGrid');
+            allGrid.innerHTML = '';
+            const titleParts = [];
+            if (filterDay) titleParts.push('deals on ' + (DAY_SHORT[filterDay] || filterDay));
+            if (filterCuisine) titleParts.push(filterCuisine);
+            if (titleParts.length) {
+                allTitle.textContent = titleParts.join(' · ');
+                todaySection.style.display = filterDay ? 'none' : 'block';
+            } else {
+                allTitle.textContent = 'All restaurants';
+            }
+            allMeta.textContent = visible.length + ' restaurant' + (visible.length === 1 ? '' : 's');
+            if (!visible.length) {
+                const emptyMsg = filterDay || filterCuisine
+                    ? 'No restaurants match these filters'
+                    : 'No restaurants saved yet';
+                allGrid.innerHTML = '<div class="r-empty">' + escHtml(emptyMsg) + '</div>';
+            } else {
+                visible.forEach(function(r) { allGrid.appendChild(buildCard(r, true)); });
+            }
+            renderMap(visible);
+        }
+
+        function whenLeafletReady(cb, tries) {
+            tries = tries == null ? 40 : tries;
+            if (typeof L !== 'undefined') { cb(); return; }
+            if (tries <= 0) return;
+            setTimeout(function() { whenLeafletReady(cb, tries - 1); }, 100);
+        }
+
+        function buildMapIcon(hasDeal) {
+            return L.divIcon({
+                className: '',
+                html: '<div class="r-map-marker' + (hasDeal ? ' has-deal' : '') + '">R</div>',
+                iconSize: [26, 26],
+                iconAnchor: [13, 13],
+                popupAnchor: [0, -12]
+            });
+        }
+
+        function renderMap(visible) {
+            visible = visible || filteredRestaurants();
+            whenLeafletReady(function() {
+                if (!mapInstance) {
+                    mapInstance = L.map('rMap', { scrollWheelZoom: true }).setView(MAP_DEFAULT, 13);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                        maxZoom: 19
+                    }).addTo(mapInstance);
+                }
+                mapMarkers.forEach(function(m) { mapInstance.removeLayer(m); });
+                mapMarkers = [];
+                const points = [];
+                let missing = 0;
+                visible.forEach(function(rest) {
+                    const lat = parseFloat(rest.latitude);
+                    const lng = parseFloat(rest.longitude);
+                    if (isNaN(lat) || isNaN(lng)) {
+                        missing++;
+                        return;
+                    }
+                    const marker = L.marker([lat, lng], { icon: buildMapIcon(hasDealToday(rest)) }).addTo(mapInstance);
+                    marker.on('click', function() { openModal(rest); });
+                    mapMarkers.push(marker);
+                    points.push([lat, lng]);
+                });
+                const meta = document.getElementById('rMapMeta');
+                const hint = document.getElementById('rMapHint');
+                if (meta) {
+                    meta.textContent = points.length + ' on map' + (missing ? ' · ' + missing + ' without location' : '');
+                }
+                if (hint && missing && !points.length) {
+                    hint.textContent = 'No locations yet — paste a Google Maps link and use Fetch details when adding a restaurant.';
+                } else if (hint) {
+                    hint.innerHTML = 'Tap a pin to open details. Yellow pins have a deal today. Use <strong>Fetch details</strong> from a Google Maps link to set the location.';
+                }
+                if (points.length > 1) {
+                    mapInstance.fitBounds(points, { padding: [48, 48], maxZoom: 15 });
+                } else if (points.length === 1) {
+                    mapInstance.setView(points[0], 15);
+                } else {
+                    mapInstance.setView(MAP_DEFAULT, 13);
+                }
+                setTimeout(function() { try { mapInstance.invalidateSize(); } catch (e) {} }, 0);
+            });
+        }
+
+        // ---------- Day filter ----------
+        document.getElementById('rDayBtns').addEventListener('click', function(e) {
+            const btn = e.target.closest('.r-day-btn');
+            if (!btn) return;
+            filterDay = btn.getAttribute('data-day') || '';
+            document.querySelectorAll('.r-day-btn').forEach(function(b) {
+                b.classList.toggle('is-on', b === btn);
+            });
+            renderAll();
+        });
+        document.getElementById('rCuisineFilter').addEventListener('change', function(e) {
+            filterCuisine = (e.target.value || '').trim();
+            renderAll();
+        });
+        // Set "All" as default active
+        document.querySelector('.r-day-btn[data-day=""]').classList.add('is-on');
+
+        // ---------- Modal ----------
+        function openModal(rest) {
+            rest = rest || {};
+            document.getElementById('rRestaurantId').value = rest.id || '';
+            document.getElementById('rModalTitle').textContent = rest.id ? 'Edit restaurant' : 'Add restaurant';
+            document.getElementById('rMapsUrl').value = rest.google_maps_link || '';
+            document.getElementById('rName').value = rest.name || '';
+            setCuisineValue(rest.cuisine);
+            document.getElementById('rPhone').value = rest.phone || '';
+            document.getElementById('rAddress').value = rest.address || '';
+            document.getElementById('rWebsite').value = rest.website || '';
+            document.getElementById('rNotes').value = rest.notes || '';
+            document.getElementById('rDeal').value = rest.deal || '';
+            document.getElementById('rLatitude').value = rest.latitude != null ? rest.latitude : '';
+            document.getElementById('rLongitude').value = rest.longitude != null ? rest.longitude : '';
+            // Deal days checkboxes
+            const dealDays = rest.deal_days || [];
+            document.querySelectorAll('#rDealDays label').forEach(function(lbl) {
+                const day = lbl.getAttribute('data-day');
+                const checked = dealDays.includes(day);
+                lbl.querySelector('input').checked = checked;
+                lbl.classList.toggle('is-checked', checked);
+            });
+            setStatus('', false);
+            document.getElementById('rModal').classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { document.getElementById('rName').focus(); }, 50);
+        }
+        function closeModal() {
+            document.getElementById('rModal').classList.remove('is-open');
+            document.body.style.overflow = '';
+        }
+
+        document.getElementById('rAddBtn').addEventListener('click', function() { openModal(); });
+        document.getElementById('rModalClose').addEventListener('click', closeModal);
+        document.getElementById('rCancelBtn').addEventListener('click', closeModal);
+        document.getElementById('rModal').addEventListener('click', function(e) {
+            if (e.target.id === 'rModal') closeModal();
+        });
+
+        // Toggle deal day checkboxes
+        document.getElementById('rDealDays').addEventListener('click', function(e) {
+            const lbl = e.target.closest('label[data-day]');
+            if (!lbl) return;
+            const cb = lbl.querySelector('input[type="checkbox"]');
+            if (!cb) return;
+            cb.checked = !cb.checked;
+            lbl.classList.toggle('is-checked', cb.checked);
+        });
+
+        // ---------- Google Maps fetch ----------
+        document.getElementById('rFetchBtn').addEventListener('click', async function() {
+            const url = (document.getElementById('rMapsUrl').value || '').trim();
+            if (!url) { setStatus('Paste a Google Maps link first.', true); return; }
+            const btn = document.getElementById('rFetchBtn');
+            const prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            setStatus('', false);
+            try {
+                const r = await fetch('/api/restaurants/preview?url=' + encodeURIComponent(url));
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+                if (data.name && !document.getElementById('rName').value) {
+                    document.getElementById('rName').value = data.name;
+                }
+                if (data.google_maps_link) {
+                    document.getElementById('rMapsUrl').value = data.google_maps_link;
+                }
+                if (data.latitude != null) document.getElementById('rLatitude').value = data.latitude;
+                if (data.longitude != null) document.getElementById('rLongitude').value = data.longitude;
+                setStatus('Details loaded — fill in anything missing and save.', false);
+            } catch (err) {
+                setStatus(err.message || 'Could not fetch this link.', true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        });
+
+        // ---------- Form submit ----------
+        document.getElementById('rForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('rRestaurantId').value;
+            const name = (document.getElementById('rName').value || '').trim();
+            if (!name) { setStatus('Name is required.', true); return; }
+
+            const dealDays = [];
+            document.querySelectorAll('#rDealDays input[type="checkbox"]').forEach(function(cb) {
+                if (cb.checked) dealDays.push(cb.value);
+            });
+
+            const latVal = document.getElementById('rLatitude').value;
+            const lngVal = document.getElementById('rLongitude').value;
+            const payload = {
+                name: name,
+                cuisine: getCuisineValue(),
+                phone: (document.getElementById('rPhone').value || '').trim(),
+                address: (document.getElementById('rAddress').value || '').trim(),
+                google_maps_link: (document.getElementById('rMapsUrl').value || '').trim(),
+                website: (document.getElementById('rWebsite').value || '').trim(),
+                notes: (document.getElementById('rNotes').value || '').trim(),
+                deal: (document.getElementById('rDeal').value || '').trim(),
+                deal_days: dealDays,
+            };
+            if (latVal !== '') payload.latitude = parseFloat(latVal);
+            if (lngVal !== '') payload.longitude = parseFloat(lngVal);
+
+            const method = id ? 'PATCH' : 'POST';
+            const url = id ? '/api/restaurants/' + encodeURIComponent(id) : '/api/restaurants';
+            try {
+                setStatus('Saving…', false);
+                const r = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+                closeModal();
+                await loadRestaurants();
+            } catch (err) {
+                console.error('Save failed:', err);
+                setStatus(err.message || 'Could not save.', true);
+            }
+        });
+
+        // ---------- Card actions (edit / delete) ----------
+        function handleCardAction(grid) {
+            grid.addEventListener('click', async function(e) {
+                const card = e.target.closest('.r-card');
+                if (!card) return;
+                const id = card.getAttribute('data-id');
+
+                if (e.target.closest('button[data-action="edit"]')) {
+                    const rest = restaurantData.find(function(r) { return String(r.id) === String(id); });
+                    if (rest) openModal(rest);
+                    return;
+                }
+                if (e.target.closest('button[data-action="delete"]')) {
+                    if (!confirm('Delete this restaurant?')) return;
+                    try {
+                        const r = await fetch('/api/restaurants/' + encodeURIComponent(id), { method: 'DELETE' });
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        await loadRestaurants();
+                    } catch (err) {
+                        alert('Could not delete: ' + err.message);
+                    }
+                }
+            });
+        }
+        handleCardAction(document.getElementById('rTodayGrid'));
+        handleCardAction(document.getElementById('rAllGrid'));
+
+        // ---------- Init ----------
+        initCuisineSelect();
+        loadRestaurants();
+    })();
+    </script>
+</body>
+</html>

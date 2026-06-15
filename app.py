@@ -252,6 +252,7 @@ DESIGN_SECTIONS = {
         'layout': 'single',
         'images': [
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Stairs into entrance'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/WhatsApp%20Image%202026-06-15%20at%2021.56.37.jpeg', 'alt': 'Entrance path and steps'},
         ],
     },
     'floor-plans': {
@@ -3678,6 +3679,172 @@ def delete_thing_to_do(thing_id):
         return jsonify({'ok': True}), 200
     except Exception as e:
         app.logger.error(f"Error deleting thing-to-do {thing_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------- Restaurants (ha_restaurants) ----------
+
+DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+
+@app.route('/restaurants/')
+def restaurants():
+    return render_template('restaurants.html')
+
+
+def _parse_google_maps_url(url):
+    """Best-effort extraction of name + coords from a Google Maps URL.
+    Follows short-URL redirects (maps.app.goo.gl, goo.gl/maps).
+    Returns dict with any fields that could be extracted."""
+    out = {}
+    if not url:
+        return out
+    url = url.strip()
+
+    # Follow short-URL redirects to get the canonical maps URL.
+    final_url = url
+    host = urlparse(url).netloc.lower()
+    if 'goo.gl' in host or 'maps.app' in host:
+        try:
+            resp = requests.get(url, allow_redirects=True, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+            final_url = resp.url
+        except Exception:
+            pass
+
+    # Extract place name from URL path: /maps/place/PLACE+NAME/...
+    path = urlparse(final_url).path
+    m = re.match(r'/maps/place/([^/@]+)', path)
+    if m:
+        raw = m.group(1)
+        # URL-decode and replace + with space
+        name = unquote(raw).replace('+', ' ').strip()
+        # Remove trailing punctuation noise
+        name = re.sub(r'[,\s]+$', '', name)
+        if name:
+            out['name'] = name
+
+    # Extract coords.
+    lat, lng = _coords_from_map_link(final_url)
+    if lat is not None:
+        out['latitude'] = lat
+        out['longitude'] = lng
+
+    out['google_maps_link'] = final_url
+    return out
+
+
+@app.route('/api/restaurants/preview')
+def restaurant_preview():
+    """GET ?url= — parse a Google Maps link and return what we can."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Invalid URL'}), 400
+    data = _parse_google_maps_url(url)
+    if not data:
+        return jsonify({'error': 'Could not extract details from this URL'}), 400
+    return jsonify(data), 200
+
+
+@app.route('/api/restaurants', methods=['GET'], strict_slashes=False)
+def get_restaurants():
+    """List all restaurants. ?day=monday returns only those with a deal on that day."""
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        query = supabase.table('ha_restaurants').select('*').order('name')
+        day = (request.args.get('day') or '').strip().lower()
+        if day and day in DAYS_OF_WEEK:
+            query = query.cs('deal_days', [day])
+        r = query.execute()
+        return jsonify(r.data or []), 200
+    except Exception as e:
+        app.logger.error(f'Error fetching restaurants: {e}')
+        return jsonify([]), 200
+
+
+@app.route('/api/restaurants', methods=['POST'], strict_slashes=False)
+def create_restaurant():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'name is required'}), 400
+        deal_days_raw = data.get('deal_days') or []
+        deal_days = [d for d in deal_days_raw if d in DAYS_OF_WEEK]
+        payload = {
+            'name': name,
+            'address': (data.get('address') or '').strip() or None,
+            'cuisine': (data.get('cuisine') or '').strip() or None,
+            'google_maps_link': (data.get('google_maps_link') or '').strip() or None,
+            'phone': (data.get('phone') or '').strip() or None,
+            'website': (data.get('website') or '').strip() or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'deal': (data.get('deal') or '').strip() or None,
+            'deal_days': deal_days or None,
+        }
+        coords = _resolve_coords({
+            'map_link': payload['google_maps_link'],
+            'latitude': data.get('latitude'),
+            'longitude': data.get('longitude'),
+        })
+        if coords.get('latitude') is not None:
+            payload['latitude'] = coords['latitude']
+        if coords.get('longitude') is not None:
+            payload['longitude'] = coords['longitude']
+        r = supabase.table('ha_restaurants').insert(payload).execute()
+        return jsonify((r.data or [payload])[0]), 201
+    except Exception as e:
+        app.logger.error(f'Error creating restaurant: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/restaurants/<int:restaurant_id>', methods=['PATCH'])
+def update_restaurant(restaurant_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        str_fields = ('name', 'address', 'cuisine', 'google_maps_link', 'phone', 'website', 'notes', 'deal')
+        for f in str_fields:
+            if f in data:
+                payload[f] = (data[f] or '').strip() or None
+        if 'deal_days' in data:
+            days = data['deal_days'] or []
+            payload['deal_days'] = [d for d in days if d in DAYS_OF_WEEK] or None
+        if 'latitude' in data or 'longitude' in data or 'google_maps_link' in data:
+            coords = _resolve_coords({
+                'map_link': data.get('google_maps_link'),
+                'latitude': data.get('latitude'),
+                'longitude': data.get('longitude'),
+            })
+            if coords.get('latitude') is not None:
+                payload['latitude'] = coords['latitude']
+            if coords.get('longitude') is not None:
+                payload['longitude'] = coords['longitude']
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        payload['updated_at'] = datetime.now(timezone.utc).isoformat()
+        r = supabase.table('ha_restaurants').update(payload).eq('id', restaurant_id).execute()
+        return jsonify((r.data or [payload])[0]), 200
+    except Exception as e:
+        app.logger.error(f'Error updating restaurant {restaurant_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/restaurants/<int:restaurant_id>', methods=['DELETE'])
+def delete_restaurant(restaurant_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_restaurants').delete().eq('id', restaurant_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f'Error deleting restaurant {restaurant_id}: {e}')
         return jsonify({'error': str(e)}), 500
 
 
