@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Highgate Avenue – Events</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260427">
@@ -142,6 +142,135 @@
             flex: 0 0 auto;
         }
         .ev-cal-nav button:hover { background: var(--ev-bg-soft); }
+        .ev-cal-controls-left {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem 1.25rem;
+        }
+        .ev-cal-view-toggle {
+            display: inline-flex;
+            border: 1.5px solid var(--ev-border);
+        }
+        .ev-cal-view-btn {
+            font: inherit;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.4rem 0.65rem;
+            border: none;
+            border-right: 1px solid var(--ev-border);
+            background: #fff;
+            cursor: pointer;
+        }
+        .ev-cal-view-btn:last-child { border-right: none; }
+        .ev-cal-view-btn.is-on { background: var(--ev-border); color: #fff; }
+        .ev-cal-view-btn:hover:not(.is-on) { background: var(--ev-bg-soft); }
+        #evCalFullscreen { font-size: 1rem; line-height: 1; }
+
+        .ev-cal-body { display: flex; flex-direction: column; min-height: 0; }
+        .ev-cal-agenda {
+            border: 2px solid var(--ev-border);
+            background: #fff;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+        .ev-cal-agenda-row {
+            display: grid;
+            grid-template-columns: 5.5rem 5rem 1fr auto;
+            gap: 0.75rem 1rem;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
+        }
+        .ev-cal-agenda-row:hover { background: var(--ev-bg-soft); }
+        .ev-cal-agenda-date {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .ev-cal-agenda-type {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--ev-muted);
+        }
+        .ev-cal-agenda-title { font-weight: 600; }
+        .ev-cal-agenda-venue { font-size: 0.8rem; color: var(--ev-muted); }
+        .ev-cal-agenda-empty {
+            padding: 2rem 1rem;
+            text-align: center;
+            color: var(--ev-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Full-screen calendar (iPad / wall display) */
+        body.ev-cal-fullscreen {
+            overflow: hidden;
+        }
+        body.ev-cal-fullscreen .sidebar,
+        body.ev-cal-fullscreen .events-header,
+        body.ev-cal-fullscreen .events-toolbar,
+        body.ev-cal-fullscreen #evUpcomingSection,
+        body.ev-cal-fullscreen #evTodoSection,
+        body.ev-cal-fullscreen #evMapSection,
+        body.ev-cal-fullscreen .events-container > footer,
+        body.ev-cal-fullscreen #evStatusBanner {
+            display: none !important;
+        }
+        body.ev-cal-fullscreen .main-with-sidebar {
+            margin: 0;
+            width: 100%;
+            max-width: none;
+        }
+        body.ev-cal-fullscreen .events-container {
+            max-width: none;
+            margin: 0;
+            padding: max(0.75rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+            height: 100vh;
+            height: 100dvh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        body.ev-cal-fullscreen #evCalendarSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            min-height: 0;
+        }
+        body.ev-cal-fullscreen .ev-section-head { margin-bottom: 0.75rem; flex-shrink: 0; }
+        body.ev-cal-fullscreen .ev-cal-controls { flex-shrink: 0; }
+        body.ev-cal-fullscreen .ev-cal-body { flex: 1; min-height: 0; }
+        body.ev-cal-fullscreen .ev-cal-grid {
+            flex: 1;
+            min-height: 0;
+            grid-auto-rows: 1fr;
+        }
+        body.ev-cal-fullscreen .ev-cal-day {
+            min-height: 0;
+        }
+        body.ev-cal-fullscreen .ev-cal-pill {
+            font-size: 0.72rem;
+            padding: 2px 5px;
+        }
+        body.ev-cal-fullscreen .ev-cal-num { font-size: 0.95rem; }
+        body.ev-cal-fullscreen .ev-cal-agenda {
+            flex: 1;
+            max-height: none;
+            min-height: 0;
+        }
+        body.ev-cal-fullscreen .ev-cal-agenda-row {
+            padding: 1rem 1.25rem;
+            grid-template-columns: 6.5rem 5.5rem 1fr auto;
+        }
+        body.ev-cal-fullscreen .ev-cal-agenda-title { font-size: 1.05rem; }
+        body.ev-cal-fullscreen .ev-cal-month { font-size: 1.35rem; }
 
         .ev-cal-grid {
             display: grid;
@@ -167,6 +296,8 @@
             position: relative;
             cursor: pointer;
             background: #fff;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
         }
         .ev-cal-day:nth-child(7n) { border-right: none; }
         .ev-cal-day:hover { background: var(--ev-bg-soft); }
@@ -191,19 +322,38 @@
             font-size: 0.65rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            padding: 1px 4px;
+            padding: 0.35rem 0.45rem;
+            min-height: 1.75rem;
             border: 1px solid var(--ev-border);
             background: #fff;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
         }
         .ev-cal-pill--concert { background: #fff3a3; }
         .ev-cal-pill--comedy { background: #c8e6c9; }
         .ev-cal-pill--theatre { background: #d1c4e9; }
         .ev-cal-pill--festival { background: #ffccbc; }
+        .ev-cal-pill--appointment { background: #b2ebf2; }
         .ev-cal-pill--going-flag { box-shadow: inset 3px 0 0 #2e7d32; }
         .ev-cal-pill--want-flag { box-shadow: inset 3px 0 0 #1565c0; }
+        .ev-cal-grid--week {
+            grid-template-rows: auto 1fr;
+        }
+        .ev-cal-grid--week .ev-cal-day {
+            min-height: 280px;
+        }
+        body.ev-cal-fullscreen .ev-cal-grid--week .ev-cal-day {
+            min-height: 0;
+        }
+        .ev-cal-grid--week .ev-cal-pill {
+            white-space: normal;
+            line-height: 1.25;
+        }
         .ev-att-badge {
             display: inline-block;
             margin-left: 0.45rem;
@@ -227,9 +377,17 @@
             padding: 0.85rem 1rem;
             border-bottom: 1px solid var(--ev-border);
             background: #fff;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
         }
         .ev-list-row:last-child { border-bottom: none; }
         .ev-list-row:hover { background: var(--ev-bg-soft); }
+        .ev-list-actions button {
+            min-width: 2.25rem;
+            min-height: 2.25rem;
+            touch-action: manipulation;
+        }
         .ev-list-date {
             text-align: center;
             border-right: 1px solid var(--ev-border);
@@ -394,6 +552,7 @@
         .ev-map-legend .lg-comedy::before { background: #c8e6c9; }
         .ev-map-legend .lg-theatre::before { background: #d1c4e9; }
         .ev-map-legend .lg-festival::before { background: #ffccbc; }
+        .ev-map-legend .lg-appointment::before { background: #b2ebf2; }
         .ev-map-legend .lg-other::before { background: #ddd; }
 
         .ev-map-marker {
@@ -414,6 +573,7 @@
         .ev-map-marker.m-comedy { background: #c8e6c9; }
         .ev-map-marker.m-theatre { background: #d1c4e9; }
         .ev-map-marker.m-festival { background: #ffccbc; }
+        .ev-map-marker.m-appointment { background: #b2ebf2; }
         .ev-map-marker.m-other { background: #ddd; }
 
         .leaflet-popup-content {
@@ -449,6 +609,14 @@
             overflow-y: auto;
         }
         .ev-modal.is-open { display: flex; }
+        body.ev-cal-fullscreen .ev-modal { z-index: 10050; }
+        @media (max-width: 900px) {
+            .ev-modal {
+                padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem 1rem;
+                align-items: flex-start;
+            }
+            .ev-modal-card--entry { max-width: none; }
+        }
         .ev-modal-card {
             background: #fff;
             border: 2.5px solid var(--ev-border);
@@ -506,6 +674,23 @@
             border-radius: 0;
         }
         .ev-form-grid textarea { min-height: 70px; resize: vertical; }
+        .ev-time-pickers {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .ev-time-pickers select {
+            flex: 1;
+            min-width: 0;
+            font-size: 1rem;
+            padding: 0.55rem 0.5rem;
+        }
+        .ev-time-colon {
+            font-weight: 700;
+            font-size: 1.1rem;
+            line-height: 1;
+            color: var(--ev-muted);
+        }
         .ev-form-actions {
             display: flex;
             justify-content: space-between;
@@ -647,6 +832,7 @@
                             <option value="comedy">Comedy</option>
                             <option value="theatre">Theatre</option>
                             <option value="festival">Festival</option>
+                            <option value="appointment">Appointment</option>
                         </select>
                     </div>
                     <div class="ev-toolbar-spacer"></div>
@@ -660,15 +846,26 @@
                         <span class="ev-section-meta" id="evCalendarMeta">London · 4 events this month</span>
                     </div>
                     <div class="ev-cal-controls">
-                        <div class="ev-cal-month" id="evCalMonth">April 2026</div>
+                        <div class="ev-cal-controls-left">
+                            <div class="ev-cal-month" id="evCalMonth">April 2026</div>
+                            <div class="ev-cal-view-toggle" role="tablist" aria-label="Calendar view">
+                                <button type="button" class="ev-cal-view-btn is-on" data-view="month" role="tab" aria-selected="true">Month</button>
+                                <button type="button" class="ev-cal-view-btn" data-view="week" role="tab" aria-selected="false">Week</button>
+                                <button type="button" class="ev-cal-view-btn" data-view="agenda" role="tab" aria-selected="false">Agenda</button>
+                            </div>
+                        </div>
                         <div class="ev-cal-nav">
-                            <button type="button" class="ev-cal-arrow" id="evCalPrev" aria-label="Previous month">‹</button>
+                            <button type="button" class="ev-cal-arrow" id="evCalPrev" aria-label="Previous">‹</button>
                             <button type="button" id="evCalToday">Today</button>
-                            <button type="button" class="ev-cal-arrow" id="evCalNext" aria-label="Next month">›</button>
+                            <button type="button" class="ev-cal-arrow" id="evCalNext" aria-label="Next">›</button>
+                            <button type="button" id="evCalFullscreen" aria-label="Full screen" title="Full screen" aria-pressed="false">⛶</button>
                         </div>
                     </div>
-                    <div class="ev-cal-grid" id="evCalGrid">
-                        <!-- Rendered by JS -->
+                    <div class="ev-cal-body" id="evCalBody">
+                        <div class="ev-cal-grid" id="evCalGrid">
+                            <!-- Rendered by JS -->
+                        </div>
+                        <div class="ev-cal-agenda" id="evCalAgenda" hidden></div>
                     </div>
                 </section>
 
@@ -707,6 +904,7 @@
                         <span class="lg-comedy">Comedy</span>
                         <span class="lg-theatre">Theatre</span>
                         <span class="lg-festival">Festival</span>
+                        <span class="lg-appointment">Appointment</span>
                         <span class="lg-other">Other</span>
                     </div>
                 </section>
@@ -766,6 +964,7 @@
                                 <option value="comedy">Comedy</option>
                                 <option value="theatre">Theatre</option>
                                 <option value="festival">Festival</option>
+                                <option value="appointment">Appointment</option>
                                 <option value="other">Other</option>
                             </select>
                         </div>
@@ -795,8 +994,20 @@
                             <input type="date" id="evEventDate">
                         </div>
                         <div class="ev-form-row">
-                            <label for="evEventTime">Time</label>
-                            <input type="time" id="evEventTime">
+                            <label>Time</label>
+                            <div class="ev-time-pickers">
+                                <select id="evEventHour" aria-label="Hour">
+                                    <option value="">Hour</option>
+                                </select>
+                                <span class="ev-time-colon" aria-hidden="true">:</span>
+                                <select id="evEventMinute" aria-label="Minutes">
+                                    <option value="">Min</option>
+                                    <option value="00">:00</option>
+                                    <option value="15">:15</option>
+                                    <option value="30">:30</option>
+                                    <option value="45">:45</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="ev-form-row full">
                             <label for="evEventVenue">Venue</label>
@@ -899,6 +1110,9 @@
         const today = new Date(); today.setHours(0,0,0,0);
         let viewYear = today.getFullYear();
         let viewMonth = today.getMonth(); // 0-indexed
+        let calView = 'month'; // month | week | agenda
+        let viewWeekStart = null; // Monday of displayed week
+        let isCalFullscreen = false;
         let cityEvents = [];   // events for current city (raw rows)
         let cityTodos = [];    // things-to-do for current city
         let isLoadingEvents = false;
@@ -952,7 +1166,7 @@
         }
 
         // ---------- Helpers ----------
-        const TYPE_LABEL = { concert: 'Concert', comedy: 'Comedy', theatre: 'Theatre', festival: 'Festival' };
+        const TYPE_LABEL = { concert: 'Concert', comedy: 'Comedy', theatre: 'Theatre', festival: 'Festival', appointment: 'Appointment' };
         const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
         const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
@@ -969,6 +1183,11 @@
             return currentType ? cityEvents.filter(function(e) { return e.type === currentType; }) : cityEvents;
         }
 
+        function findEventById(id) {
+            if (id == null || id === '') return null;
+            return cityEvents.find(function(x) { return String(x.id) === String(id); }) || null;
+        }
+
         /** YYYY-MM-DD in the viewer's local timezone. Do not use toISOString().slice(0,10) for calendar cells:
          *  local midnight converts to the previous UTC date in positive offsets (e.g. UK summer), so events
          *  match the wrong column (e.g. 26th vs 27th). */
@@ -979,13 +1198,149 @@
             return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
         }
 
-        // ---------- Calendar ----------
-        function renderCalendar() {
-            const grid = document.getElementById('evCalGrid');
-            const monthLabel = document.getElementById('evCalMonth');
-            grid.innerHTML = '';
-            monthLabel.textContent = MONTHS[viewMonth] + ' ' + viewYear;
+        function snapTimeToQuarterHour(timeStr) {
+            if (!timeStr || !/^\d{1,2}:\d{2}/.test(timeStr)) return '';
+            var parts = String(timeStr).slice(0, 5).split(':');
+            var h = parseInt(parts[0], 10);
+            var m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return '';
+            var total = Math.max(0, Math.min(24 * 60 - 1, h * 60 + m));
+            var snapped = Math.round(total / 15) * 15;
+            if (snapped >= 24 * 60) snapped = 23 * 60 + 45;
+            var sh = Math.floor(snapped / 60);
+            var sm = snapped % 60;
+            return (sh < 10 ? '0' : '') + sh + ':' + (sm < 10 ? '0' : '') + sm;
+        }
 
+        function initEventTimeSelects() {
+            var hourSel = document.getElementById('evEventHour');
+            if (!hourSel || hourSel.options.length > 1) return;
+            for (var h = 0; h < 24; h++) {
+                var hh = (h < 10 ? '0' : '') + h;
+                var opt = document.createElement('option');
+                opt.value = hh;
+                opt.textContent = hh;
+                hourSel.appendChild(opt);
+            }
+        }
+
+        function getEventTimeValue() {
+            var hour = (document.getElementById('evEventHour').value || '').trim();
+            var minute = (document.getElementById('evEventMinute').value || '').trim();
+            if (!hour || !minute) return '';
+            return hour + ':' + minute;
+        }
+
+        function setEventTimeValue(timeStr) {
+            var snapped = snapTimeToQuarterHour(timeStr);
+            var hourEl = document.getElementById('evEventHour');
+            var minEl = document.getElementById('evEventMinute');
+            if (!snapped) {
+                hourEl.value = '';
+                minEl.value = '';
+                return;
+            }
+            var parts = snapped.split(':');
+            hourEl.value = parts[0];
+            minEl.value = parts[1];
+        }
+
+        // ---------- Calendar ----------
+        function mondayOf(d) {
+            const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            copy.setHours(0, 0, 0, 0);
+            const diff = (copy.getDay() + 6) % 7;
+            copy.setDate(copy.getDate() - diff);
+            return copy;
+        }
+
+        function ensureWeekStart() {
+            if (viewWeekStart) return viewWeekStart;
+            const inCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+            viewWeekStart = mondayOf(inCurrentMonth ? today : new Date(viewYear, viewMonth, 1));
+            return viewWeekStart;
+        }
+
+        function formatShortDate(d) {
+            return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        }
+
+        function appendCalPills(wrap, eventsHere) {
+            eventsHere.forEach(function(ev) {
+                const pill = document.createElement('div');
+                pill.className = 'ev-cal-pill ev-cal-pill--' + (ev.type || 'other');
+                if (ev.attendance === 'going') pill.classList.add('ev-cal-pill--going-flag');
+                if (ev.attendance === 'want_to_go') pill.classList.add('ev-cal-pill--want-flag');
+                if (ev.id != null) pill.setAttribute('data-event-id', ev.id);
+                pill.setAttribute('role', 'button');
+                pill.setAttribute('tabindex', '0');
+                pill.title = (ev.title || '') + (ev.venue ? ' — ' + ev.venue : '');
+                pill.textContent = ev.title || '(untitled)';
+                wrap.appendChild(pill);
+            });
+        }
+
+        function buildCalDayCell(cellDate, events, opts) {
+            opts = opts || {};
+            const cell = document.createElement('div');
+            cell.className = 'ev-cal-day';
+            if (opts.otherMonth) cell.classList.add('ev-cal-day--other');
+            if (cellDate.getTime() === today.getTime()) cell.classList.add('ev-cal-day--today');
+            const iso = localDateISO(cellDate);
+            cell.setAttribute('data-date', iso);
+            cell.innerHTML = '<span class="ev-cal-num">' + cellDate.getDate() + '</span><div class="ev-cal-events"></div>';
+            const eventsHere = events.filter(function(ev) { return ev.date === iso; });
+            appendCalPills(cell.querySelector('.ev-cal-events'), eventsHere);
+            return { cell: cell, count: eventsHere.length };
+        }
+
+        var lastCalInteractionAt = 0;
+        function handleCalendarInteraction(e) {
+            var now = Date.now();
+            if (now - lastCalInteractionAt < 350) return;
+            lastCalInteractionAt = now;
+            var agendaRow = e.target.closest('.ev-cal-agenda-row');
+            if (agendaRow) {
+                var agendaId = agendaRow.getAttribute('data-event-id');
+                var agendaEv = findEventById(agendaId);
+                if (agendaEv) { openEventModal(agendaEv); return; }
+            }
+            var pill = e.target.closest('.ev-cal-pill');
+            if (pill) {
+                var pillEv = findEventById(pill.getAttribute('data-event-id'));
+                if (pillEv) { openEventModal(pillEv); return; }
+            }
+            var day = e.target.closest('.ev-cal-day');
+            if (day) {
+                var iso = day.getAttribute('data-date');
+                if (iso) openEventModal({ date: iso });
+            }
+        }
+
+        function updateCalMonthLabel() {
+            const monthLabel = document.getElementById('evCalMonth');
+            if (calView === 'week') {
+                const start = ensureWeekStart();
+                const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+                if (start.getMonth() === end.getMonth()) {
+                    monthLabel.textContent = start.getDate() + '–' + end.getDate() + ' ' + MONTHS[start.getMonth()] + ' ' + start.getFullYear();
+                } else {
+                    monthLabel.textContent = formatShortDate(start) + ' – ' + formatShortDate(end);
+                }
+            } else {
+                monthLabel.textContent = MONTHS[viewMonth] + ' ' + viewYear;
+            }
+        }
+
+        function updateCalMeta(count) {
+            const meta = document.getElementById('evCalendarMeta');
+            const period = calView === 'week' ? 'this week' : 'this month';
+            meta.textContent = cityLabel(currentCity) + ' · ' + count + ' event' + (count === 1 ? '' : 's') + ' ' + period;
+        }
+
+        function renderCalMonth() {
+            const grid = document.getElementById('evCalGrid');
+            grid.innerHTML = '';
             DOW.forEach(function(d) {
                 const cell = document.createElement('div');
                 cell.className = 'ev-cal-dow';
@@ -994,7 +1349,6 @@
             });
 
             const first = new Date(viewYear, viewMonth, 1);
-            // Monday-start offset: getDay() returns 0=Sun..6=Sat; convert to 0=Mon..6=Sun
             const startOffset = (first.getDay() + 6) % 7;
             const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
             const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
@@ -1003,50 +1357,160 @@
 
             for (let i = 0; i < totalCells; i++) {
                 const dayNum = i - startOffset + 1;
-                const cell = document.createElement('div');
-                cell.className = 'ev-cal-day';
                 let cellDate;
+                let otherMonth = false;
                 if (dayNum < 1) {
                     cellDate = new Date(viewYear, viewMonth, dayNum);
-                    cell.classList.add('ev-cal-day--other');
+                    otherMonth = true;
                 } else if (dayNum > daysInMonth) {
                     cellDate = new Date(viewYear, viewMonth, dayNum);
-                    cell.classList.add('ev-cal-day--other');
+                    otherMonth = true;
                 } else {
                     cellDate = new Date(viewYear, viewMonth, dayNum);
                 }
-                if (cellDate.getTime() === today.getTime()) cell.classList.add('ev-cal-day--today');
-                const iso = localDateISO(cellDate);
-                cell.setAttribute('data-date', iso);
-                cell.innerHTML = '<span class="ev-cal-num">' + cellDate.getDate() + '</span><div class="ev-cal-events"></div>';
-
-                const eventsHere = events.filter(function(ev) { return ev.date === iso; });
-                if (cellDate.getMonth() === viewMonth) inMonthCount += eventsHere.length;
-                const wrap = cell.querySelector('.ev-cal-events');
-                eventsHere.forEach(function(ev) {
-                    const pill = document.createElement('div');
-                    pill.className = 'ev-cal-pill ev-cal-pill--' + (ev.type || 'other');
-                    if (ev.attendance === 'going') pill.classList.add('ev-cal-pill--going-flag');
-                    if (ev.attendance === 'want_to_go') pill.classList.add('ev-cal-pill--want-flag');
-                    pill.title = (ev.title || '') + (ev.venue ? ' — ' + ev.venue : '');
-                    pill.textContent = ev.title || '(untitled)';
-                    wrap.appendChild(pill);
-                });
-
-                cell.addEventListener('click', function(e) {
-                    const pillEl = e.target.closest('.ev-cal-pill');
-                    if (pillEl) {
-                        const titleHere = pillEl.title.split(' — ')[0];
-                        const match = events.find(function(ev) { return ev.date === iso && (ev.title || '(untitled)') === titleHere; });
-                        if (match) { openEventModal(match); return; }
-                    }
-                    openEventModal({ date: iso });
-                });
-                grid.appendChild(cell);
+                const built = buildCalDayCell(cellDate, events, { otherMonth: otherMonth });
+                if (!otherMonth) inMonthCount += built.count;
+                grid.appendChild(built.cell);
             }
+            updateCalMeta(inMonthCount);
+        }
 
-            const meta = document.getElementById('evCalendarMeta');
-            meta.textContent = cityLabel(currentCity) + ' · ' + inMonthCount + ' event' + (inMonthCount === 1 ? '' : 's') + ' this month';
+        function renderCalWeek() {
+            const grid = document.getElementById('evCalGrid');
+            grid.innerHTML = '';
+            const start = ensureWeekStart();
+            const events = eventsForCity();
+            let weekCount = 0;
+
+            DOW.forEach(function(d) {
+                const cell = document.createElement('div');
+                cell.className = 'ev-cal-dow';
+                cell.textContent = d;
+                grid.appendChild(cell);
+            });
+
+            for (let i = 0; i < 7; i++) {
+                const cellDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+                const built = buildCalDayCell(cellDate, events);
+                weekCount += built.count;
+                grid.appendChild(built.cell);
+            }
+            updateCalMeta(weekCount);
+        }
+
+        function eventsInRange(events, startIso, endIso) {
+            return events.filter(function(ev) {
+                return ev.date && ev.date >= startIso && ev.date <= endIso;
+            }).sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+        }
+
+        function renderCalAgenda() {
+            const agenda = document.getElementById('evCalAgenda');
+            const events = eventsForCity();
+            const startIso = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-01';
+            const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate();
+            const endIso = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
+
+            const list = eventsInRange(events, startIso, endIso);
+            const count = list.length;
+            agenda.innerHTML = '';
+            if (!list.length) {
+                agenda.innerHTML = '<div class="ev-cal-agenda-empty">No events in this period for ' + escapeHtml(cityLabel(currentCity)) + '</div>';
+            } else {
+                list.forEach(function(ev) {
+                    const row = document.createElement('div');
+                    row.className = 'ev-cal-agenda-row';
+                    row.setAttribute('data-event-id', ev.id || '');
+                    const d = new Date(ev.date);
+                    var attBadge = '';
+                    if (ev.attendance === 'going') attBadge = ' <span class="ev-att-badge ev-att-badge--going">Going</span>';
+                    else if (ev.attendance === 'want_to_go') attBadge = ' <span class="ev-att-badge ev-att-badge--want">Want</span>';
+                    row.innerHTML = ''
+                        + '<div class="ev-cal-agenda-date">' + escapeHtml(formatShortDate(d)) + '</div>'
+                        + '<div class="ev-cal-agenda-type">' + escapeHtml(TYPE_LABEL[ev.type] || 'Other') + '</div>'
+                        + '<div><div class="ev-cal-agenda-title">' + escapeHtml(ev.title || '(untitled)') + attBadge + '</div>'
+                        + '<div class="ev-cal-agenda-venue">' + escapeHtml(ev.venue || '') + '</div></div>'
+                        + '<div class="ev-cal-agenda-type">' + escapeHtml(ev.time || '') + '</div>';
+                    agenda.appendChild(row);
+                });
+            }
+            updateCalMeta(count);
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('evCalGrid');
+            const agenda = document.getElementById('evCalAgenda');
+            updateCalMonthLabel();
+
+            document.querySelectorAll('.ev-cal-view-btn').forEach(function(btn) {
+                const on = btn.getAttribute('data-view') === calView;
+                btn.classList.toggle('is-on', on);
+                btn.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+
+            if (calView === 'agenda') {
+                grid.style.display = 'none';
+                agenda.hidden = false;
+                renderCalAgenda();
+            } else {
+                agenda.hidden = true;
+                grid.style.display = 'grid';
+                grid.classList.toggle('ev-cal-grid--week', calView === 'week');
+                if (calView === 'week') renderCalWeek();
+                else renderCalMonth();
+            }
+        }
+
+        function calNavPrev() {
+            if (calView === 'week') {
+                const start = ensureWeekStart();
+                start.setDate(start.getDate() - 7);
+                viewYear = start.getFullYear();
+                viewMonth = start.getMonth();
+            } else {
+                viewMonth--;
+                if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+                viewWeekStart = null;
+            }
+            renderCalendar();
+        }
+
+        function calNavNext() {
+            if (calView === 'week') {
+                const start = ensureWeekStart();
+                start.setDate(start.getDate() + 7);
+                viewYear = start.getFullYear();
+                viewMonth = start.getMonth();
+            } else {
+                viewMonth++;
+                if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+                viewWeekStart = null;
+            }
+            renderCalendar();
+        }
+
+        function calNavToday() {
+            viewYear = today.getFullYear();
+            viewMonth = today.getMonth();
+            viewWeekStart = mondayOf(today);
+            renderCalendar();
+        }
+
+        function setCalView(next) {
+            if (next === calView) return;
+            calView = next;
+            if (calView === 'week') ensureWeekStart();
+            renderCalendar();
+        }
+
+        function toggleCalFullscreen() {
+            isCalFullscreen = !isCalFullscreen;
+            document.body.classList.toggle('ev-cal-fullscreen', isCalFullscreen);
+            const btn = document.getElementById('evCalFullscreen');
+            btn.setAttribute('aria-pressed', isCalFullscreen ? 'true' : 'false');
+            btn.setAttribute('aria-label', isCalFullscreen ? 'Exit full screen' : 'Full screen');
+            btn.title = isCalFullscreen ? 'Exit full screen' : 'Full screen';
+            btn.textContent = isCalFullscreen ? '✕' : '⛶';
         }
 
         // ---------- Upcoming list ----------
@@ -1172,7 +1636,7 @@
 
         function buildMarkerIcon(kind) {
             const cls = 'ev-map-marker m-' + kind;
-            const labels = { todo: '★', concert: 'C', comedy: 'H', theatre: 'T', festival: 'F', other: '·' };
+            const labels = { todo: '★', concert: 'C', comedy: 'H', theatre: 'T', festival: 'F', appointment: 'A', other: '·' };
             const ch = labels[kind] || '·';
             return L.divIcon({
                 className: '',
@@ -1204,17 +1668,7 @@
                 const lat = parseFloat(ev.latitude), lng = parseFloat(ev.longitude);
                 if (isNaN(lat) || isNaN(lng)) return;
                 const m = L.marker([lat, lng], { icon: buildMarkerIcon(ev.type || 'other') }).addTo(map);
-                const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
-                const popup = ''
-                    + '<strong>' + escapeHtml(ev.title || '(untitled)') + '</strong>'
-                    + '<div class="ev-pop-meta">'
-                    +   (TYPE_LABEL[ev.type] || 'Event')
-                    +   (dateStr ? ' · ' + dateStr : '')
-                    +   (ev.venue ? ' · ' + escapeHtml(ev.venue) : '')
-                    + '</div>'
-                    + (ev.address ? '<div class="ev-pop-meta">' + escapeHtml(ev.address) + '</div>' : '')
-                    + (ev.map_link ? '<a href="' + escapeHtml(ev.map_link) + '" target="_blank" rel="noopener">Open in Google Maps ↗</a>' : '');
-                m.bindPopup(popup);
+                m.on('click', function() { openEventModal(ev); });
                 mapMarkers.push(m);
                 points.push([lat, lng]);
             });
@@ -1223,15 +1677,7 @@
                 const lat = parseFloat(t.latitude), lng = parseFloat(t.longitude);
                 if (isNaN(lat) || isNaN(lng)) return;
                 const m = L.marker([lat, lng], { icon: buildMarkerIcon('todo') }).addTo(map);
-                const popup = ''
-                    + '<strong>' + escapeHtml(t.name || '(unnamed)') + '</strong>'
-                    + '<div class="ev-pop-meta">'
-                    +   (t.category ? escapeHtml(t.category) : 'Place')
-                    +   (t.attended ? ' · Attended' : (t.booked ? ' · Booked' : ''))
-                    + '</div>'
-                    + (t.address ? '<div class="ev-pop-meta">' + escapeHtml(t.address) + '</div>' : '')
-                    + (t.map_link ? '<a href="' + escapeHtml(t.map_link) + '" target="_blank" rel="noopener">Open in Google Maps ↗</a>' : '');
-                m.bindPopup(popup);
+                m.on('click', function() { openThingModal(t); });
                 mapMarkers.push(m);
                 points.push([lat, lng]);
             });
@@ -1259,7 +1705,7 @@
 
         function closeEntryModal() {
             document.getElementById('evEntryModal').classList.remove('is-open');
-            document.body.style.overflow = '';
+            if (!isCalFullscreen) document.body.style.overflow = '';
         }
 
         function setPanelDisabled(panelEl, disabled) {
@@ -1297,7 +1743,7 @@
                 timePart = String(ev.starts_at).slice(11, 16);
             }
             document.getElementById('evEventDate').value = datePart;
-            document.getElementById('evEventTime').value = timePart;
+            setEventTimeValue(timePart);
             document.getElementById('evEventVenue').value = ev.venue || '';
             document.getElementById('evEventLink').value = ev.link || '';
             document.getElementById('evEventMapLink').value = ev.map_link || '';
@@ -1349,9 +1795,13 @@
             document.getElementById('evEntryModal').classList.add('is-open');
             document.body.style.overflow = 'hidden';
             setTimeout(function() {
+                var modal = document.getElementById('evEntryModal');
+                if (modal && modal.scrollIntoView) modal.scrollIntoView({ block: 'nearest' });
+                var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+                if (coarse) return;
                 var focusId = kind === 'event' ? 'evEventTitle' : 'evThingName';
                 var el = document.getElementById(focusId);
-                if (el && !el.disabled) el.focus();
+                if (el && !el.disabled) el.focus({ preventScroll: true });
             }, 50);
         }
 
@@ -1417,7 +1867,7 @@
             if (activeEntryKind === 'event') {
                 var id = document.getElementById('evEventId').value;
                 var date = document.getElementById('evEventDate').value;
-                var time = document.getElementById('evEventTime').value;
+                var time = getEventTimeValue();
                 if (!date) { setEntryStatus('Date is required.', true); return; }
                 var startsAt = time ? (date + 'T' + time + ':00') : (date + 'T00:00:00');
                 var payload = {
@@ -1512,9 +1962,16 @@
             await loadAll();
         });
         document.getElementById('evTypeFilter').addEventListener('change', function(e) { currentType = e.target.value; renderMap(); renderCalendar(); renderUpcoming(); });
-        document.getElementById('evCalPrev').addEventListener('click', function() { viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } renderCalendar(); });
-        document.getElementById('evCalNext').addEventListener('click', function() { viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } renderCalendar(); });
-        document.getElementById('evCalToday').addEventListener('click', function() { viewYear = today.getFullYear(); viewMonth = today.getMonth(); renderCalendar(); });
+        document.getElementById('evCalPrev').addEventListener('click', calNavPrev);
+        document.getElementById('evCalNext').addEventListener('click', calNavNext);
+        document.getElementById('evCalToday').addEventListener('click', calNavToday);
+        document.getElementById('evCalFullscreen').addEventListener('click', toggleCalFullscreen);
+        document.querySelectorAll('.ev-cal-view-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { setCalView(btn.getAttribute('data-view')); });
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isCalFullscreen) toggleCalFullscreen();
+        });
         document.getElementById('evAddEntryBtn').addEventListener('click', function() { openEntryModal('event', {}); });
 
         // Inline edits for things-to-do (booked / attended / last_visited persist via PATCH).
@@ -1572,36 +2029,47 @@
             }
         });
 
-        // Edit / remove buttons in upcoming list.
+        // Calendar taps (month / week / agenda / fullscreen) — one handler for iPad reliability.
+        var evCalBody = document.getElementById('evCalBody');
+        if (evCalBody) {
+            evCalBody.addEventListener('click', handleCalendarInteraction);
+            evCalBody.addEventListener('touchend', function(e) {
+                if (e.target.closest('.ev-cal-pill, .ev-cal-day, .ev-cal-agenda-row')) {
+                    e.preventDefault();
+                    handleCalendarInteraction(e);
+                }
+            }, { passive: false });
+        }
+
+        // Upcoming list: tap row to edit; × to remove.
         document.getElementById('evList').addEventListener('click', async function(e) {
             const row = e.target.closest('.ev-list-row');
             if (!row) return;
             const id = row.getAttribute('data-event-id');
             if (!id) return;
 
-            const editBtn = e.target.closest('button[data-action="edit"]');
-            if (editBtn) {
-                const ev = cityEvents.find(function(x) { return String(x.id) === String(id); });
-                if (ev) openEventModal(ev);
+            const removeBtn = e.target.closest('button[data-action="remove"]');
+            if (removeBtn) {
+                if (!confirm('Remove this event?')) return;
+                try {
+                    const r = await fetch('/api/events/' + encodeURIComponent(id), { method: 'DELETE' });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    cityEvents = cityEvents.filter(function(ev) { return String(ev.id) !== String(id); });
+                    renderCalendar();
+                    renderUpcoming();
+                    renderMap();
+                } catch (err) {
+                    console.error('Failed to delete event:', err);
+                    showStatus('Could not delete event. Please try again.', 'error');
+                }
                 return;
             }
 
-            const removeBtn = e.target.closest('button[data-action="remove"]');
-            if (!removeBtn) return;
-            if (!confirm('Remove this event?')) return;
-            try {
-                const r = await fetch('/api/events/' + encodeURIComponent(id), { method: 'DELETE' });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                cityEvents = cityEvents.filter(function(ev) { return String(ev.id) !== String(id); });
-                renderCalendar();
-                renderUpcoming();
-                renderMap();
-            } catch (err) {
-                console.error('Failed to delete event:', err);
-                showStatus('Could not delete event. Please try again.', 'error');
-            }
+            const ev = findEventById(id);
+            if (ev) openEventModal(ev);
         });
 
+        initEventTimeSelects();
         loadAll();
     })();
     </script>
