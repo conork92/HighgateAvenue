@@ -7,6 +7,8 @@
     <title>Highgate Avenue – Restaurants</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260614">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260614">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
     <style>
         :root {
             --r-border: #0d0d0d;
@@ -72,6 +74,15 @@
         .r-day-btn:last-child { margin-right: 0; }
         .r-day-btn.is-on { background: var(--r-border); color: #fff; }
         .r-day-btn:hover:not(.is-on) { background: var(--r-soft); }
+        .r-filter-select {
+            font: inherit;
+            font-size: 0.78rem;
+            padding: 0.4rem 0.65rem;
+            border: 1.5px solid var(--r-border);
+            background: #fff;
+            min-width: 10rem;
+            max-width: 14rem;
+        }
         .r-spacer { flex: 1; }
         .r-btn {
             font: inherit;
@@ -366,6 +377,34 @@
         }
         .r-form-status.is-error { color: #b00020; }
 
+        /* Map */
+        #rMap {
+            width: 100%;
+            height: 420px;
+            border: 2px solid var(--r-border);
+            background: #f0f0f0;
+        }
+        .r-map-marker {
+            width: 26px;
+            height: 26px;
+            border: 2px solid var(--r-border);
+            border-radius: 50%;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            box-shadow: 2px 2px 0 var(--r-border);
+        }
+        .r-map-marker.has-deal { background: var(--r-deal); }
+        .r-map-hint {
+            font-size: 0.75rem;
+            color: var(--r-muted);
+            margin-top: 0.65rem;
+            line-height: 1.45;
+        }
+
         @media (max-width: 600px) {
             .r-form-grid { grid-template-columns: 1fr; }
             .r-grid { grid-template-columns: 1fr; }
@@ -395,9 +434,23 @@
                         <button type="button" class="r-day-btn" data-day="saturday">Sat</button>
                         <button type="button" class="r-day-btn" data-day="sunday">Sun</button>
                     </div>
+                    <span class="r-toolbar-label">Cuisine</span>
+                    <select id="rCuisineFilter" class="r-filter-select" aria-label="Filter by cuisine">
+                        <option value="">All</option>
+                    </select>
                     <div class="r-spacer"></div>
                     <button type="button" class="r-btn" id="rAddBtn">+ Add restaurant</button>
                 </div>
+
+                <!-- Map -->
+                <section class="r-section" id="rMapSection">
+                    <div class="r-section-head">
+                        <h2>Map</h2>
+                        <span class="r-section-meta" id="rMapMeta">0 on map</span>
+                    </div>
+                    <div id="rMap" role="region" aria-label="Map of restaurants"></div>
+                    <p class="r-map-hint" id="rMapHint">Tap a pin to open details. Restaurants need a Google Maps link (use <strong>Fetch details</strong> when adding) so we can place them on the map.</p>
+                </section>
 
                 <!-- Today's deals -->
                 <section class="r-section" id="rTodaySection">
@@ -437,6 +490,8 @@
             </div>
             <form id="rForm">
                 <input type="hidden" id="rRestaurantId">
+                <input type="hidden" id="rLatitude">
+                <input type="hidden" id="rLongitude">
 
                 <!-- Google Maps fetch -->
                 <div class="r-fetch-block">
@@ -453,9 +508,12 @@
                         <label for="rName">Name *</label>
                         <input type="text" id="rName" placeholder="e.g. The Bull">
                     </div>
-                    <div class="r-form-row">
-                        <label for="rCuisine">Cuisine / type</label>
-                        <input type="text" id="rCuisine" placeholder="e.g. Italian, Pub, Sushi">
+                    <div class="r-form-row full">
+                        <label for="rCuisineSelect">Cuisine</label>
+                        <select id="rCuisineSelect">
+                            <option value="">—</option>
+                        </select>
+                        <input type="text" id="rCuisineCustom" placeholder="Or type your own…" style="margin-top:0.35rem;">
                     </div>
                     <div class="r-form-row">
                         <label for="rPhone">Phone</label>
@@ -511,8 +569,35 @@
         const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
         const DAY_SHORT = { sunday:'Sun', monday:'Mon', tuesday:'Tue', wednesday:'Wed', thursday:'Thu', friday:'Fri', saturday:'Sat' };
         const todayName = DAYS[new Date().getDay()]; // e.g. 'saturday'
-        let filterDay = '';   // '' = all, or a day name
-        let allRestaurants = [];  // full list from server
+        const MAP_DEFAULT = [51.5715, -0.1458]; // Highgate
+        const CUISINES = [
+            'British / Pub',
+            'Italian',
+            'French',
+            'Spanish',
+            'Greek',
+            'Turkish',
+            'Indian',
+            'Chinese',
+            'Japanese / Sushi',
+            'Thai',
+            'Vietnamese',
+            'Korean',
+            'Middle Eastern',
+            'Mexican',
+            'American',
+            'Pizza',
+            'Cafe / Brunch',
+            'Seafood',
+            'Steakhouse',
+            'Vegetarian / Vegan',
+            'Fusion'
+        ];
+        let filterDay = '';
+        let filterCuisine = '';
+        let restaurantData = [];  // full list from server
+        let mapInstance = null;
+        let mapMarkers = [];
 
         // ---------- Helpers ----------
         function escHtml(s) {
@@ -527,18 +612,95 @@
             el.classList.toggle('is-error', !!isErr);
         }
 
+        function initCuisineSelect() {
+            const sel = document.getElementById('rCuisineSelect');
+            if (!sel || sel.options.length > 1) return;
+            CUISINES.forEach(function(c) {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                sel.appendChild(opt);
+            });
+        }
+
+        function getCuisineValue() {
+            const custom = (document.getElementById('rCuisineCustom').value || '').trim();
+            if (custom) return custom;
+            return (document.getElementById('rCuisineSelect').value || '').trim();
+        }
+
+        function setCuisineValue(value) {
+            const sel = document.getElementById('rCuisineSelect');
+            const custom = document.getElementById('rCuisineCustom');
+            const v = (value || '').trim();
+            custom.value = '';
+            if (!v) {
+                sel.value = '';
+                return;
+            }
+            if (CUISINES.indexOf(v) !== -1) {
+                sel.value = v;
+                return;
+            }
+            sel.value = '';
+            custom.value = v;
+        }
+
+        function uniqueCuisinesFromData() {
+            const seen = {};
+            restaurantData.forEach(function(r) {
+                const c = (r.cuisine || '').trim();
+                if (c) seen[c] = true;
+            });
+            return Object.keys(seen).sort(function(a, b) { return a.localeCompare(b); });
+        }
+
+        function initCuisineFilter() {
+            const sel = document.getElementById('rCuisineFilter');
+            if (!sel) return;
+            const prev = filterCuisine;
+            sel.innerHTML = '<option value="">All</option>';
+            uniqueCuisinesFromData().forEach(function(c) {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                sel.appendChild(opt);
+            });
+            if (prev && Array.from(sel.options).some(function(o) { return o.value === prev; })) {
+                sel.value = prev;
+            } else {
+                filterCuisine = '';
+                sel.value = '';
+            }
+        }
+
+        function filteredRestaurants() {
+            let list = restaurantData.slice();
+            if (filterDay) {
+                list = list.filter(function(r) {
+                    return Array.isArray(r.deal_days) && r.deal_days.indexOf(filterDay) !== -1;
+                });
+            }
+            if (filterCuisine) {
+                list = list.filter(function(r) {
+                    return (r.cuisine || '').trim() === filterCuisine;
+                });
+            }
+            return list;
+        }
+
         // ---------- Fetch data ----------
         async function loadRestaurants() {
             try {
-                const url = filterDay ? ('/api/restaurants?day=' + encodeURIComponent(filterDay)) : '/api/restaurants';
-                const r = await fetch(url);
+                const r = await fetch('/api/restaurants');
                 if (!r.ok) throw new Error('HTTP ' + r.status);
-                allRestaurants = await r.json();
-                if (!Array.isArray(allRestaurants)) allRestaurants = [];
+                restaurantData = await r.json();
+                if (!Array.isArray(restaurantData)) restaurantData = [];
             } catch (e) {
                 console.error('Could not load restaurants:', e);
-                allRestaurants = [];
+                restaurantData = [];
             }
+            initCuisineFilter();
             renderAll();
         }
 
@@ -591,8 +753,9 @@
         }
 
         function renderAll() {
+            const visible = filteredRestaurants();
             // Today's deals
-            const todayDeals = allRestaurants.filter(hasDealToday);
+            const todayDeals = visible.filter(hasDealToday);
             const todayGrid = document.getElementById('rTodayGrid');
             const todaySection = document.getElementById('rTodaySection');
             const todayMeta = document.getElementById('rTodayMeta');
@@ -613,18 +776,89 @@
             const allMeta = document.getElementById('rAllMeta');
             const allGrid = document.getElementById('rAllGrid');
             allGrid.innerHTML = '';
-            if (filterDay) {
-                allTitle.textContent = 'Deals on ' + (DAY_SHORT[filterDay] || filterDay);
-                todaySection.style.display = 'none';
+            const titleParts = [];
+            if (filterDay) titleParts.push('deals on ' + (DAY_SHORT[filterDay] || filterDay));
+            if (filterCuisine) titleParts.push(filterCuisine);
+            if (titleParts.length) {
+                allTitle.textContent = titleParts.join(' · ');
+                todaySection.style.display = filterDay ? 'none' : 'block';
             } else {
                 allTitle.textContent = 'All restaurants';
             }
-            allMeta.textContent = allRestaurants.length + ' restaurant' + (allRestaurants.length === 1 ? '' : 's');
-            if (!allRestaurants.length) {
-                allGrid.innerHTML = '<div class="r-empty">' + (filterDay ? 'No deals on this day yet' : 'No restaurants saved yet') + '</div>';
+            allMeta.textContent = visible.length + ' restaurant' + (visible.length === 1 ? '' : 's');
+            if (!visible.length) {
+                const emptyMsg = filterDay || filterCuisine
+                    ? 'No restaurants match these filters'
+                    : 'No restaurants saved yet';
+                allGrid.innerHTML = '<div class="r-empty">' + escHtml(emptyMsg) + '</div>';
             } else {
-                allRestaurants.forEach(function(r) { allGrid.appendChild(buildCard(r, true)); });
+                visible.forEach(function(r) { allGrid.appendChild(buildCard(r, true)); });
             }
+            renderMap(visible);
+        }
+
+        function whenLeafletReady(cb, tries) {
+            tries = tries == null ? 40 : tries;
+            if (typeof L !== 'undefined') { cb(); return; }
+            if (tries <= 0) return;
+            setTimeout(function() { whenLeafletReady(cb, tries - 1); }, 100);
+        }
+
+        function buildMapIcon(hasDeal) {
+            return L.divIcon({
+                className: '',
+                html: '<div class="r-map-marker' + (hasDeal ? ' has-deal' : '') + '">R</div>',
+                iconSize: [26, 26],
+                iconAnchor: [13, 13],
+                popupAnchor: [0, -12]
+            });
+        }
+
+        function renderMap(visible) {
+            visible = visible || filteredRestaurants();
+            whenLeafletReady(function() {
+                if (!mapInstance) {
+                    mapInstance = L.map('rMap', { scrollWheelZoom: true }).setView(MAP_DEFAULT, 13);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                        maxZoom: 19
+                    }).addTo(mapInstance);
+                }
+                mapMarkers.forEach(function(m) { mapInstance.removeLayer(m); });
+                mapMarkers = [];
+                const points = [];
+                let missing = 0;
+                visible.forEach(function(rest) {
+                    const lat = parseFloat(rest.latitude);
+                    const lng = parseFloat(rest.longitude);
+                    if (isNaN(lat) || isNaN(lng)) {
+                        missing++;
+                        return;
+                    }
+                    const marker = L.marker([lat, lng], { icon: buildMapIcon(hasDealToday(rest)) }).addTo(mapInstance);
+                    marker.on('click', function() { openModal(rest); });
+                    mapMarkers.push(marker);
+                    points.push([lat, lng]);
+                });
+                const meta = document.getElementById('rMapMeta');
+                const hint = document.getElementById('rMapHint');
+                if (meta) {
+                    meta.textContent = points.length + ' on map' + (missing ? ' · ' + missing + ' without location' : '');
+                }
+                if (hint && missing && !points.length) {
+                    hint.textContent = 'No locations yet — paste a Google Maps link and use Fetch details when adding a restaurant.';
+                } else if (hint) {
+                    hint.innerHTML = 'Tap a pin to open details. Yellow pins have a deal today. Use <strong>Fetch details</strong> from a Google Maps link to set the location.';
+                }
+                if (points.length > 1) {
+                    mapInstance.fitBounds(points, { padding: [48, 48], maxZoom: 15 });
+                } else if (points.length === 1) {
+                    mapInstance.setView(points[0], 15);
+                } else {
+                    mapInstance.setView(MAP_DEFAULT, 13);
+                }
+                setTimeout(function() { try { mapInstance.invalidateSize(); } catch (e) {} }, 0);
+            });
         }
 
         // ---------- Day filter ----------
@@ -635,7 +869,11 @@
             document.querySelectorAll('.r-day-btn').forEach(function(b) {
                 b.classList.toggle('is-on', b === btn);
             });
-            loadRestaurants();
+            renderAll();
+        });
+        document.getElementById('rCuisineFilter').addEventListener('change', function(e) {
+            filterCuisine = (e.target.value || '').trim();
+            renderAll();
         });
         // Set "All" as default active
         document.querySelector('.r-day-btn[data-day=""]').classList.add('is-on');
@@ -647,12 +885,14 @@
             document.getElementById('rModalTitle').textContent = rest.id ? 'Edit restaurant' : 'Add restaurant';
             document.getElementById('rMapsUrl').value = rest.google_maps_link || '';
             document.getElementById('rName').value = rest.name || '';
-            document.getElementById('rCuisine').value = rest.cuisine || '';
+            setCuisineValue(rest.cuisine);
             document.getElementById('rPhone').value = rest.phone || '';
             document.getElementById('rAddress').value = rest.address || '';
             document.getElementById('rWebsite').value = rest.website || '';
             document.getElementById('rNotes').value = rest.notes || '';
             document.getElementById('rDeal').value = rest.deal || '';
+            document.getElementById('rLatitude').value = rest.latitude != null ? rest.latitude : '';
+            document.getElementById('rLongitude').value = rest.longitude != null ? rest.longitude : '';
             // Deal days checkboxes
             const dealDays = rest.deal_days || [];
             document.querySelectorAll('#rDealDays label').forEach(function(lbl) {
@@ -707,6 +947,8 @@
                 if (data.google_maps_link) {
                     document.getElementById('rMapsUrl').value = data.google_maps_link;
                 }
+                if (data.latitude != null) document.getElementById('rLatitude').value = data.latitude;
+                if (data.longitude != null) document.getElementById('rLongitude').value = data.longitude;
                 setStatus('Details loaded — fill in anything missing and save.', false);
             } catch (err) {
                 setStatus(err.message || 'Could not fetch this link.', true);
@@ -728,9 +970,11 @@
                 if (cb.checked) dealDays.push(cb.value);
             });
 
+            const latVal = document.getElementById('rLatitude').value;
+            const lngVal = document.getElementById('rLongitude').value;
             const payload = {
                 name: name,
-                cuisine: (document.getElementById('rCuisine').value || '').trim(),
+                cuisine: getCuisineValue(),
                 phone: (document.getElementById('rPhone').value || '').trim(),
                 address: (document.getElementById('rAddress').value || '').trim(),
                 google_maps_link: (document.getElementById('rMapsUrl').value || '').trim(),
@@ -739,6 +983,8 @@
                 deal: (document.getElementById('rDeal').value || '').trim(),
                 deal_days: dealDays,
             };
+            if (latVal !== '') payload.latitude = parseFloat(latVal);
+            if (lngVal !== '') payload.longitude = parseFloat(lngVal);
 
             const method = id ? 'PATCH' : 'POST';
             const url = id ? '/api/restaurants/' + encodeURIComponent(id) : '/api/restaurants';
@@ -763,7 +1009,7 @@
                 const id = card.getAttribute('data-id');
 
                 if (e.target.closest('button[data-action="edit"]')) {
-                    const rest = allRestaurants.find(function(r) { return String(r.id) === String(id); });
+                    const rest = restaurantData.find(function(r) { return String(r.id) === String(id); });
                     if (rest) openModal(rest);
                     return;
                 }
@@ -783,6 +1029,7 @@
         handleCardAction(document.getElementById('rAllGrid'));
 
         // ---------- Init ----------
+        initCuisineSelect();
         loadRestaurants();
     })();
     </script>

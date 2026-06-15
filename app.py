@@ -252,6 +252,7 @@ DESIGN_SECTIONS = {
         'layout': 'single',
         'images': [
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/stairs.jpg', 'alt': 'Stairs into entrance'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/stairs/WhatsApp%20Image%202026-06-15%20at%2021.56.37.jpeg', 'alt': 'Entrance path and steps'},
         ],
     },
     'floor-plans': {
@@ -3785,10 +3786,15 @@ def create_restaurant():
             'deal': (data.get('deal') or '').strip() or None,
             'deal_days': deal_days or None,
         }
-        coords = _resolve_coords({'map_link': payload['google_maps_link'],
-                                   'latitude': data.get('latitude'),
-                                   'longitude': data.get('longitude')})
-        payload.update(coords)
+        coords = _resolve_coords({
+            'map_link': payload['google_maps_link'],
+            'latitude': data.get('latitude'),
+            'longitude': data.get('longitude'),
+        })
+        if coords.get('latitude') is not None:
+            payload['latitude'] = coords['latitude']
+        if coords.get('longitude') is not None:
+            payload['longitude'] = coords['longitude']
         r = supabase.table('ha_restaurants').insert(payload).execute()
         return jsonify((r.data or [payload])[0]), 201
     except Exception as e:
@@ -3811,7 +3817,15 @@ def update_restaurant(restaurant_id):
             days = data['deal_days'] or []
             payload['deal_days'] = [d for d in days if d in DAYS_OF_WEEK] or None
         if 'latitude' in data or 'longitude' in data or 'google_maps_link' in data:
-            payload.update(_resolve_coords(data))
+            coords = _resolve_coords({
+                'map_link': data.get('google_maps_link'),
+                'latitude': data.get('latitude'),
+                'longitude': data.get('longitude'),
+            })
+            if coords.get('latitude') is not None:
+                payload['latitude'] = coords['latitude']
+            if coords.get('longitude') is not None:
+                payload['longitude'] = coords['longitude']
         if not payload:
             return jsonify({'error': 'No fields to update'}), 400
         payload['updated_at'] = datetime.now(timezone.utc).isoformat()
