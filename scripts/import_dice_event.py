@@ -20,7 +20,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Import dice.fm event metadata as ha_events JSON.")
     ap.add_argument("url", help="dice.fm event URL")
     ap.add_argument("--city", help="Override inferred city slug (e.g. london)")
-    ap.add_argument("--type", choices=["concert", "comedy", "theatre", "festival", "other"], help="Override type")
+    ap.add_argument("--type", choices=["concert", "comedy", "theatre", "festival", "appointment", "other"], help="Override type")
     ap.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     ap.add_argument(
         "--curl",

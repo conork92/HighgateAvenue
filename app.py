@@ -229,6 +229,8 @@ DESIGN_SECTIONS = {
         'layout': 'single',
         'images': [
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/garden/garden.PNG', 'alt': 'Garden'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/garden/Gemini_Generated_Image_x1wdzx1wdzx1wdzx.png', 'alt': 'Garden — patio and studio'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/garden/garden_re_design.png', 'alt': 'Garden redesign'},
         ],
     },
     'summer-house': {
@@ -258,6 +260,7 @@ DESIGN_SECTIONS = {
         'images': [
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/old_floor_plan.PNG', 'alt': 'Original floor plan'},
             {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/floor_plan_clear.PNG', 'alt': 'New floor plan'},
+            {'url': 'https://storage.googleapis.com/highgate-avenue-designs/designs/floor_plans/WhatsApp%20Image%202026-06-11%20at%2007.12.47.jpeg', 'alt': 'Floor plan — drainage and utility'},
         ],
     },
 }
@@ -3342,7 +3345,7 @@ def serve_gcp_image(image_path):
 
 # ---------- Events (ha_events) ----------
 
-EVENT_TYPES = {'concert', 'comedy', 'theatre', 'festival', 'other'}
+EVENT_TYPES = {'concert', 'comedy', 'theatre', 'festival', 'appointment', 'other'}
 EVENT_STATUSES = {'idea', 'booked', 'attended', 'cancelled'}
 EVENT_ATTENDANCE = {'going', 'want_to_go'}
 
