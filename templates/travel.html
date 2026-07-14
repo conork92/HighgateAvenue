@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Highgate Avenue – Travel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260706">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260706">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260706">
+</head>
+<body>
+    <div class="app-layout">
+        {% include '_sidebar.html' %}
+        <main class="main-with-sidebar">
+            <div class="tr-container">
+                <!-- Trip list -->
+                <div id="trListView">
+                    <header class="tr-header">
+                        <h1>Travel</h1>
+                        <p class="subtitle">Plan trips with locations and compare hotels &amp; Airbnbs — share the page to decide together.</p>
+                        <button type="button" class="tr-btn" id="trAddTripBtn">+ Add trip</button>
+                    </header>
+                    <div id="trTripCards" class="tr-trip-cards"></div>
+                    <p id="trListEmpty" class="tr-empty" style="display:none;">No trips yet. Add one — e.g. “Ireland summer 2026”.</p>
+                </div>
+
+                <!-- Trip detail -->
+                <div id="trDetailView" style="display:none;">
+                    <button type="button" class="tr-back" id="trBackBtn">← All trips</button>
+                    <header class="tr-detail-head">
+                        <div>
+                            <h1 id="trDetailTitle">Trip</h1>
+                            <p class="tr-detail-dates" id="trDetailDates"></p>
+                            <span class="tr-status" id="trDetailStatus"></span>
+                        </div>
+                        <div class="tr-detail-actions">
+                            <button type="button" class="tr-btn tr-btn--ghost" id="trEditTripBtn">Edit trip</button>
+                            <button type="button" class="tr-btn" id="trAddLocationBtn">+ Location</button>
+                        </div>
+                    </header>
+                    <div class="tr-overview" id="trDetailNotes"></div>
+
+                    <section class="tr-section" id="trTripStaysSection" style="display:none;">
+                        <div class="tr-section-head">
+                            <h2>Trip-wide stays</h2>
+                            <button type="button" class="tr-btn tr-btn--sm" id="trAddTripStayBtn">+ Add stay</button>
+                        </div>
+                        <div class="tr-stay-grid" id="trTripStaysGrid"></div>
+                    </section>
+
+                    <div id="trLocationsWrap"></div>
+                </div>
+
+                <footer class="tr-footer">
+                    Run <code>tables/ha_travel.sql</code> in Supabase before first use.
+                </footer>
+            </div>
+        </main>
+    </div>
+
+    <!-- Trip modal -->
+    <div class="tr-modal" id="trTripModal">
+        <div class="tr-modal-card">
+            <div class="tr-modal-head">
+                <h3 id="trTripModalTitle">Add trip</h3>
+                <button type="button" class="tr-modal-close" data-close="trTripModal">×</button>
+            </div>
+            <form id="trTripForm">
+                <input type="hidden" id="trTripId">
+                <div class="tr-form-grid">
+                    <div class="tr-form-row full">
+                        <label for="trTripTitle">Title *</label>
+                        <input type="text" id="trTripTitle" required placeholder="e.g. Ireland summer 2026">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trTripStart">Start date</label>
+                        <input type="date" id="trTripStart">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trTripEnd">End date</label>
+                        <input type="date" id="trTripEnd">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trTripStatus">Status</label>
+                        <select id="trTripStatus">
+                            <option value="planning">Planning</option>
+                            <option value="booked">Booked</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trTripNotes">Overview notes</label>
+                        <textarea id="trTripNotes" rows="4" placeholder="Dates, flights, budget, things to do — what your partner needs to know at a glance"></textarea>
+                    </div>
+                </div>
+                <div class="tr-form-actions">
+                    <span class="tr-form-status" id="trTripFormStatus"></span>
+                    <button type="button" class="tr-btn tr-btn--ghost" data-close="trTripModal">Cancel</button>
+                    <button type="submit" class="tr-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Location modal -->
+    <div class="tr-modal" id="trLocationModal">
+        <div class="tr-modal-card">
+            <div class="tr-modal-head">
+                <h3 id="trLocationModalTitle">Add location</h3>
+                <button type="button" class="tr-modal-close" data-close="trLocationModal">×</button>
+            </div>
+            <form id="trLocationForm">
+                <input type="hidden" id="trLocationId">
+                <input type="hidden" id="trLocationTripId">
+                <div class="tr-form-grid">
+                    <div class="tr-form-row full">
+                        <label for="trLocationName">Location *</label>
+                        <input type="text" id="trLocationName" required placeholder="e.g. Kerry, Cork">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trLocationStart">Arrive</label>
+                        <input type="date" id="trLocationStart">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trLocationEnd">Leave</label>
+                        <input type="date" id="trLocationEnd">
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trLocationNotes">Notes</label>
+                        <textarea id="trLocationNotes" rows="3" placeholder="What you want to do here, driving notes…"></textarea>
+                    </div>
+                </div>
+                <div class="tr-form-actions">
+                    <span class="tr-form-status" id="trLocationFormStatus"></span>
+                    <button type="button" class="tr-btn tr-btn--ghost" data-close="trLocationModal">Cancel</button>
+                    <button type="submit" class="tr-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stay modal -->
+    <div class="tr-modal" id="trStayModal">
+        <div class="tr-modal-card tr-modal-card--wide">
+            <div class="tr-modal-head">
+                <h3 id="trStayModalTitle">Add stay option</h3>
+                <button type="button" class="tr-modal-close" data-close="trStayModal">×</button>
+            </div>
+            <form id="trStayForm">
+                <input type="hidden" id="trStayId">
+                <input type="hidden" id="trStayTripId">
+                <input type="hidden" id="trStayLocationId">
+                <div class="tr-form-grid">
+                    <div class="tr-form-row full">
+                        <label for="trStayTitle">Name *</label>
+                        <input type="text" id="trStayTitle" required placeholder="e.g. Lakeside cottage, Muckross Hotel">
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trStayLink">Link</label>
+                        <input type="url" id="trStayLink" placeholder="https://airbnb.com/… or booking.com/…">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trStayType">Type</label>
+                        <select id="trStayType">
+                            <option value="hotel">Hotel</option>
+                            <option value="airbnb">Airbnb</option>
+                            <option value="b_and_b">B&amp;B</option>
+                            <option value="hostel">Hostel</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trStayPrice">Price</label>
+                        <input type="text" id="trStayPrice" placeholder="e.g. €120/night, £450 total">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trStayStatus">Status</label>
+                        <select id="trStayStatus">
+                            <option value="considering">Considering</option>
+                            <option value="shortlist">Shortlist</option>
+                            <option value="booked">Booked</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trStayPros">Pros</label>
+                        <textarea id="trStayPros" rows="2" placeholder="Great location, parking, breakfast included…"></textarea>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trStayCons">Cons</label>
+                        <textarea id="trStayCons" rows="2" placeholder="Far from town, shared bathroom…"></textarea>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trStayNotes">Notes</label>
+                        <textarea id="trStayNotes" rows="2" placeholder="Anything else for the decision"></textarea>
+                    </div>
+                </div>
+                <div class="tr-form-actions">
+                    <span class="tr-form-status" id="trStayFormStatus"></span>
+                    <button type="button" class="tr-btn tr-btn--ghost" data-close="trStayModal">Cancel</button>
+                    <button type="submit" class="tr-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const STAY_TYPE_LABEL = { hotel: 'Hotel', airbnb: 'Airbnb', b_and_b: 'B&B', hostel: 'Hostel', other: 'Other' };
+        const STAY_STATUS_LABEL = { considering: 'Considering', shortlist: 'Shortlist', booked: 'Booked', rejected: 'Rejected' };
+        const TRIP_STATUS_LABEL = { planning: 'Planning', booked: 'Booked', completed: 'Completed' };
+
+        let trips = [];
+        let currentTrip = null;
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        function fmtRange(start, end) {
+            if (!start && !end) return '';
+            if (start && end) return fmtDate(start) + ' – ' + fmtDate(end);
+            return fmtDate(start || end);
+        }
+
+        function fmtDate(iso) {
+            if (!iso) return '';
+            const d = new Date(iso + 'T12:00:00');
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function setFormStatus(id, msg, err) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = msg || '';
+            el.classList.toggle('is-error', !!err);
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('is-open');
+            document.body.style.overflow = '';
+        }
+
+        document.querySelectorAll('[data-close]').forEach(function(btn) {
+            btn.addEventListener('click', function() { closeModal(btn.getAttribute('data-close')); });
+        });
+        document.querySelectorAll('.tr-modal').forEach(function(m) {
+            m.addEventListener('click', function(e) {
+                if (e.target === m) closeModal(m.id);
+            });
+        });
+
+        async function loadTrips() {
+            const r = await fetch('/api/trips');
+            trips = await r.json();
+            if (!Array.isArray(trips)) trips = [];
+            renderTripList();
+        }
+
+        async function loadTrip(id) {
+            const r = await fetch('/api/trips?id=' + encodeURIComponent(id));
+            if (!r.ok) throw new Error('Could not load trip');
+            currentTrip = await r.json();
+            renderTripDetail();
+        }
+
+        function renderTripList() {
+            const wrap = document.getElementById('trTripCards');
+            const empty = document.getElementById('trListEmpty');
+            wrap.innerHTML = '';
+            if (!trips.length) {
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+            trips.forEach(function(t) {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'tr-trip-card';
+                card.innerHTML = ''
+                    + '<div class="tr-trip-card-title">' + esc(t.title) + '</div>'
+                    + '<div class="tr-trip-card-dates">' + esc(fmtRange(t.start_date, t.end_date) || 'Dates TBC') + '</div>'
+                    + '<span class="tr-status tr-status--' + esc(t.status || 'planning') + '">' + esc(TRIP_STATUS_LABEL[t.status] || t.status) + '</span>';
+                card.addEventListener('click', function() {
+                    document.getElementById('trListView').style.display = 'none';
+                    document.getElementById('trDetailView').style.display = 'block';
+                    loadTrip(t.id).catch(function() { alert('Could not load trip'); });
+                });
+                wrap.appendChild(card);
+            });
+        }
+
+        function buildStayCard(stay, locationId) {
+            const card = document.createElement('div');
+            card.className = 'tr-stay-card tr-stay-card--' + (stay.status || 'considering');
+            const linkHtml = stay.link
+                ? '<a href="' + esc(stay.link) + '" target="_blank" rel="noopener" class="tr-stay-link">Open listing ↗</a>'
+                : '';
+            card.innerHTML = ''
+                + '<div class="tr-stay-card-head">'
+                +   '<strong>' + esc(stay.title) + '</strong>'
+                +   '<span class="tr-stay-badges">'
+                +     '<span class="tr-stay-type">' + esc(STAY_TYPE_LABEL[stay.stay_type] || 'Stay') + '</span>'
+                +     '<span class="tr-stay-status">' + esc(STAY_STATUS_LABEL[stay.status] || stay.status) + '</span>'
+                +   '</span>'
+                + '</div>'
+                + (stay.price ? '<div class="tr-stay-price">' + esc(stay.price) + '</div>' : '')
+                + (stay.pros ? '<div class="tr-stay-pros"><span>Pros</span>' + esc(stay.pros) + '</div>' : '')
+                + (stay.cons ? '<div class="tr-stay-cons"><span>Cons</span>' + esc(stay.cons) + '</div>' : '')
+                + (stay.notes ? '<div class="tr-stay-notes">' + esc(stay.notes) + '</div>' : '')
+                + linkHtml
+                + '<div class="tr-stay-foot">'
+                +   '<button type="button" data-action="edit-stay">Edit</button>'
+                +   '<button type="button" data-action="delete-stay">Delete</button>'
+                + '</div>';
+            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay, locationId); });
+            card.querySelector('[data-action="delete-stay"]').addEventListener('click', function() {
+                if (!confirm('Remove this stay option?')) return;
+                fetch('/api/trip-stays/' + stay.id, { method: 'DELETE' }).then(function() { loadTrip(currentTrip.id); });
+            });
+            return card;
+        }
+
+        function renderTripDetail() {
+            if (!currentTrip) return;
+            const t = currentTrip;
+            document.getElementById('trDetailTitle').textContent = t.title || 'Trip';
+            document.getElementById('trDetailDates').textContent = fmtRange(t.start_date, t.end_date) || 'Dates not set';
+            const stEl = document.getElementById('trDetailStatus');
+            stEl.textContent = TRIP_STATUS_LABEL[t.status] || t.status;
+            stEl.className = 'tr-status tr-status--' + (t.status || 'planning');
+            const notesEl = document.getElementById('trDetailNotes');
+            notesEl.innerHTML = t.notes ? esc(t.notes).replace(/\n/g, '<br>') : '<span class="tr-muted">No overview notes yet — edit the trip to add context for your partner.</span>';
+
+            const tripStays = t.trip_stays || [];
+            const tripSection = document.getElementById('trTripStaysSection');
+            const tripGrid = document.getElementById('trTripStaysGrid');
+            tripSection.style.display = 'block';
+            tripGrid.innerHTML = '';
+            if (!tripStays.length) {
+                tripGrid.innerHTML = '<p class="tr-empty-inline">Optional: stays not tied to a specific location.</p>';
+            } else {
+                tripStays.forEach(function(s) { tripGrid.appendChild(buildStayCard(s, null)); });
+            }
+
+            const locWrap = document.getElementById('trLocationsWrap');
+            locWrap.innerHTML = '';
+            (t.locations || []).forEach(function(loc) {
+                const sec = document.createElement('section');
+                sec.className = 'tr-section tr-location-block';
+                sec.innerHTML = ''
+                    + '<div class="tr-section-head">'
+                    +   '<div><h2>' + esc(loc.name) + '</h2>'
+                    +   '<p class="tr-loc-dates">' + esc(fmtRange(loc.start_date, loc.end_date)) + '</p></div>'
+                    +   '<div class="tr-loc-actions">'
+                    +     '<button type="button" class="tr-btn tr-btn--ghost tr-btn--sm" data-action="edit-loc">Edit</button>'
+                    +     '<button type="button" class="tr-btn tr-btn--sm" data-action="add-stay">+ Stay</button>'
+                    +   '</div>'
+                    + '</div>'
+                    + (loc.notes ? '<p class="tr-loc-notes">' + esc(loc.notes).replace(/\n/g, '<br>') + '</p>' : '')
+                    + '<div class="tr-stay-grid tr-loc-stays"></div>';
+                const grid = sec.querySelector('.tr-loc-stays');
+                if (!(loc.stays || []).length) {
+                    grid.innerHTML = '<p class="tr-empty-inline">No stay options yet — add hotels or Airbnbs to compare.</p>';
+                } else {
+                    loc.stays.forEach(function(s) { grid.appendChild(buildStayCard(s, loc.id)); });
+                }
+                sec.querySelector('[data-action="edit-loc"]').addEventListener('click', function() { openLocationModal(loc); });
+                sec.querySelector('[data-action="add-stay"]').addEventListener('click', function() { openStayModal(null, loc.id); });
+                locWrap.appendChild(sec);
+            });
+        }
+
+        function openTripModal(trip) {
+            trip = trip || {};
+            document.getElementById('trTripId').value = trip.id || '';
+            document.getElementById('trTripModalTitle').textContent = trip.id ? 'Edit trip' : 'Add trip';
+            document.getElementById('trTripTitle').value = trip.title || '';
+            document.getElementById('trTripStart').value = trip.start_date || '';
+            document.getElementById('trTripEnd').value = trip.end_date || '';
+            document.getElementById('trTripStatus').value = trip.status || 'planning';
+            document.getElementById('trTripNotes').value = trip.notes || '';
+            setFormStatus('trTripFormStatus', '', false);
+            openModal('trTripModal');
+        }
+
+        function openLocationModal(loc) {
+            loc = loc || {};
+            document.getElementById('trLocationId').value = loc.id || '';
+            document.getElementById('trLocationTripId').value = loc.trip_id || (currentTrip && currentTrip.id) || '';
+            document.getElementById('trLocationModalTitle').textContent = loc.id ? 'Edit location' : 'Add location';
+            document.getElementById('trLocationName').value = loc.name || '';
+            document.getElementById('trLocationStart').value = loc.start_date || '';
+            document.getElementById('trLocationEnd').value = loc.end_date || '';
+            document.getElementById('trLocationNotes').value = loc.notes || '';
+            setFormStatus('trLocationFormStatus', '', false);
+            openModal('trLocationModal');
+        }
+
+        function openStayModal(stay, locationId) {
+            stay = stay || {};
+            document.getElementById('trStayId').value = stay.id || '';
+            document.getElementById('trStayTripId').value = stay.trip_id || (currentTrip && currentTrip.id) || '';
+            document.getElementById('trStayLocationId').value = stay.location_id != null ? stay.location_id : (locationId || '');
+            document.getElementById('trStayModalTitle').textContent = stay.id ? 'Edit stay' : 'Add stay option';
+            document.getElementById('trStayTitle').value = stay.title || '';
+            document.getElementById('trStayLink').value = stay.link || '';
+            document.getElementById('trStayType').value = stay.stay_type || 'hotel';
+            document.getElementById('trStayPrice').value = stay.price || '';
+            document.getElementById('trStayStatus').value = stay.status || 'considering';
+            document.getElementById('trStayPros').value = stay.pros || '';
+            document.getElementById('trStayCons').value = stay.cons || '';
+            document.getElementById('trStayNotes').value = stay.notes || '';
+            setFormStatus('trStayFormStatus', '', false);
+            openModal('trStayModal');
+        }
+
+        document.getElementById('trAddTripBtn').addEventListener('click', function() { openTripModal(); });
+        document.getElementById('trEditTripBtn').addEventListener('click', function() { if (currentTrip) openTripModal(currentTrip); });
+        document.getElementById('trAddLocationBtn').addEventListener('click', function() { openLocationModal(); });
+        document.getElementById('trAddTripStayBtn').addEventListener('click', function() { openStayModal(null, null); });
+
+        document.getElementById('trBackBtn').addEventListener('click', function() {
+            document.getElementById('trDetailView').style.display = 'none';
+            document.getElementById('trListView').style.display = 'block';
+            currentTrip = null;
+            loadTrips();
+        });
+
+        document.getElementById('trTripForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('trTripId').value;
+            const payload = {
+                title: document.getElementById('trTripTitle').value.trim(),
+                start_date: document.getElementById('trTripStart').value || null,
+                end_date: document.getElementById('trTripEnd').value || null,
+                status: document.getElementById('trTripStatus').value,
+                notes: document.getElementById('trTripNotes').value.trim()
+            };
+            if (!payload.title) return;
+            const url = id ? '/api/trips/' + id : '/api/trips';
+            const method = id ? 'PATCH' : 'POST';
+            try {
+                const r = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Save failed');
+                closeModal('trTripModal');
+                if (currentTrip && String(currentTrip.id) === String(id)) {
+                    await loadTrip(id);
+                } else if (!id) {
+                    document.getElementById('trListView').style.display = 'none';
+                    document.getElementById('trDetailView').style.display = 'block';
+                    await loadTrip(data.id);
+                } else {
+                    await loadTrips();
+                }
+            } catch (err) {
+                setFormStatus('trTripFormStatus', err.message, true);
+            }
+        });
+
+        document.getElementById('trLocationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('trLocationId').value;
+            const payload = {
+                trip_id: document.getElementById('trLocationTripId').value,
+                name: document.getElementById('trLocationName').value.trim(),
+                start_date: document.getElementById('trLocationStart').value || null,
+                end_date: document.getElementById('trLocationEnd').value || null,
+                notes: document.getElementById('trLocationNotes').value.trim()
+            };
+            if (!payload.name) return;
+            const url = id ? '/api/trip-locations/' + id : '/api/trip-locations';
+            const method = id ? 'PATCH' : 'POST';
+            try {
+                const r = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Save failed');
+                closeModal('trLocationModal');
+                await loadTrip(currentTrip.id);
+            } catch (err) {
+                setFormStatus('trLocationFormStatus', err.message, true);
+            }
+        });
+
+        document.getElementById('trStayForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('trStayId').value;
+            const locRaw = document.getElementById('trStayLocationId').value;
+            const payload = {
+                trip_id: document.getElementById('trStayTripId').value,
+                location_id: locRaw ? parseInt(locRaw, 10) : null,
+                title: document.getElementById('trStayTitle').value.trim(),
+                link: document.getElementById('trStayLink').value.trim(),
+                stay_type: document.getElementById('trStayType').value,
+                price: document.getElementById('trStayPrice').value.trim(),
+                status: document.getElementById('trStayStatus').value,
+                pros: document.getElementById('trStayPros').value.trim(),
+                cons: document.getElementById('trStayCons').value.trim(),
+                notes: document.getElementById('trStayNotes').value.trim()
+            };
+            if (!payload.title) return;
+            const url = id ? '/api/trip-stays/' + id : '/api/trip-stays';
+            const method = id ? 'PATCH' : 'POST';
+            try {
+                const r = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Save failed');
+                closeModal('trStayModal');
+                await loadTrip(currentTrip.id);
+            } catch (err) {
+                setFormStatus('trStayFormStatus', err.message, true);
+            }
+        });
+
+        loadTrips();
+    })();
+    </script>
+</body>
+</html>

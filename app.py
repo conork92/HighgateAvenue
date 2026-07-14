@@ -435,6 +435,12 @@ def cars():
     return render_template('cars.html')
 
 
+@app.route('/travel/')
+def travel():
+    """Travel trips with locations and stay options."""
+    return render_template('travel.html')
+
+
 @app.route('/presents/')
 def presents():
     """Gift ideas: ha_products with is_present, grouped by recipient."""
@@ -3845,6 +3851,275 @@ def delete_restaurant(restaurant_id):
         return jsonify({'ok': True}), 200
     except Exception as e:
         app.logger.error(f'Error deleting restaurant {restaurant_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------- Travel (ha_trips / ha_trip_locations / ha_trip_stays) ----------
+
+TRIP_STATUSES = {'planning', 'booked', 'completed'}
+STAY_TYPES = {'hotel', 'airbnb', 'b_and_b', 'hostel', 'other'}
+STAY_STATUSES = {'considering', 'shortlist', 'rejected', 'booked'}
+
+
+def _trip_row_dates(row):
+    if not row:
+        return row
+    for key in ('start_date', 'end_date'):
+        if row.get(key) and hasattr(row[key], 'isoformat'):
+            row[key] = row[key].isoformat()[:10]
+    return row
+
+
+def _fetch_trip_bundle(trip_id):
+    """Return trip dict with locations[] and stays[] nested."""
+    tr = supabase.table('ha_trips').select('*').eq('id', trip_id).execute()
+    rows = tr.data or []
+    if not rows:
+        return None
+    trip = _trip_row_dates(rows[0])
+    loc_r = supabase.table('ha_trip_locations').select('*').eq('trip_id', trip_id).order('sort_order').order('start_date').execute()
+    stay_r = supabase.table('ha_trip_stays').select('*').eq('trip_id', trip_id).order('sort_order').order('created_at').execute()
+    locations = [_trip_row_dates(dict(x)) for x in (loc_r.data or [])]
+    stays = [dict(x) for x in (stay_r.data or [])]
+    for loc in locations:
+        loc['stays'] = [s for s in stays if s.get('location_id') == loc['id']]
+    trip['locations'] = locations
+    trip['trip_stays'] = [s for s in stays if not s.get('location_id')]
+    return trip
+
+
+@app.route('/api/trips', methods=['GET'], strict_slashes=False)
+def get_trips():
+    if not supabase:
+        return jsonify([]), 200
+    try:
+        trip_id = request.args.get('id')
+        if trip_id:
+            bundle = _fetch_trip_bundle(int(trip_id))
+            if not bundle:
+                return jsonify({'error': 'Trip not found'}), 404
+            return jsonify(bundle), 200
+        r = supabase.table('ha_trips').select('*').order('start_date', desc=True).order('created_at', desc=True).execute()
+        trips = [_trip_row_dates(dict(t)) for t in (r.data or [])]
+        return jsonify(trips), 200
+    except Exception as e:
+        app.logger.error(f'Error fetching trips: {e}')
+        return jsonify([]), 200
+
+
+@app.route('/api/trips', methods=['POST'], strict_slashes=False)
+def create_trip():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        title = (data.get('title') or '').strip()
+        if not title:
+            return jsonify({'error': 'title is required'}), 400
+        status = (data.get('status') or 'planning').strip().lower()
+        if status not in TRIP_STATUSES:
+            status = 'planning'
+        payload = {
+            'title': title,
+            'start_date': data.get('start_date') or None,
+            'end_date': data.get('end_date') or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'status': status,
+        }
+        r = supabase.table('ha_trips').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(_trip_row_dates(rows[0] if rows else payload)), 201
+    except Exception as e:
+        app.logger.error(f'Error creating trip: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trips/<int:trip_id>', methods=['PATCH'])
+def update_trip(trip_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        if 'title' in data:
+            payload['title'] = (data.get('title') or '').strip()
+        if 'start_date' in data:
+            payload['start_date'] = data.get('start_date') or None
+        if 'end_date' in data:
+            payload['end_date'] = data.get('end_date') or None
+        if 'notes' in data:
+            payload['notes'] = (data.get('notes') or '').strip() or None
+        if 'status' in data:
+            st = (data.get('status') or 'planning').strip().lower()
+            payload['status'] = st if st in TRIP_STATUSES else 'planning'
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        payload['updated_at'] = datetime.now(timezone.utc).isoformat()
+        r = supabase.table('ha_trips').update(payload).eq('id', trip_id).execute()
+        rows = r.data or []
+        return jsonify(_trip_row_dates(rows[0] if rows else payload)), 200
+    except Exception as e:
+        app.logger.error(f'Error updating trip {trip_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trips/<int:trip_id>', methods=['DELETE'])
+def delete_trip(trip_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_trips').delete().eq('id', trip_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f'Error deleting trip {trip_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-locations', methods=['POST'], strict_slashes=False)
+def create_trip_location():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        trip_id = data.get('trip_id')
+        name = (data.get('name') or '').strip()
+        if not trip_id or not name:
+            return jsonify({'error': 'trip_id and name are required'}), 400
+        payload = {
+            'trip_id': int(trip_id),
+            'name': name,
+            'start_date': data.get('start_date') or None,
+            'end_date': data.get('end_date') or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'sort_order': int(data.get('sort_order') or 0),
+        }
+        r = supabase.table('ha_trip_locations').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(_trip_row_dates(rows[0] if rows else payload)), 201
+    except Exception as e:
+        app.logger.error(f'Error creating trip location: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-locations/<int:location_id>', methods=['PATCH'])
+def update_trip_location(location_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        for field in ('name', 'start_date', 'end_date', 'notes', 'sort_order'):
+            if field in data:
+                if field == 'sort_order':
+                    payload[field] = int(data[field] or 0)
+                elif field == 'name':
+                    payload[field] = (data.get('name') or '').strip()
+                elif field in ('start_date', 'end_date'):
+                    payload[field] = data.get(field) or None
+                else:
+                    payload[field] = (data.get(field) or '').strip() or None
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_trip_locations').update(payload).eq('id', location_id).execute()
+        rows = r.data or []
+        return jsonify(_trip_row_dates(rows[0] if rows else payload)), 200
+    except Exception as e:
+        app.logger.error(f'Error updating trip location {location_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-locations/<int:location_id>', methods=['DELETE'])
+def delete_trip_location(location_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_trip_locations').delete().eq('id', location_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f'Error deleting trip location {location_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-stays', methods=['POST'], strict_slashes=False)
+def create_trip_stay():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        trip_id = data.get('trip_id')
+        title = (data.get('title') or '').strip()
+        if not trip_id or not title:
+            return jsonify({'error': 'trip_id and title are required'}), 400
+        stay_type = (data.get('stay_type') or 'other').strip().lower()
+        if stay_type not in STAY_TYPES:
+            stay_type = 'other'
+        status = (data.get('status') or 'considering').strip().lower()
+        if status not in STAY_STATUSES:
+            status = 'considering'
+        loc_id = data.get('location_id')
+        payload = {
+            'trip_id': int(trip_id),
+            'location_id': int(loc_id) if loc_id not in (None, '', 0) else None,
+            'title': title,
+            'link': (data.get('link') or '').strip() or None,
+            'image_url': (data.get('image_url') or '').strip() or None,
+            'stay_type': stay_type,
+            'price': (data.get('price') or '').strip() or None,
+            'pros': (data.get('pros') or '').strip() or None,
+            'cons': (data.get('cons') or '').strip() or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'status': status,
+            'sort_order': int(data.get('sort_order') or 0),
+        }
+        r = supabase.table('ha_trip_stays').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f'Error creating trip stay: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-stays/<int:stay_id>', methods=['PATCH'])
+def update_trip_stay(stay_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        str_fields = ('title', 'link', 'price', 'pros', 'cons', 'notes')
+        for field in str_fields:
+            if field in data:
+                payload[field] = (data.get(field) or '').strip() or None
+        if 'stay_type' in data:
+            st = (data.get('stay_type') or 'other').strip().lower()
+            payload['stay_type'] = st if st in STAY_TYPES else 'other'
+        if 'status' in data:
+            st = (data.get('status') or 'considering').strip().lower()
+            payload['status'] = st if st in STAY_STATUSES else 'considering'
+        if 'location_id' in data:
+            loc = data.get('location_id')
+            payload['location_id'] = int(loc) if loc not in (None, '', 0) else None
+        if 'sort_order' in data:
+            payload['sort_order'] = int(data.get('sort_order') or 0)
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_trip_stays').update(payload).eq('id', stay_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 200
+    except Exception as e:
+        app.logger.error(f'Error updating trip stay {stay_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-stays/<int:stay_id>', methods=['DELETE'])
+def delete_trip_stay(stay_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_trip_stays').delete().eq('id', stay_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f'Error deleting trip stay {stay_id}: {e}')
         return jsonify({'error': str(e)}), 500
 
 
