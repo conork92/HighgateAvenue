@@ -7,7 +7,7 @@
     <title>Highgate Avenue – Travel</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260706">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260706">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260706">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260709">
 </head>
 <body>
     <div class="app-layout">
@@ -21,8 +21,21 @@
                         <p class="subtitle">Plan trips with locations and compare hotels &amp; Airbnbs — share the page to decide together.</p>
                         <button type="button" class="tr-btn" id="trAddTripBtn">+ Add trip</button>
                     </header>
-                    <div id="trTripCards" class="tr-trip-cards"></div>
-                    <p id="trListEmpty" class="tr-empty" style="display:none;">No trips yet. Add one — e.g. “Ireland summer 2026”.</p>
+                    <div class="tr-list-body">
+                        <div class="tr-list-main">
+                            <div id="trTripCards"></div>
+                            <p id="trListEmpty" class="tr-empty" style="display:none;">No trips yet. Add one — e.g. “Ireland summer 2026”.</p>
+                        </div>
+                        <aside class="tr-cal-panel" id="trCalPanel" aria-label="Upcoming holidays calendar">
+                            <div class="tr-cal-head">
+                                <button type="button" class="tr-cal-nav" id="trCalPrev" aria-label="Previous month">‹</button>
+                                <span class="tr-cal-label" id="trCalLabel"></span>
+                                <button type="button" class="tr-cal-nav" id="trCalNext" aria-label="Next month">›</button>
+                            </div>
+                            <div class="tr-cal-months" id="trCalMonths"></div>
+                            <div class="tr-cal-legend" id="trCalLegend"></div>
+                        </aside>
+                    </div>
                 </div>
 
                 <!-- Trip detail -->
@@ -36,24 +49,41 @@
                         </div>
                         <div class="tr-detail-actions">
                             <button type="button" class="tr-btn tr-btn--ghost" id="trEditTripBtn">Edit trip</button>
+                            <button type="button" class="tr-btn tr-btn--danger" id="trDeleteTripBtn">Delete trip</button>
                             <button type="button" class="tr-btn" id="trAddLocationBtn">+ Location</button>
                         </div>
                     </header>
                     <div class="tr-overview" id="trDetailNotes"></div>
 
-                    <section class="tr-section" id="trTripStaysSection" style="display:none;">
+                    <section class="tr-section" id="trStaysSection">
                         <div class="tr-section-head">
-                            <h2>Trip-wide stays</h2>
-                            <button type="button" class="tr-btn tr-btn--sm" id="trAddTripStayBtn">+ Add stay</button>
+                            <div>
+                                <h2>Hotels &amp; Airbnbs</h2>
+                                <p class="tr-section-sub">Options you are comparing — mark shortlist, booked, or rejected as you decide.</p>
+                            </div>
+                            <button type="button" class="tr-btn tr-btn--sm" id="trAddStayBtn">+ Add option</button>
                         </div>
-                        <div class="tr-stay-grid" id="trTripStaysGrid"></div>
+                        <div class="tr-stay-filters" id="trStayFilters"></div>
+                        <div class="tr-stay-grid" id="trStaysGrid"></div>
+                    </section>
+
+                    <section class="tr-section" id="trTripIdeasSection">
+                        <div class="tr-section-head">
+                            <div>
+                                <h2>Things to do</h2>
+                                <p class="tr-section-sub">Restaurants, activities, museums &amp; more — ideas suggested for this trip.</p>
+                            </div>
+                            <button type="button" class="tr-btn tr-btn--sm" id="trAddTripIdeaBtn">+ Add idea</button>
+                        </div>
+                        <div class="tr-idea-filters" id="trIdeaFilters"></div>
+                        <div class="tr-idea-grid" id="trTripIdeasGrid"></div>
                     </section>
 
                     <div id="trLocationsWrap"></div>
                 </div>
 
                 <footer class="tr-footer">
-                    Run <code>tables/ha_travel.sql</code> in Supabase before first use.
+                    Run <code>tables/ha_travel.sql</code> (or <code>tables/ha_travel_add_trip_ideas.sql</code> if travel tables already exist) in Supabase before first use.
                 </footer>
             </div>
         </main>
@@ -144,7 +174,7 @@
     <div class="tr-modal" id="trStayModal">
         <div class="tr-modal-card tr-modal-card--wide">
             <div class="tr-modal-head">
-                <h3 id="trStayModalTitle">Add stay option</h3>
+                <h3 id="trStayModalTitle">Add hotel / Airbnb</h3>
                 <button type="button" class="tr-modal-close" data-close="trStayModal">×</button>
             </div>
             <form id="trStayForm">
@@ -152,13 +182,21 @@
                 <input type="hidden" id="trStayTripId">
                 <input type="hidden" id="trStayLocationId">
                 <div class="tr-form-grid">
+                    <div class="tr-form-row full tr-fetch-block">
+                        <label for="trStayMapsUrl">Google Maps link</label>
+                        <div class="tr-fetch-row">
+                            <input type="url" id="trStayMapsUrl" placeholder="https://maps.app.goo.gl/… or google.com/maps/place/…" autocomplete="off">
+                            <button type="button" class="tr-btn" id="trStayFetchBtn">Fetch details</button>
+                        </div>
+                        <p class="tr-fetch-hint">Paste a Google Maps place link to fill the hotel name and map link. For Airbnb or Booking.com, type the listing URL in <strong>Listing link</strong> below.</p>
+                    </div>
                     <div class="tr-form-row full">
                         <label for="trStayTitle">Name *</label>
                         <input type="text" id="trStayTitle" required placeholder="e.g. Lakeside cottage, Muckross Hotel">
                     </div>
                     <div class="tr-form-row full">
-                        <label for="trStayLink">Link</label>
-                        <input type="url" id="trStayLink" placeholder="https://airbnb.com/… or booking.com/…">
+                        <label for="trStayLink">Listing link</label>
+                        <input type="url" id="trStayLink" placeholder="Google Maps, Airbnb, Booking.com…">
                     </div>
                     <div class="tr-form-row">
                         <label for="trStayType">Type</label>
@@ -184,6 +222,12 @@
                         </select>
                     </div>
                     <div class="tr-form-row full">
+                        <label for="trStayLocationSelect">Location <span class="tr-label-opt">(optional)</span></label>
+                        <select id="trStayLocationSelect">
+                            <option value="">Trip-wide (anywhere)</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row full">
                         <label for="trStayPros">Pros</label>
                         <textarea id="trStayPros" rows="2" placeholder="Great location, parking, breakfast included…"></textarea>
                     </div>
@@ -205,14 +249,109 @@
         </div>
     </div>
 
+    <!-- Idea modal -->
+    <div class="tr-modal" id="trIdeaModal">
+        <div class="tr-modal-card tr-modal-card--wide">
+            <div class="tr-modal-head">
+                <h3 id="trIdeaModalTitle">Add idea</h3>
+                <button type="button" class="tr-modal-close" data-close="trIdeaModal">×</button>
+            </div>
+            <form id="trIdeaForm">
+                <input type="hidden" id="trIdeaId">
+                <input type="hidden" id="trIdeaTripId">
+                <input type="hidden" id="trIdeaLocationId">
+                <div class="tr-form-grid">
+                    <div class="tr-form-row full tr-fetch-block">
+                        <label for="trIdeaMapsUrl">Google Maps link</label>
+                        <div class="tr-fetch-row">
+                            <input type="url" id="trIdeaMapsUrl" placeholder="https://maps.app.goo.gl/… or google.com/maps/place/…" autocomplete="off">
+                            <button type="button" class="tr-btn" id="trIdeaFetchBtn">Fetch details</button>
+                        </div>
+                        <p class="tr-fetch-hint">Paste a Google Maps place link to fill the name, category, and map link.</p>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trIdeaTitle">Name *</label>
+                        <input type="text" id="trIdeaTitle" required placeholder="e.g. Muckross House, Quay Co-op">
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trIdeaCategory">Category</label>
+                        <select id="trIdeaCategory">
+                            <option value="restaurant">Restaurant</option>
+                            <option value="activity">Activity</option>
+                            <option value="museum_gallery">Museum &amp; gallery</option>
+                            <option value="sightseeing">Sightseeing</option>
+                            <option value="nature">Nature &amp; outdoors</option>
+                            <option value="shopping">Shopping &amp; markets</option>
+                            <option value="family">Family</option>
+                            <option value="nightlife">Nightlife &amp; bars</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row">
+                        <label for="trIdeaStatus">Status</label>
+                        <select id="trIdeaStatus">
+                            <option value="suggested">Suggested</option>
+                            <option value="want_to_do">Want to do</option>
+                            <option value="booked">Booked</option>
+                            <option value="done">Done</option>
+                            <option value="skip">Skip</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trIdeaLocationSelect">Location <span class="tr-label-opt">(optional)</span></label>
+                        <select id="trIdeaLocationSelect">
+                            <option value="">Trip-wide (anywhere)</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trIdeaSuggestedBy">Suggested by</label>
+                        <input type="text" id="trIdeaSuggestedBy" placeholder="e.g. Sarah, Rick Steves, Instagram">
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trIdeaLink">Website</label>
+                        <input type="url" id="trIdeaLink" placeholder="https://…">
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trIdeaMapLink">Map link</label>
+                        <input type="url" id="trIdeaMapLink" placeholder="Google Maps or Apple Maps link">
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trIdeaNotes">Notes</label>
+                        <textarea id="trIdeaNotes" rows="3" placeholder="Why go, when to visit, tips…"></textarea>
+                    </div>
+                </div>
+                <div class="tr-form-actions">
+                    <span class="tr-form-status" id="trIdeaFormStatus"></span>
+                    <button type="button" class="tr-btn tr-btn--ghost" data-close="trIdeaModal">Cancel</button>
+                    <button type="submit" class="tr-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
     (function() {
         const STAY_TYPE_LABEL = { hotel: 'Hotel', airbnb: 'Airbnb', b_and_b: 'B&B', hostel: 'Hostel', other: 'Other' };
         const STAY_STATUS_LABEL = { considering: 'Considering', shortlist: 'Shortlist', booked: 'Booked', rejected: 'Rejected' };
         const TRIP_STATUS_LABEL = { planning: 'Planning', booked: 'Booked', completed: 'Completed' };
+        const IDEA_CATEGORY_LABEL = {
+            restaurant: 'Restaurant', activity: 'Activity', museum_gallery: 'Museum & gallery',
+            sightseeing: 'Sightseeing', nature: 'Nature & outdoors', shopping: 'Shopping & markets',
+            family: 'Family', nightlife: 'Nightlife & bars', other: 'Other'
+        };
+        const IDEA_STATUS_LABEL = {
+            suggested: 'Suggested', want_to_do: 'Want to do', booked: 'Booked', done: 'Done', skip: 'Skip'
+        };
 
         let trips = [];
         let currentTrip = null;
+        let ideaCategoryFilter = 'all';
+        let stayStatusFilter = 'active';
+        let calViewMonth = new Date().getMonth();
+        let calViewYear = new Date().getFullYear();
+        const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -230,6 +369,37 @@
             if (!iso) return '';
             const d = new Date(iso + 'T12:00:00');
             return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function todayISO() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function parseISO(iso) {
+            if (!iso) return null;
+            const p = iso.split('-');
+            return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        }
+
+        function daysUntil(iso) {
+            if (!iso) return null;
+            const today = parseISO(todayISO());
+            const target = parseISO(iso);
+            return Math.round((target - today) / 86400000);
+        }
+
+        function tripEffectiveStart(t) {
+            return t.start_date || t.end_date || null;
+        }
+
+        function tripEffectiveEnd(t) {
+            return t.end_date || t.start_date || null;
+        }
+
+        function isTripPast(t) {
+            const end = tripEffectiveEnd(t);
+            return end ? end < todayISO() : false;
         }
 
         function setFormStatus(id, msg, err) {
@@ -261,6 +431,7 @@
             const r = await fetch('/api/trips');
             trips = await r.json();
             if (!Array.isArray(trips)) trips = [];
+            alignCalendarToTrips();
             renderTripList();
         }
 
@@ -268,7 +439,170 @@
             const r = await fetch('/api/trips?id=' + encodeURIComponent(id));
             if (!r.ok) throw new Error('Could not load trip');
             currentTrip = await r.json();
+            ideaCategoryFilter = 'all';
+            stayStatusFilter = 'active';
             renderTripDetail();
+        }
+
+        function sortTripsForList(list) {
+            const upcoming = [];
+            const past = [];
+            const tbc = [];
+            list.forEach(function(t) {
+                if (!t.start_date && !t.end_date) tbc.push(t);
+                else if (isTripPast(t)) past.push(t);
+                else upcoming.push(t);
+            });
+            upcoming.sort(function(a, b) {
+                return (tripEffectiveStart(a) || '9999-12-31').localeCompare(tripEffectiveStart(b) || '9999-12-31');
+            });
+            past.sort(function(a, b) {
+                return (tripEffectiveStart(b) || '').localeCompare(tripEffectiveStart(a) || '');
+            });
+            return { upcoming: upcoming, past: past, tbc: tbc };
+        }
+
+        function alignCalendarToTrips() {
+            const first = sortTripsForList(trips).upcoming[0];
+            if (!first) return;
+            const start = tripEffectiveStart(first);
+            if (!start) return;
+            const d = parseISO(start);
+            calViewMonth = d.getMonth();
+            calViewYear = d.getFullYear();
+        }
+
+        function tripsOnDay(iso) {
+            return trips.filter(function(t) {
+                const start = tripEffectiveStart(t);
+                const end = tripEffectiveEnd(t);
+                if (!start && !end) return false;
+                const s = start || end;
+                const e = end || start;
+                return iso >= s && iso <= e;
+            });
+        }
+
+        function openTripFromList(id) {
+            document.getElementById('trListView').style.display = 'none';
+            document.getElementById('trDetailView').style.display = 'block';
+            loadTrip(id).catch(function() { alert('Could not load trip'); });
+        }
+
+        function buildTripCard(t) {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'tr-trip-card tr-trip-card--' + esc(t.status || 'planning');
+            const start = tripEffectiveStart(t);
+            const countdown = daysUntil(start);
+            let countdownHtml = '';
+            if (countdown != null && countdown >= 0 && !isTripPast(t)) {
+                if (countdown === 0) countdownHtml = '<span class="tr-trip-countdown tr-trip-countdown--soon">Starts today</span>';
+                else if (countdown === 1) countdownHtml = '<span class="tr-trip-countdown tr-trip-countdown--soon">Tomorrow</span>';
+                else if (countdown <= 30) countdownHtml = '<span class="tr-trip-countdown">In ' + countdown + ' days</span>';
+                else countdownHtml = '<span class="tr-trip-countdown">' + fmtDate(start) + '</span>';
+            }
+            card.innerHTML = ''
+                + '<div class="tr-trip-card-top">'
+                +   '<div class="tr-trip-card-title">' + esc(t.title) + '</div>'
+                +   countdownHtml
+                + '</div>'
+                + '<div class="tr-trip-card-dates">' + esc(fmtRange(t.start_date, t.end_date) || 'Dates TBC') + '</div>'
+                + '<span class="tr-status tr-status--' + esc(t.status || 'planning') + '">' + esc(TRIP_STATUS_LABEL[t.status] || t.status) + '</span>';
+            card.addEventListener('click', function() { openTripFromList(t.id); });
+            return card;
+        }
+
+        function renderTripSection(title, items, extraClass) {
+            if (!items.length) return null;
+            const sec = document.createElement('section');
+            sec.className = 'tr-trip-group' + (extraClass ? ' ' + extraClass : '');
+            sec.innerHTML = '<h2 class="tr-trip-group-title">' + esc(title) + ' <span class="tr-trip-group-count">' + items.length + '</span></h2>';
+            const grid = document.createElement('div');
+            grid.className = 'tr-trip-cards';
+            items.forEach(function(t) { grid.appendChild(buildTripCard(t)); });
+            sec.appendChild(grid);
+            return sec;
+        }
+
+        function renderMonthGrid(year, month, tripLookup) {
+            const first = new Date(year, month, 1);
+            const startPad = (first.getDay() + 6) % 7;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = todayISO();
+            const wrap = document.createElement('div');
+            wrap.className = 'tr-cal-month';
+            wrap.innerHTML = '<div class="tr-cal-month-name">' + esc(MONTHS_SHORT[month]) + ' ' + year + '</div>';
+            const grid = document.createElement('div');
+            grid.className = 'tr-cal-grid';
+            WEEKDAYS.forEach(function(w) {
+                const h = document.createElement('div');
+                h.className = 'tr-cal-weekday';
+                h.textContent = w;
+                grid.appendChild(h);
+            });
+            for (let i = 0; i < startPad; i++) {
+                const blank = document.createElement('div');
+                blank.className = 'tr-cal-day tr-cal-day--blank';
+                blank.setAttribute('aria-hidden', 'true');
+                grid.appendChild(blank);
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const iso = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+                const dayTrips = tripLookup(iso);
+                const cell = document.createElement('button');
+                cell.type = 'button';
+                cell.className = 'tr-cal-day';
+                if (iso === today) cell.classList.add('tr-cal-day--today');
+                if (iso < today) cell.classList.add('tr-cal-day--past');
+                if (dayTrips.length) {
+                    cell.classList.add('tr-cal-day--trip');
+                    dayTrips.forEach(function(t) { cell.classList.add('tr-cal-day--' + (t.status || 'planning')); });
+                }
+                cell.innerHTML = '<span class="tr-cal-day-num">' + day + '</span>'
+                    + (dayTrips.length ? '<span class="tr-cal-day-dots">' + dayTrips.map(function() { return '<i></i>'; }).join('') + '</span>' : '');
+                if (dayTrips.length === 1) {
+                    cell.title = dayTrips[0].title;
+                    cell.addEventListener('click', function() { openTripFromList(dayTrips[0].id); });
+                } else if (dayTrips.length > 1) {
+                    cell.title = dayTrips.map(function(t) { return t.title; }).join(', ');
+                    cell.addEventListener('click', function() { openTripFromList(dayTrips[0].id); });
+                } else {
+                    cell.disabled = true;
+                }
+                grid.appendChild(cell);
+            }
+            wrap.appendChild(grid);
+            return wrap;
+        }
+
+        function renderTravelCalendar() {
+            const label = document.getElementById('trCalLabel');
+            const monthsWrap = document.getElementById('trCalMonths');
+            const legendWrap = document.getElementById('trCalLegend');
+            const m1 = calViewMonth;
+            const y1 = calViewYear;
+            const m2 = (m1 + 1) % 12;
+            const y2 = m1 === 11 ? y1 + 1 : y1;
+            label.textContent = MONTHS_SHORT[m1] + ' – ' + MONTHS_SHORT[m2] + ' ' + (y1 === y2 ? y1 : y1 + ' / ' + y2);
+            monthsWrap.innerHTML = '';
+            monthsWrap.appendChild(renderMonthGrid(y1, m1, tripsOnDay));
+            monthsWrap.appendChild(renderMonthGrid(y2, m2, tripsOnDay));
+            const upcoming = sortTripsForList(trips).upcoming;
+            legendWrap.innerHTML = '';
+            if (!upcoming.length) {
+                legendWrap.innerHTML = '<p class="tr-cal-legend-empty">Add dates to trips to see them on the calendar.</p>';
+                return;
+            }
+            upcoming.slice(0, 6).forEach(function(t) {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'tr-cal-legend-item tr-cal-legend-item--' + (t.status || 'planning');
+                chip.innerHTML = '<span class="tr-cal-legend-dot"></span><span class="tr-cal-legend-text">' + esc(t.title) + '</span>'
+                    + '<span class="tr-cal-legend-when">' + esc(fmtRange(t.start_date, t.end_date) || 'TBC') + '</span>';
+                chip.addEventListener('click', function() { openTripFromList(t.id); });
+                legendWrap.appendChild(chip);
+            });
         }
 
         function renderTripList() {
@@ -277,33 +611,55 @@
             wrap.innerHTML = '';
             if (!trips.length) {
                 empty.style.display = 'block';
+                document.getElementById('trCalPanel').style.display = 'none';
                 return;
             }
             empty.style.display = 'none';
-            trips.forEach(function(t) {
-                const card = document.createElement('button');
-                card.type = 'button';
-                card.className = 'tr-trip-card';
-                card.innerHTML = ''
-                    + '<div class="tr-trip-card-title">' + esc(t.title) + '</div>'
-                    + '<div class="tr-trip-card-dates">' + esc(fmtRange(t.start_date, t.end_date) || 'Dates TBC') + '</div>'
-                    + '<span class="tr-status tr-status--' + esc(t.status || 'planning') + '">' + esc(TRIP_STATUS_LABEL[t.status] || t.status) + '</span>';
-                card.addEventListener('click', function() {
-                    document.getElementById('trListView').style.display = 'none';
-                    document.getElementById('trDetailView').style.display = 'block';
-                    loadTrip(t.id).catch(function() { alert('Could not load trip'); });
+            document.getElementById('trCalPanel').style.display = '';
+            const groups = sortTripsForList(trips);
+            const upcomingSec = renderTripSection('Coming up', groups.upcoming);
+            if (upcomingSec) wrap.appendChild(upcomingSec);
+            const tbcSec = renderTripSection('Dates to be confirmed', groups.tbc, 'tr-trip-group--muted');
+            if (tbcSec) wrap.appendChild(tbcSec);
+            if (groups.past.length) {
+                const pastSec = document.createElement('section');
+                pastSec.className = 'tr-trip-group tr-trip-group--past';
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'tr-trip-group-toggle';
+                toggle.innerHTML = 'Past trips <span class="tr-trip-group-count">' + groups.past.length + '</span>';
+                const pastGrid = document.createElement('div');
+                pastGrid.className = 'tr-trip-cards';
+                pastGrid.style.display = 'none';
+                groups.past.forEach(function(t) { pastGrid.appendChild(buildTripCard(t)); });
+                toggle.addEventListener('click', function() {
+                    const open = pastGrid.style.display !== 'none';
+                    pastGrid.style.display = open ? 'none' : 'grid';
+                    toggle.classList.toggle('is-open', !open);
                 });
-                wrap.appendChild(card);
-            });
+                pastSec.appendChild(toggle);
+                pastSec.appendChild(pastGrid);
+                wrap.appendChild(pastSec);
+            }
+            renderTravelCalendar();
         }
 
-        function buildStayCard(stay, locationId) {
+        function buildStayCard(stay) {
             const card = document.createElement('div');
             card.className = 'tr-stay-card tr-stay-card--' + (stay.status || 'considering');
+            card.dataset.status = stay.status || 'considering';
             const linkHtml = stay.link
                 ? '<a href="' + esc(stay.link) + '" target="_blank" rel="noopener" class="tr-stay-link">Open listing ↗</a>'
                 : '';
-            card.innerHTML = ''
+            const locName = stay.location_id && currentTrip && (currentTrip.locations || []).length
+                ? ((currentTrip.locations.find(function(l) { return l.id === stay.location_id; }) || {}).name || '')
+                : '';
+            const photoHtml = stay.image_url
+                ? '<a href="' + esc(stay.link || stay.image_url) + '" target="_blank" rel="noopener" class="tr-stay-photo-link">'
+                    + '<img class="tr-stay-photo" src="' + esc(stay.image_url) + '" alt="">'
+                    + '</a>'
+                : '';
+            card.innerHTML = photoHtml
                 + '<div class="tr-stay-card-head">'
                 +   '<strong>' + esc(stay.title) + '</strong>'
                 +   '<span class="tr-stay-badges">'
@@ -311,6 +667,7 @@
                 +     '<span class="tr-stay-status">' + esc(STAY_STATUS_LABEL[stay.status] || stay.status) + '</span>'
                 +   '</span>'
                 + '</div>'
+                + (locName ? '<div class="tr-stay-loc">' + esc(locName) + '</div>' : '')
                 + (stay.price ? '<div class="tr-stay-price">' + esc(stay.price) + '</div>' : '')
                 + (stay.pros ? '<div class="tr-stay-pros"><span>Pros</span>' + esc(stay.pros) + '</div>' : '')
                 + (stay.cons ? '<div class="tr-stay-cons"><span>Cons</span>' + esc(stay.cons) + '</div>' : '')
@@ -320,12 +677,185 @@
                 +   '<button type="button" data-action="edit-stay">Edit</button>'
                 +   '<button type="button" data-action="delete-stay">Delete</button>'
                 + '</div>';
-            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay, locationId); });
+            const locId = stay.location_id || null;
+            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay, locId); });
             card.querySelector('[data-action="delete-stay"]').addEventListener('click', function() {
-                if (!confirm('Remove this stay option?')) return;
+                if (!confirm('Remove this option?')) return;
                 fetch('/api/trip-stays/' + stay.id, { method: 'DELETE' }).then(function() { loadTrip(currentTrip.id); });
             });
             return card;
+        }
+
+        function collectAllStays(t) {
+            const all = (t.trip_stays || []).slice();
+            (t.locations || []).forEach(function(loc) {
+                (loc.stays || []).forEach(function(s) { all.push(s); });
+            });
+            const rank = { shortlist: 0, considering: 1, booked: 2, rejected: 3 };
+            all.sort(function(a, b) {
+                const ra = rank[a.status] != null ? rank[a.status] : 9;
+                const rb = rank[b.status] != null ? rank[b.status] : 9;
+                if (ra !== rb) return ra - rb;
+                return (a.title || '').localeCompare(b.title || '');
+            });
+            return all;
+        }
+
+        function renderStayFilters(stays) {
+            const wrap = document.getElementById('trStayFilters');
+            wrap.innerHTML = '';
+            const counts = {
+                active: stays.filter(function(s) { return s.status === 'considering' || s.status === 'shortlist'; }).length,
+                all: stays.length,
+                considering: stays.filter(function(s) { return s.status === 'considering'; }).length,
+                shortlist: stays.filter(function(s) { return s.status === 'shortlist'; }).length,
+                booked: stays.filter(function(s) { return s.status === 'booked'; }).length,
+                rejected: stays.filter(function(s) { return s.status === 'rejected'; }).length
+            };
+            const chips = [
+                { key: 'active', label: 'In play' },
+                { key: 'shortlist', label: 'Shortlist' },
+                { key: 'considering', label: 'Considering' },
+                { key: 'booked', label: 'Booked' },
+                { key: 'rejected', label: 'Rejected' },
+                { key: 'all', label: 'All' }
+            ];
+            chips.forEach(function(chip) {
+                if (chip.key !== 'all' && chip.key !== 'active' && !counts[chip.key]) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tr-stay-filter' + (stayStatusFilter === chip.key ? ' is-active' : '');
+                btn.textContent = chip.label + ' (' + counts[chip.key] + ')';
+                btn.addEventListener('click', function() {
+                    stayStatusFilter = chip.key;
+                    renderTripDetail();
+                });
+                wrap.appendChild(btn);
+            });
+        }
+
+        function filterStays(stays) {
+            if (stayStatusFilter === 'all') return stays;
+            if (stayStatusFilter === 'active') {
+                return stays.filter(function(s) {
+                    return s.status === 'considering' || s.status === 'shortlist';
+                });
+            }
+            return stays.filter(function(s) { return (s.status || 'considering') === stayStatusFilter; });
+        }
+
+        function renderStaysGrid(stays) {
+            const grid = document.getElementById('trStaysGrid');
+            grid.innerHTML = '';
+            const filtered = filterStays(stays);
+            if (!stays.length) {
+                grid.innerHTML = '<p class="tr-empty-inline">No hotels or Airbnbs yet — add options to compare price, location, and pros &amp; cons.</p>';
+                return;
+            }
+            if (!filtered.length) {
+                grid.innerHTML = '<p class="tr-empty-inline">Nothing in this filter — try another tab or add an option.</p>';
+                return;
+            }
+            filtered.forEach(function(s) { grid.appendChild(buildStayCard(s)); });
+        }
+
+        function populateStayLocationSelect(selectedId) {
+            const sel = document.getElementById('trStayLocationSelect');
+            sel.innerHTML = '<option value="">Trip-wide (anywhere)</option>';
+            (currentTrip && currentTrip.locations || []).forEach(function(loc) {
+                const opt = document.createElement('option');
+                opt.value = loc.id;
+                opt.textContent = loc.name;
+                sel.appendChild(opt);
+            });
+            sel.value = selectedId != null && selectedId !== '' ? String(selectedId) : '';
+        }
+
+        function buildIdeaCard(idea, locationId) {
+            const card = document.createElement('div');
+            card.className = 'tr-idea-card tr-idea-card--' + (idea.status || 'suggested') + ' tr-idea-card--cat-' + (idea.category || 'other');
+            card.dataset.category = idea.category || 'other';
+            const links = [];
+            if (idea.map_link) links.push('<a href="' + esc(idea.map_link) + '" target="_blank" rel="noopener" class="tr-idea-link">Map ↗</a>');
+            if (idea.link) links.push('<a href="' + esc(idea.link) + '" target="_blank" rel="noopener" class="tr-idea-link">Website ↗</a>');
+            const locName = idea.location_id && currentTrip && (currentTrip.locations || []).length
+                ? ((currentTrip.locations.find(function(l) { return l.id === idea.location_id; }) || {}).name || '')
+                : '';
+            card.innerHTML = ''
+                + '<div class="tr-idea-card-head">'
+                +   '<strong>' + esc(idea.title) + '</strong>'
+                +   '<span class="tr-idea-badges">'
+                +     '<span class="tr-idea-cat">' + esc(IDEA_CATEGORY_LABEL[idea.category] || idea.category) + '</span>'
+                +     '<span class="tr-idea-status">' + esc(IDEA_STATUS_LABEL[idea.status] || idea.status) + '</span>'
+                +   '</span>'
+                + '</div>'
+                + (locName ? '<div class="tr-idea-loc">' + esc(locName) + '</div>' : '')
+                + (idea.suggested_by ? '<div class="tr-idea-by">Suggested by ' + esc(idea.suggested_by) + '</div>' : '')
+                + (idea.notes ? '<div class="tr-idea-notes">' + esc(idea.notes) + '</div>' : '')
+                + (links.length ? '<div class="tr-idea-links">' + links.join(' ') + '</div>' : '')
+                + '<div class="tr-idea-foot">'
+                +   '<button type="button" data-action="edit-idea">Edit</button>'
+                +   '<button type="button" data-action="delete-idea">Delete</button>'
+                + '</div>';
+            card.querySelector('[data-action="edit-idea"]').addEventListener('click', function() { openIdeaModal(idea, locationId); });
+            card.querySelector('[data-action="delete-idea"]').addEventListener('click', function() {
+                if (!confirm('Remove this idea?')) return;
+                fetch('/api/trip-ideas/' + idea.id, { method: 'DELETE' }).then(function() { loadTrip(currentTrip.id); });
+            });
+            return card;
+        }
+
+        function renderIdeaFilters(ideas) {
+            const wrap = document.getElementById('trIdeaFilters');
+            wrap.innerHTML = '';
+            const counts = { all: ideas.length };
+            ideas.forEach(function(i) {
+                const c = i.category || 'other';
+                counts[c] = (counts[c] || 0) + 1;
+            });
+            const chips = [{ key: 'all', label: 'All' }];
+            Object.keys(IDEA_CATEGORY_LABEL).forEach(function(key) {
+                if (counts[key]) chips.push({ key: key, label: IDEA_CATEGORY_LABEL[key] });
+            });
+            chips.forEach(function(chip) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tr-idea-filter' + (ideaCategoryFilter === chip.key ? ' is-active' : '');
+                btn.textContent = chip.label + (chip.key === 'all' ? ' (' + counts.all + ')' : ' (' + counts[chip.key] + ')');
+                btn.addEventListener('click', function() {
+                    ideaCategoryFilter = chip.key;
+                    renderTripDetail();
+                });
+                wrap.appendChild(btn);
+            });
+        }
+
+        function renderIdeasGrid(container, ideas, locationId) {
+            container.innerHTML = '';
+            const filtered = ideaCategoryFilter === 'all'
+                ? ideas
+                : ideas.filter(function(i) { return (i.category || 'other') === ideaCategoryFilter; });
+            if (!ideas.length) {
+                container.innerHTML = '<p class="tr-empty-inline">No ideas yet — add restaurants, activities, museums, or anything someone suggested.</p>';
+                return;
+            }
+            if (!filtered.length) {
+                container.innerHTML = '<p class="tr-empty-inline">No ideas in this category.</p>';
+                return;
+            }
+            filtered.forEach(function(i) { container.appendChild(buildIdeaCard(i, locationId)); });
+        }
+
+        function populateIdeaLocationSelect(selectedId) {
+            const sel = document.getElementById('trIdeaLocationSelect');
+            sel.innerHTML = '<option value="">Trip-wide (anywhere)</option>';
+            (currentTrip && currentTrip.locations || []).forEach(function(loc) {
+                const opt = document.createElement('option');
+                opt.value = loc.id;
+                opt.textContent = loc.name;
+                sel.appendChild(opt);
+            });
+            sel.value = selectedId != null && selectedId !== '' ? String(selectedId) : '';
         }
 
         function renderTripDetail() {
@@ -339,15 +869,21 @@
             const notesEl = document.getElementById('trDetailNotes');
             notesEl.innerHTML = t.notes ? esc(t.notes).replace(/\n/g, '<br>') : '<span class="tr-muted">No overview notes yet — edit the trip to add context for your partner.</span>';
 
-            const tripStays = t.trip_stays || [];
-            const tripSection = document.getElementById('trTripStaysSection');
-            const tripGrid = document.getElementById('trTripStaysGrid');
-            tripSection.style.display = 'block';
-            tripGrid.innerHTML = '';
-            if (!tripStays.length) {
-                tripGrid.innerHTML = '<p class="tr-empty-inline">Optional: stays not tied to a specific location.</p>';
+            const allStays = collectAllStays(t);
+            renderStayFilters(allStays);
+            renderStaysGrid(allStays);
+
+            const allIdeas = (t.trip_ideas || []).slice();
+            (t.locations || []).forEach(function(loc) {
+                (loc.ideas || []).forEach(function(i) { allIdeas.push(i); });
+            });
+            renderIdeaFilters(allIdeas);
+            const tripIdeasGrid = document.getElementById('trTripIdeasGrid');
+            const tripIdeas = t.trip_ideas || [];
+            if (!tripIdeas.length && allIdeas.length) {
+                tripIdeasGrid.innerHTML = '<p class="tr-empty-inline">No trip-wide ideas yet — add one here, or use <strong>+ Idea</strong> on a location below.</p>';
             } else {
-                tripStays.forEach(function(s) { tripGrid.appendChild(buildStayCard(s, null)); });
+                renderIdeasGrid(tripIdeasGrid, tripIdeas, null);
             }
 
             const locWrap = document.getElementById('trLocationsWrap');
@@ -361,18 +897,24 @@
                     +   '<p class="tr-loc-dates">' + esc(fmtRange(loc.start_date, loc.end_date)) + '</p></div>'
                     +   '<div class="tr-loc-actions">'
                     +     '<button type="button" class="tr-btn tr-btn--ghost tr-btn--sm" data-action="edit-loc">Edit</button>'
-                    +     '<button type="button" class="tr-btn tr-btn--sm" data-action="add-stay">+ Stay</button>'
+                    +     '<button type="button" class="tr-btn tr-btn--sm" data-action="add-idea">+ Idea</button>'
+                    +     '<button type="button" class="tr-btn tr-btn--sm" data-action="add-stay">+ Hotel</button>'
                     +   '</div>'
                     + '</div>'
                     + (loc.notes ? '<p class="tr-loc-notes">' + esc(loc.notes).replace(/\n/g, '<br>') + '</p>' : '')
-                    + '<div class="tr-stay-grid tr-loc-stays"></div>';
-                const grid = sec.querySelector('.tr-loc-stays');
-                if (!(loc.stays || []).length) {
-                    grid.innerHTML = '<p class="tr-empty-inline">No stay options yet — add hotels or Airbnbs to compare.</p>';
-                } else {
-                    loc.stays.forEach(function(s) { grid.appendChild(buildStayCard(s, loc.id)); });
+                    + '<div class="tr-loc-ideas-wrap" style="display:none;">'
+                    +   '<h3 class="tr-loc-subhead">Ideas for ' + esc(loc.name) + '</h3>'
+                    +   '<div class="tr-idea-grid tr-loc-ideas"></div>'
+                    + '</div>';
+                const ideaWrap = sec.querySelector('.tr-loc-ideas-wrap');
+                const ideaGrid = sec.querySelector('.tr-loc-ideas');
+                const locIdeas = loc.ideas || [];
+                if (locIdeas.length) {
+                    ideaWrap.style.display = 'block';
+                    renderIdeasGrid(ideaGrid, locIdeas, loc.id);
                 }
                 sec.querySelector('[data-action="edit-loc"]').addEventListener('click', function() { openLocationModal(loc); });
+                sec.querySelector('[data-action="add-idea"]').addEventListener('click', function() { openIdeaModal(null, loc.id); });
                 sec.querySelector('[data-action="add-stay"]').addEventListener('click', function() { openStayModal(null, loc.id); });
                 locWrap.appendChild(sec);
             });
@@ -406,12 +948,16 @@
 
         function openStayModal(stay, locationId) {
             stay = stay || {};
+            const locId = stay.location_id != null ? stay.location_id : (locationId || '');
             document.getElementById('trStayId').value = stay.id || '';
             document.getElementById('trStayTripId').value = stay.trip_id || (currentTrip && currentTrip.id) || '';
-            document.getElementById('trStayLocationId').value = stay.location_id != null ? stay.location_id : (locationId || '');
-            document.getElementById('trStayModalTitle').textContent = stay.id ? 'Edit stay' : 'Add stay option';
+            document.getElementById('trStayLocationId').value = locId;
+            populateStayLocationSelect(locId);
+            document.getElementById('trStayModalTitle').textContent = stay.id ? 'Edit hotel / Airbnb' : 'Add hotel / Airbnb';
             document.getElementById('trStayTitle').value = stay.title || '';
-            document.getElementById('trStayLink').value = stay.link || '';
+            const stayLink = stay.link || '';
+            document.getElementById('trStayLink').value = stayLink;
+            document.getElementById('trStayMapsUrl').value = /google\.|goo\.gl|maps\.app/i.test(stayLink) ? stayLink : '';
             document.getElementById('trStayType').value = stay.stay_type || 'hotel';
             document.getElementById('trStayPrice').value = stay.price || '';
             document.getElementById('trStayStatus').value = stay.status || 'considering';
@@ -422,10 +968,121 @@
             openModal('trStayModal');
         }
 
+        function openIdeaModal(idea, locationId) {
+            idea = idea || {};
+            document.getElementById('trIdeaId').value = idea.id || '';
+            document.getElementById('trIdeaTripId').value = idea.trip_id || (currentTrip && currentTrip.id) || '';
+            const locId = idea.location_id != null ? idea.location_id : (locationId || '');
+            document.getElementById('trIdeaLocationId').value = locId;
+            populateIdeaLocationSelect(locId);
+            document.getElementById('trIdeaModalTitle').textContent = idea.id ? 'Edit idea' : 'Add idea';
+            document.getElementById('trIdeaTitle').value = idea.title || '';
+            document.getElementById('trIdeaCategory').value = idea.category || 'other';
+            document.getElementById('trIdeaStatus').value = idea.status || 'suggested';
+            document.getElementById('trIdeaSuggestedBy').value = idea.suggested_by || '';
+            document.getElementById('trIdeaLink').value = idea.link || '';
+            const mapLink = idea.map_link || '';
+            document.getElementById('trIdeaMapLink').value = mapLink;
+            document.getElementById('trIdeaMapsUrl').value = /google\.|goo\.gl|maps\.app/i.test(mapLink) ? mapLink : '';
+            document.getElementById('trIdeaNotes').value = idea.notes || '';
+            setFormStatus('trIdeaFormStatus', '', false);
+            openModal('trIdeaModal');
+        }
+
         document.getElementById('trAddTripBtn').addEventListener('click', function() { openTripModal(); });
+
+        document.getElementById('trCalPrev').addEventListener('click', function() {
+            calViewMonth -= 1;
+            if (calViewMonth < 0) { calViewMonth = 11; calViewYear -= 1; }
+            renderTravelCalendar();
+        });
+        document.getElementById('trCalNext').addEventListener('click', function() {
+            calViewMonth += 1;
+            if (calViewMonth > 11) { calViewMonth = 0; calViewYear += 1; }
+            renderTravelCalendar();
+        });
+
         document.getElementById('trEditTripBtn').addEventListener('click', function() { if (currentTrip) openTripModal(currentTrip); });
+        document.getElementById('trDeleteTripBtn').addEventListener('click', async function() {
+            if (!currentTrip || !currentTrip.id) return;
+            if (!confirm('Delete “' + (currentTrip.title || 'this trip') + '”? All locations, stay options, and ideas will be removed.')) return;
+            try {
+                const r = await fetch('/api/trips/' + encodeURIComponent(currentTrip.id), { method: 'DELETE' });
+                if (!r.ok) {
+                    const data = await r.json().catch(function() { return {}; });
+                    throw new Error(data.error || 'Delete failed');
+                }
+                currentTrip = null;
+                document.getElementById('trDetailView').style.display = 'none';
+                document.getElementById('trListView').style.display = 'block';
+                await loadTrips();
+            } catch (err) {
+                alert(err.message || 'Could not delete trip');
+            }
+        });
         document.getElementById('trAddLocationBtn').addEventListener('click', function() { openLocationModal(); });
-        document.getElementById('trAddTripStayBtn').addEventListener('click', function() { openStayModal(null, null); });
+        document.getElementById('trAddStayBtn').addEventListener('click', function() { openStayModal(null, null); });
+        document.getElementById('trAddTripIdeaBtn').addEventListener('click', function() { openIdeaModal(null, null); });
+
+        document.getElementById('trIdeaFetchBtn').addEventListener('click', async function() {
+            const url = (document.getElementById('trIdeaMapsUrl').value || '').trim();
+            if (!url) {
+                setFormStatus('trIdeaFormStatus', 'Paste a Google Maps link first.', true);
+                return;
+            }
+            const btn = document.getElementById('trIdeaFetchBtn');
+            const prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            setFormStatus('trIdeaFormStatus', '', false);
+            try {
+                const r = await fetch('/api/trip-ideas/preview?url=' + encodeURIComponent(url));
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Fetch failed');
+                if (data.title) document.getElementById('trIdeaTitle').value = data.title;
+                if (data.map_link) {
+                    document.getElementById('trIdeaMapLink').value = data.map_link;
+                    document.getElementById('trIdeaMapsUrl').value = data.map_link;
+                }
+                if (data.category) document.getElementById('trIdeaCategory').value = data.category;
+                setFormStatus('trIdeaFormStatus', 'Loaded from Google Maps — add who suggested it, then save.', false);
+            } catch (err) {
+                setFormStatus('trIdeaFormStatus', err.message || 'Could not fetch this link.', true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        });
+
+        document.getElementById('trStayFetchBtn').addEventListener('click', async function() {
+            const url = (document.getElementById('trStayMapsUrl').value || '').trim();
+            if (!url) {
+                setFormStatus('trStayFormStatus', 'Paste a Google Maps link first.', true);
+                return;
+            }
+            const btn = document.getElementById('trStayFetchBtn');
+            const prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            setFormStatus('trStayFormStatus', '', false);
+            try {
+                const r = await fetch('/api/trip-stays/preview?url=' + encodeURIComponent(url));
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Fetch failed');
+                if (data.title) document.getElementById('trStayTitle').value = data.title;
+                if (data.link) {
+                    document.getElementById('trStayLink').value = data.link;
+                    document.getElementById('trStayMapsUrl').value = data.link;
+                }
+                if (data.stay_type) document.getElementById('trStayType').value = data.stay_type;
+                setFormStatus('trStayFormStatus', 'Loaded from Google Maps — add price, pros/cons, then save.', false);
+            } catch (err) {
+                setFormStatus('trStayFormStatus', err.message || 'Could not fetch this link.', true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        });
 
         document.getElementById('trBackBtn').addEventListener('click', function() {
             document.getElementById('trDetailView').style.display = 'none';
@@ -493,7 +1150,7 @@
         document.getElementById('trStayForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const id = document.getElementById('trStayId').value;
-            const locRaw = document.getElementById('trStayLocationId').value;
+            const locRaw = document.getElementById('trStayLocationSelect').value || document.getElementById('trStayLocationId').value;
             const payload = {
                 trip_id: document.getElementById('trStayTripId').value,
                 location_id: locRaw ? parseInt(locRaw, 10) : null,
@@ -517,6 +1174,35 @@
                 await loadTrip(currentTrip.id);
             } catch (err) {
                 setFormStatus('trStayFormStatus', err.message, true);
+            }
+        });
+
+        document.getElementById('trIdeaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('trIdeaId').value;
+            const locRaw = document.getElementById('trIdeaLocationSelect').value || document.getElementById('trIdeaLocationId').value;
+            const payload = {
+                trip_id: document.getElementById('trIdeaTripId').value,
+                location_id: locRaw ? parseInt(locRaw, 10) : null,
+                title: document.getElementById('trIdeaTitle').value.trim(),
+                category: document.getElementById('trIdeaCategory').value,
+                status: document.getElementById('trIdeaStatus').value,
+                suggested_by: document.getElementById('trIdeaSuggestedBy').value.trim(),
+                link: document.getElementById('trIdeaLink').value.trim(),
+                map_link: document.getElementById('trIdeaMapLink').value.trim(),
+                notes: document.getElementById('trIdeaNotes').value.trim()
+            };
+            if (!payload.title) return;
+            const url = id ? '/api/trip-ideas/' + id : '/api/trip-ideas';
+            const method = id ? 'PATCH' : 'POST';
+            try {
+                const r = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Save failed');
+                closeModal('trIdeaModal');
+                await loadTrip(currentTrip.id);
+            } catch (err) {
+                setFormStatus('trIdeaFormStatus', err.message, true);
             }
         });
 
