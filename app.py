@@ -3739,6 +3739,108 @@ def _parse_google_maps_url(url):
     return out
 
 
+def _guess_stay_type_from_maps(name, url):
+    """Guess hotel/airbnb/etc. from place name and URL."""
+    blob = ((name or '') + ' ' + (url or '')).lower()
+    if 'airbnb' in blob:
+        return 'airbnb'
+    if 'hostel' in blob:
+        return 'hostel'
+    if 'b&b' in blob or 'b and b' in blob or 'bed and breakfast' in blob:
+        return 'b_and_b'
+    if any(w in blob for w in ('hotel', ' inn', ' lodge', ' resort', ' guesthouse', ' guest house')):
+        return 'hotel'
+    if 'google.com/maps' in blob or 'maps.app.goo.gl' in blob or 'goo.gl/maps' in blob:
+        return 'hotel'
+    return 'other'
+
+
+def _parse_stay_from_maps_url(url):
+    """Map Google Maps URL to ha_trip_stays preview fields."""
+    parsed = _parse_google_maps_url(url)
+    if not parsed:
+        return {}
+    name = parsed.get('name')
+    link = parsed.get('google_maps_link') or url.strip()
+    out = {'link': link}
+    if name:
+        out['title'] = name
+    out['stay_type'] = _guess_stay_type_from_maps(name, link)
+    if parsed.get('latitude') is not None:
+        out['latitude'] = parsed['latitude']
+    if parsed.get('longitude') is not None:
+        out['longitude'] = parsed['longitude']
+    return out
+
+
+def _guess_idea_category_from_maps(name, url):
+    """Guess idea category from Google Maps place name/URL."""
+    blob = ((name or '') + ' ' + (url or '')).lower()
+    if any(w in blob for w in ('museum', 'gallery', 'exhibition', 'art centre', 'art center')):
+        return 'museum_gallery'
+    if any(w in blob for w in ('restaurant', ' cafe', 'café', ' bistro', ' pizzeria', ' trattoria', ' brasserie', ' diner', ' eatery')):
+        return 'restaurant'
+    if any(w in blob for w in (' pub', ' bar', ' brewery', ' cocktail', ' wine bar', ' nightclub', ' club ')):
+        return 'nightlife'
+    if any(w in blob for w in (' park', ' beach', ' trail', ' hike', ' forest', ' garden', ' nature', ' waterfall', ' lake ')):
+        return 'nature'
+    if any(w in blob for w in (' shop', ' market', ' mall', ' boutique', ' outlet')):
+        return 'shopping'
+    if any(w in blob for w in (' zoo', ' aquarium', ' theme park', ' playground', ' family')):
+        return 'family'
+    if any(w in blob for w in (' cathedral', ' castle', ' monument', ' landmark', ' tower', ' bridge', ' viewpoint', ' lookout')):
+        return 'sightseeing'
+    if any(w in blob for w in (' tour', ' activity', ' adventure', ' kayak', ' surf', ' golf', ' spa', ' cinema', ' theatre', ' theater')):
+        return 'activity'
+    return 'other'
+
+
+def _parse_idea_from_maps_url(url):
+    """Map Google Maps URL to ha_trip_ideas preview fields."""
+    parsed = _parse_google_maps_url(url)
+    if not parsed:
+        return {}
+    name = parsed.get('name')
+    map_link = parsed.get('google_maps_link') or url.strip()
+    out = {'map_link': map_link}
+    if name:
+        out['title'] = name
+    out['category'] = _guess_idea_category_from_maps(name, map_link)
+    return out
+
+
+@app.route('/api/trip-ideas/preview')
+def trip_idea_preview():
+    """GET ?url= — parse a Google Maps place link for idea autofill."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Invalid URL'}), 400
+    if 'google' not in url.lower() and 'goo.gl' not in url.lower() and 'maps.app' not in url.lower():
+        return jsonify({'error': 'Use a Google Maps place link (google.com/maps or maps.app.goo.gl)'}), 400
+    data = _parse_idea_from_maps_url(url)
+    if not data.get('title') and not data.get('map_link'):
+        return jsonify({'error': 'Could not extract details from this URL'}), 400
+    return jsonify(data), 200
+
+
+@app.route('/api/trip-stays/preview')
+def trip_stay_preview():
+    """GET ?url= — parse a Google Maps place link for stay autofill."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Invalid URL'}), 400
+    if 'google' not in url.lower() and 'goo.gl' not in url.lower() and 'maps.app' not in url.lower():
+        return jsonify({'error': 'Use a Google Maps place link (google.com/maps or maps.app.goo.gl)'}), 400
+    data = _parse_stay_from_maps_url(url)
+    if not data.get('title') and not data.get('link'):
+        return jsonify({'error': 'Could not extract details from this URL'}), 400
+    return jsonify(data), 200
+
+
 @app.route('/api/restaurants/preview')
 def restaurant_preview():
     """GET ?url= — parse a Google Maps link and return what we can."""
@@ -3854,11 +3956,16 @@ def delete_restaurant(restaurant_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ---------- Travel (ha_trips / ha_trip_locations / ha_trip_stays) ----------
+# ---------- Travel (ha_trips / ha_trip_locations / ha_trip_stays / ha_trip_ideas) ----------
 
 TRIP_STATUSES = {'planning', 'booked', 'completed'}
 STAY_TYPES = {'hotel', 'airbnb', 'b_and_b', 'hostel', 'other'}
 STAY_STATUSES = {'considering', 'shortlist', 'rejected', 'booked'}
+IDEA_CATEGORIES = {
+    'restaurant', 'activity', 'museum_gallery', 'sightseeing',
+    'nature', 'shopping', 'family', 'nightlife', 'other',
+}
+IDEA_STATUSES = {'suggested', 'want_to_do', 'booked', 'done', 'skip'}
 
 
 def _trip_row_dates(row):
@@ -3871,7 +3978,7 @@ def _trip_row_dates(row):
 
 
 def _fetch_trip_bundle(trip_id):
-    """Return trip dict with locations[] and stays[] nested."""
+    """Return trip dict with locations[], stays[], and ideas[] nested."""
     tr = supabase.table('ha_trips').select('*').eq('id', trip_id).execute()
     rows = tr.data or []
     if not rows:
@@ -3879,12 +3986,16 @@ def _fetch_trip_bundle(trip_id):
     trip = _trip_row_dates(rows[0])
     loc_r = supabase.table('ha_trip_locations').select('*').eq('trip_id', trip_id).order('sort_order').order('start_date').execute()
     stay_r = supabase.table('ha_trip_stays').select('*').eq('trip_id', trip_id).order('sort_order').order('created_at').execute()
+    idea_r = supabase.table('ha_trip_ideas').select('*').eq('trip_id', trip_id).order('sort_order').order('created_at').execute()
     locations = [_trip_row_dates(dict(x)) for x in (loc_r.data or [])]
     stays = [dict(x) for x in (stay_r.data or [])]
+    ideas = [dict(x) for x in (idea_r.data or [])]
     for loc in locations:
         loc['stays'] = [s for s in stays if s.get('location_id') == loc['id']]
+        loc['ideas'] = [i for i in ideas if i.get('location_id') == loc['id']]
     trip['locations'] = locations
     trip['trip_stays'] = [s for s in stays if not s.get('location_id')]
+    trip['trip_ideas'] = [i for i in ideas if not i.get('location_id')]
     return trip
 
 
@@ -3899,7 +4010,7 @@ def get_trips():
             if not bundle:
                 return jsonify({'error': 'Trip not found'}), 404
             return jsonify(bundle), 200
-        r = supabase.table('ha_trips').select('*').order('start_date', desc=True).order('created_at', desc=True).execute()
+        r = supabase.table('ha_trips').select('*').order('start_date').order('created_at').execute()
         trips = [_trip_row_dates(dict(t)) for t in (r.data or [])]
         return jsonify(trips), 200
     except Exception as e:
@@ -4120,6 +4231,87 @@ def delete_trip_stay(stay_id):
         return jsonify({'ok': True}), 200
     except Exception as e:
         app.logger.error(f'Error deleting trip stay {stay_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-ideas', methods=['POST'], strict_slashes=False)
+def create_trip_idea():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        trip_id = data.get('trip_id')
+        title = (data.get('title') or '').strip()
+        if not trip_id or not title:
+            return jsonify({'error': 'trip_id and title are required'}), 400
+        category = (data.get('category') or 'other').strip().lower()
+        if category not in IDEA_CATEGORIES:
+            category = 'other'
+        status = (data.get('status') or 'suggested').strip().lower()
+        if status not in IDEA_STATUSES:
+            status = 'suggested'
+        loc_id = data.get('location_id')
+        payload = {
+            'trip_id': int(trip_id),
+            'location_id': int(loc_id) if loc_id not in (None, '', 0) else None,
+            'title': title,
+            'category': category,
+            'link': (data.get('link') or '').strip() or None,
+            'map_link': (data.get('map_link') or '').strip() or None,
+            'suggested_by': (data.get('suggested_by') or '').strip() or None,
+            'notes': (data.get('notes') or '').strip() or None,
+            'status': status,
+            'sort_order': int(data.get('sort_order') or 0),
+        }
+        r = supabase.table('ha_trip_ideas').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f'Error creating trip idea: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-ideas/<int:idea_id>', methods=['PATCH'])
+def update_trip_idea(idea_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        str_fields = ('title', 'link', 'map_link', 'suggested_by', 'notes')
+        for field in str_fields:
+            if field in data:
+                payload[field] = (data.get(field) or '').strip() or None
+        if 'category' in data:
+            cat = (data.get('category') or 'other').strip().lower()
+            payload['category'] = cat if cat in IDEA_CATEGORIES else 'other'
+        if 'status' in data:
+            st = (data.get('status') or 'suggested').strip().lower()
+            payload['status'] = st if st in IDEA_STATUSES else 'suggested'
+        if 'location_id' in data:
+            loc = data.get('location_id')
+            payload['location_id'] = int(loc) if loc not in (None, '', 0) else None
+        if 'sort_order' in data:
+            payload['sort_order'] = int(data.get('sort_order') or 0)
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_trip_ideas').update(payload).eq('id', idea_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 200
+    except Exception as e:
+        app.logger.error(f'Error updating trip idea {idea_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-ideas/<int:idea_id>', methods=['DELETE'])
+def delete_trip_idea(idea_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_trip_ideas').delete().eq('id', idea_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f'Error deleting trip idea {idea_id}: {e}')
         return jsonify({'error': str(e)}), 500
 
 

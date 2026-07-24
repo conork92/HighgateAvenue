@@ -6,11 +6,13 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-start: ## Start the application using Docker Compose (with rebuild)
+start: ## Stop, rebuild, and start the application (full reset)
+	@echo "Stopping existing containers..."
+	docker-compose down
 	@echo "Building Docker image..."
 	docker-compose build
 	@echo "Starting Highgate Avenue application..."
-	docker-compose up -d
+	docker-compose up -d --force-recreate
 	@echo "Application is running at http://localhost:8001"
 
 run: start ## Same as start (Docker Compose with rebuild)

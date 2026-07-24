@@ -98,7 +98,7 @@ The app will be available at `http://localhost:8000`
 #### Available Make Commands
 
 ```bash
-make start      # Start the application using Docker Compose
+make start      # Stop, rebuild, and start (full reset)
 make stop       # Stop the application
 make restart    # Restart the application
 make build      # Build the Docker image
