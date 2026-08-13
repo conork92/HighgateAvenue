@@ -219,6 +219,8 @@
 }
 .tr-stay-filter.is-active { background: #0d0d0d; color: #fff; }
 .tr-stay-loc { font-size: 0.72rem; color: #6b6b6b; text-transform: uppercase; letter-spacing: 0.04em; }
+.tr-stay-dates { font-size: 0.82rem; color: #333; font-weight: 600; margin-top: 0.15rem; }
+.tr-stay-card--booked .tr-stay-dates { color: #2e7d32; }
 
 .tr-fetch-block { padding-bottom: 0.25rem; }
 .tr-fetch-row { display: flex; gap: 0.5rem; }
@@ -455,6 +457,8 @@
 }
 .tr-form-row { display: flex; flex-direction: column; gap: 0.3rem; }
 .tr-form-row.full { grid-column: 1 / -1; }
+.tr-form-row--date { min-width: 0; }
+.tr-form-row--date input[type="date"] { width: 100%; min-width: 0; }
 .tr-form-row label {
     font-size: 0.65rem;
     text-transform: uppercase;

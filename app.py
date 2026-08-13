@@ -14,6 +14,7 @@ import hmac
 import hashlib
 import base64
 from urllib.parse import quote, urlparse, unquote, parse_qs
+from html import unescape
 from io import BytesIO
 import re
 import boto3
@@ -4223,38 +4224,60 @@ def restaurants():
     return render_template('restaurants.html')
 
 
+def _resolve_google_maps_url(url):
+    """Resolve a Google Maps URL to a canonical google.com/maps/place link."""
+    if not url:
+        return url
+    url = url.strip()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-GB,en;q=0.9',
+    }
+    host = urlparse(url).netloc.lower()
+    is_short = 'goo.gl' in host or 'maps.app' in host
+    final_url = url
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=12, headers=headers)
+        final_url = resp.url
+        if is_short and 'google.com/maps' not in final_url.lower():
+            html = resp.text
+            if 'google.com/maps/place' not in html.lower():
+                resp = requests.get(url, allow_redirects=True, timeout=12, headers={'User-Agent': 'Mozilla/5.0'})
+                html = resp.text
+            m = re.search(r'https://(?:www\.)?google\.com/maps/place/[^"\s<>\\]+', html, re.I)
+            if m:
+                final_url = unescape(m.group(0))
+    except Exception:
+        pass
+    return final_url
+
+
+def _place_name_from_maps_url(url):
+    path = urlparse(url).path
+    m = re.match(r'/maps/place/([^/@]+)', path)
+    if not m:
+        return None
+    name = unquote(m.group(1)).replace('+', ' ').strip()
+    name = unescape(name)
+    name = re.sub(r'[,\s]+$', '', name)
+    return name or None
+
+
 def _parse_google_maps_url(url):
     """Best-effort extraction of name + coords from a Google Maps URL.
-    Follows short-URL redirects (maps.app.goo.gl, goo.gl/maps).
+    Follows short-URL redirects (maps.app.goo.gl, goo.gl/maps) and scrapes
+    embedded canonical links when no HTTP redirect is returned.
     Returns dict with any fields that could be extracted."""
     out = {}
     if not url:
         return out
     url = url.strip()
+    final_url = _resolve_google_maps_url(url)
 
-    # Follow short-URL redirects to get the canonical maps URL.
-    final_url = url
-    host = urlparse(url).netloc.lower()
-    if 'goo.gl' in host or 'maps.app' in host:
-        try:
-            resp = requests.get(url, allow_redirects=True, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-            final_url = resp.url
-        except Exception:
-            pass
+    name = _place_name_from_maps_url(final_url)
+    if name:
+        out['name'] = name
 
-    # Extract place name from URL path: /maps/place/PLACE+NAME/...
-    path = urlparse(final_url).path
-    m = re.match(r'/maps/place/([^/@]+)', path)
-    if m:
-        raw = m.group(1)
-        # URL-decode and replace + with space
-        name = unquote(raw).replace('+', ' ').strip()
-        # Remove trailing punctuation noise
-        name = re.sub(r'[,\s]+$', '', name)
-        if name:
-            out['name'] = name
-
-    # Extract coords.
     lat, lng = _coords_from_map_link(final_url)
     if lat is not None:
         out['latitude'] = lat
@@ -4277,6 +4300,213 @@ def _guess_stay_type_from_maps(name, url):
     return 'other'
 
 
+def _google_maps_page_html(maps_url):
+    """Fetch Google Maps place page HTML (with consent cookies)."""
+    if not maps_url or 'google.com/maps' not in maps_url.lower():
+        return None
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-GB,en;q=0.9',
+        'Cookie': 'CONSENT=YES+1; SOCS=CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_L2mBg',
+    }
+    try:
+        resp = requests.get(maps_url, headers=headers, timeout=12)
+        resp.raise_for_status()
+        return resp.text
+    except Exception as e:
+        app.logger.warning(f'Google Maps page fetch failed: {e}')
+        return None
+
+
+def _google_maps_api_key():
+    """Return a Google Maps/Places API key from environment (user-provided)."""
+    return (os.getenv('GOOGLE_MAPS_API_KEY') or os.getenv('GOOGLE_PLACES_API_KEY') or '').strip() or None
+
+
+def _normalize_place_name_for_search(name):
+    if not name:
+        return name
+    n = name.strip()
+    for suffix in (
+        ' Hotel and Restaurant', ' Hotel & Restaurant', ' Hotel and Spa',
+        ' Hotel', ' Restaurant', ' Inn', ' Resort', ' Lodge',
+    ):
+        if n.lower().endswith(suffix.lower()):
+            n = n[: -len(suffix)].strip()
+            break
+    return n
+
+
+def _wikipedia_place_photo(name, location_hint=None):
+    """Find a thumbnail for well-known places via Wikipedia search."""
+    if not name:
+        return None
+    search_names = []
+    short = _normalize_place_name_for_search(name)
+    if short:
+        search_names.append(short)
+    if name not in search_names:
+        search_names.append(name)
+
+    best = None
+    best_score = -1
+    for search_name in search_names:
+        query = search_name
+        try:
+            resp = requests.get(
+                'https://en.wikipedia.org/w/api.php',
+                params={
+                    'action': 'query',
+                    'generator': 'search',
+                    'gsrsearch': query,
+                    'gsrlimit': 5,
+                    'prop': 'pageimages',
+                    'piprop': 'thumbnail',
+                    'pithumbsize': 800,
+                    'format': 'json',
+                },
+                headers={'User-Agent': 'HighgateAvenue/1.0 (travel stays)'},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            pages = (resp.json().get('query') or {}).get('pages') or {}
+        except Exception as e:
+            app.logger.warning(f'Wikipedia thumbnail lookup failed: {e}')
+            continue
+
+        ordered = sorted(pages.values(), key=lambda p: p.get('index', 999))
+        for page in ordered:
+            thumb = (page.get('thumbnail') or {}).get('source')
+            if not thumb:
+                continue
+            title = (page.get('title') or '').strip()
+            title_lower = title.lower()
+            short_lower = (short or '').lower()
+            if short_lower and title_lower == short_lower:
+                return thumb
+            score = 0
+            for candidate in (short, name):
+                if not candidate:
+                    continue
+                cand_lower = candidate.lower()
+                if title_lower == cand_lower:
+                    score += 100
+                elif cand_lower in title_lower or title_lower in cand_lower:
+                    score += 25
+                for word in cand_lower.split():
+                    if len(word) > 3 and word in title_lower:
+                        score += 4
+            if location_hint and location_hint.lower() == title_lower:
+                score -= 10
+            if score > best_score:
+                best_score = score
+                best = thumb
+        if best_score >= 25:
+            break
+
+    if location_hint and (not best or best_score < 50):
+        return _wikipedia_place_photo(short or name, None) or best
+    return best
+
+
+def _google_maps_place_photo_api(name, lat, lng):
+    """Fetch the default place photo via Google Places API (Find Place + Place Photo)."""
+    api_key = _google_maps_api_key()
+    if not api_key or not name:
+        return None
+    params = {
+        'input': name,
+        'inputtype': 'textquery',
+        'fields': 'photos',
+        'key': api_key,
+    }
+    if lat is not None and lng is not None:
+        params['locationbias'] = f'circle:500@{lat},{lng}'
+    try:
+        resp = requests.get(
+            'https://maps.googleapis.com/maps/api/place/findplacefromtext/json',
+            params=params,
+            timeout=12,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get('status') not in ('OK', 'ZERO_RESULTS'):
+            app.logger.warning(f'Places findplace status: {data.get("status")} {data.get("error_message")}')
+            return None
+        candidates = data.get('candidates') or []
+        if not candidates:
+            return None
+        photos = candidates[0].get('photos') or []
+        if not photos:
+            return None
+        photo_ref = photos[0].get('photo_reference')
+        if not photo_ref:
+            return None
+        return (
+            'https://maps.googleapis.com/maps/api/place/photo'
+            f'?maxwidth=800&photo_reference={quote(photo_ref)}&key={api_key}'
+        )
+    except Exception as e:
+        app.logger.warning(f'Google Places photo lookup failed: {e}')
+    return None
+
+
+def _google_maps_place_photo(name, lat, lng, location_hint=None):
+    """Best-effort hotel/place photo — Places API, then Wikipedia."""
+    return (
+        _google_maps_place_photo_api(name, lat, lng)
+        or _wikipedia_place_photo(name, location_hint)
+    )
+
+
+def _google_maps_og_image(maps_url):
+    """Map preview thumbnail — not used for stay cards."""
+    html = _google_maps_page_html(maps_url)
+    if not html:
+        return None
+    m = re.search(r'property="og:image"\s+content="([^"]+)"', html, re.I)
+    if not m:
+        m = re.search(r'content="([^"]+)"\s+property="og:image"', html, re.I)
+    if m:
+        url = unescape(m.group(1).replace('&amp;', '&'))
+        if 'staticmap' in url:
+            return url
+    return None
+
+
+def _reverse_geocode_label(lat, lng):
+    """Return {location_name, address} from coordinates via Nominatim."""
+    if lat is None or lng is None:
+        return {}
+    try:
+        resp = requests.get(
+            'https://nominatim.openstreetmap.org/reverse',
+            params={'lat': lat, 'lon': lng, 'format': 'json'},
+            headers={'User-Agent': 'HighgateAvenue/1.0 (travel stays)'},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        app.logger.warning(f'Reverse geocode failed: {e}')
+        return {}
+    address = data.get('address') or {}
+    location_name = (
+        address.get('village')
+        or address.get('town')
+        or address.get('city')
+        or address.get('municipality')
+        or address.get('county')
+    )
+    out = {}
+    if location_name:
+        out['location_name'] = location_name
+    display = (data.get('display_name') or '').strip()
+    if display:
+        out['address'] = display
+    return out
+
+
 def _parse_stay_from_maps_url(url):
     parsed = _parse_google_maps_url(url)
     if not parsed:
@@ -4287,6 +4517,19 @@ def _parse_stay_from_maps_url(url):
     if name:
         out['title'] = name
     out['stay_type'] = _guess_stay_type_from_maps(name, link)
+
+    lat = parsed.get('latitude')
+    lng = parsed.get('longitude')
+    geo = _reverse_geocode_label(lat, lng)
+    if geo.get('location_name'):
+        out['location_name'] = geo['location_name']
+    if geo.get('address'):
+        out['notes'] = geo['address']
+
+    image_url = _google_maps_place_photo(name, lat, lng, geo.get('location_name'))
+    if image_url:
+        out['image_url'] = image_url
+
     return out
 
 
@@ -4627,11 +4870,14 @@ def create_trip_stay():
         payload = {
             'trip_id': int(trip_id),
             'location_id': int(loc_id) if loc_id not in (None, '', 0) else None,
+            'location_name': (data.get('location_name') or '').strip() or None,
             'title': title,
             'link': (data.get('link') or '').strip() or None,
             'image_url': (data.get('image_url') or '').strip() or None,
             'stay_type': stay_type,
             'price': (data.get('price') or '').strip() or None,
+            'check_in_date': (data.get('check_in_date') or '').strip() or None,
+            'check_out_date': (data.get('check_out_date') or '').strip() or None,
             'pros': (data.get('pros') or '').strip() or None,
             'cons': (data.get('cons') or '').strip() or None,
             'notes': (data.get('notes') or '').strip() or None,
@@ -4653,10 +4899,14 @@ def update_trip_stay(stay_id):
     try:
         data = request.get_json() or {}
         payload = {}
-        str_fields = ('title', 'link', 'price', 'pros', 'cons', 'notes')
+        str_fields = ('title', 'link', 'price', 'pros', 'cons', 'notes', 'image_url')
         for field in str_fields:
             if field in data:
                 payload[field] = (data.get(field) or '').strip() or None
+        for date_field in ('check_in_date', 'check_out_date'):
+            if date_field in data:
+                val = (data.get(date_field) or '').strip()
+                payload[date_field] = val or None
         if 'stay_type' in data:
             st = (data.get('stay_type') or 'other').strip().lower()
             payload['stay_type'] = st if st in STAY_TYPES else 'other'
@@ -4666,6 +4916,8 @@ def update_trip_stay(stay_id):
         if 'location_id' in data:
             loc = data.get('location_id')
             payload['location_id'] = int(loc) if loc not in (None, '', 0) else None
+        if 'location_name' in data:
+            payload['location_name'] = (data.get('location_name') or '').strip() or None
         if 'sort_order' in data:
             payload['sort_order'] = int(data.get('sort_order') or 0)
         if not payload:
