@@ -31,7 +31,199 @@
 }
 .tr-btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 #0d0d0d; }
 .tr-btn--ghost { background: #fff; color: #0d0d0d; }
+.tr-btn--danger { background: #fff; color: #b00020; border-color: #b00020; }
 .tr-btn--sm { font-size: 0.68rem; padding: 0.4rem 0.7rem; }
+
+.tr-list-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    gap: 1.25rem;
+    align-items: start;
+}
+.tr-list-main { min-width: 0; }
+
+.tr-next-trip {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    border: 2.5px solid #0d0d0d;
+    background: #fffef8;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    box-shadow: 4px 4px 0 #0d0d0d;
+    transition: transform 0.12s;
+}
+.tr-next-trip:hover { transform: translate(-2px, -2px); }
+.tr-next-trip--booked { background: #f4fff4; }
+.tr-next-trip-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 3rem;
+    border-right: 1.5px solid #ddd;
+    padding-right: 1rem;
+}
+.tr-next-trip-day { font-size: 1.75rem; font-weight: 700; line-height: 1; }
+.tr-next-trip-mon { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b6b6b; }
+.tr-next-trip-kicker { margin: 0 0 0.2rem; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6b6b; }
+.tr-next-trip-title { margin: 0 0 0.25rem; font-size: 1.25rem; }
+.tr-next-trip-when { margin: 0 0 0.5rem; font-size: 0.85rem; color: #6b6b6b; }
+.tr-next-trip-countdown {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.tr-trip-group { margin-bottom: 1.5rem; }
+.tr-trip-group-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #6b6b6b;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.tr-trip-group-count { font-size: 0.62rem; border: 1px solid #ccc; padding: 0.05rem 0.35rem; color: #888; }
+.tr-trip-group--past { margin-top: 0.25rem; }
+.tr-trip-group-toggle {
+    font: inherit;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b6b6b;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+}
+.tr-trip-group-toggle::after { content: '▸'; transition: transform 0.15s; }
+.tr-trip-group-toggle.is-open::after { transform: rotate(90deg); }
+
+.tr-timeline { display: flex; flex-direction: column; gap: 0.45rem; }
+.tr-timeline-row {
+    display: grid;
+    grid-template-columns: 3.25rem 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    border: 1.5px solid #0d0d0d;
+    background: #fff;
+    padding: 0.65rem 0.85rem;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.tr-timeline-row:hover { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 #0d0d0d; }
+.tr-timeline-date { text-align: center; line-height: 1.1; }
+.tr-timeline-day { display: block; font-size: 1.15rem; font-weight: 700; }
+.tr-timeline-mon { display: block; font-size: 0.58rem; text-transform: uppercase; color: #6b6b6b; }
+.tr-timeline-tbc { font-size: 0.65rem; text-transform: uppercase; color: #999; }
+.tr-timeline-main strong { display: block; font-size: 0.95rem; margin-bottom: 0.1rem; }
+.tr-timeline-range { font-size: 0.78rem; color: #6b6b6b; }
+.tr-timeline-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+.tr-timeline-cd { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b6b6b; }
+
+.tr-cal-panel {
+    border: 2px solid #0d0d0d;
+    background: #fafafa;
+    padding: 0.85rem;
+    position: sticky;
+    top: 1rem;
+}
+.tr-cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid #ddd;
+}
+.tr-cal-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; flex: 1; text-align: center; }
+.tr-cal-nav {
+    font: inherit;
+    width: 1.6rem;
+    height: 1.6rem;
+    border: 1.5px solid #0d0d0d;
+    background: #fff;
+    cursor: pointer;
+    padding: 0;
+}
+.tr-cal-months { display: flex; flex-direction: column; gap: 0.65rem; }
+.tr-cal-month-name { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b6b6b; margin-bottom: 0.3rem; }
+.tr-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.tr-cal-weekday { font-size: 0.52rem; text-align: center; color: #aaa; }
+.tr-cal-day {
+    aspect-ratio: 1;
+    border: none;
+    background: #fff;
+    padding: 0;
+    font: inherit;
+    font-size: 0.58rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    cursor: default;
+}
+.tr-cal-day--blank { background: transparent; }
+.tr-cal-day--today .tr-cal-day-num { background: #0d0d0d; color: #fff; border-radius: 50%; width: 1.2rem; height: 1.2rem; display: flex; align-items: center; justify-content: center; }
+.tr-cal-day--trip { cursor: pointer; background: #fffef0; outline: 1px solid #c9a800; }
+.tr-cal-day--trip.tr-cal-day--booked { background: #eef8ee; outline-color: #4caf50; }
+.tr-cal-day-bar { display: block; width: 70%; height: 2px; background: #0d0d0d; border-radius: 1px; }
+.tr-cal-legend { margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px dashed #ccc; display: flex; flex-direction: column; gap: 0.3rem; max-height: 8.5rem; overflow-y: auto; }
+.tr-cal-legend-empty { margin: 0; font-size: 0.72rem; color: #6b6b6b; line-height: 1.4; }
+.tr-cal-legend-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 0.4rem;
+    align-items: start;
+    text-align: left;
+    font: inherit;
+    border: none;
+    background: none;
+    padding: 0.15rem 0;
+    cursor: pointer;
+}
+.tr-cal-legend-dot { width: 0.5rem; height: 0.5rem; margin-top: 0.15rem; border: 1px solid #0d0d0d; background: #fffef0; }
+.tr-cal-legend-text { font-size: 0.72rem; font-weight: 600; }
+.tr-cal-legend-when { grid-column: 2; font-size: 0.62rem; color: #6b6b6b; }
+
+.tr-section-sub { margin: 0.25rem 0 0; font-size: 0.78rem; color: #6b6b6b; }
+.tr-label-opt { font-weight: normal; text-transform: none; letter-spacing: 0; color: #999; }
+.tr-loc-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.tr-stay-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.85rem; }
+.tr-stay-filter {
+    font: inherit;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.28rem 0.5rem;
+    border: 1.5px solid #0d0d0d;
+    background: #fff;
+    cursor: pointer;
+}
+.tr-stay-filter.is-active { background: #0d0d0d; color: #fff; }
+.tr-stay-loc { font-size: 0.72rem; color: #6b6b6b; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.tr-fetch-block { padding-bottom: 0.25rem; }
+.tr-fetch-row { display: flex; gap: 0.5rem; }
+.tr-fetch-row input { flex: 1; font: inherit; padding: 0.5rem 0.6rem; border: 1.5px solid #0d0d0d; }
+.tr-fetch-hint { font-size: 0.72rem; color: #6b6b6b; margin: 0.35rem 0 0; line-height: 1.45; }
 
 .tr-trip-cards {
     display: grid;
@@ -288,7 +480,16 @@
 .tr-form-status { flex: 1; font-size: 0.75rem; color: #6b6b6b; }
 .tr-form-status.is-error { color: #b00020; }
 
+@media (max-width: 900px) {
+    .tr-list-body { grid-template-columns: 1fr; }
+    .tr-cal-panel { position: static; }
+    .tr-next-trip { grid-template-columns: auto 1fr; }
+    .tr-next-trip-countdown { grid-column: 2; justify-self: start; margin-top: -0.25rem; }
+}
+
 @media (max-width: 600px) {
     .tr-form-grid { grid-template-columns: 1fr; }
     .tr-stay-grid { grid-template-columns: 1fr; }
+    .tr-timeline-row { grid-template-columns: 2.5rem 1fr; }
+    .tr-timeline-meta { grid-column: 2; flex-direction: row; align-items: center; margin-top: 0.25rem; }
 }

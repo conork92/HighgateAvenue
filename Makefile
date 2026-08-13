@@ -1,4 +1,4 @@
-.PHONY: help start run stop build clean install dev test
+.PHONY: help start run stop build clean install dev serve test
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -28,16 +28,15 @@ build: ## Build the Docker image
 logs: ## View application logs
 	docker-compose logs -f
 
-dev: ## Run in development mode (local Python)
-	@echo "Starting in development mode..."
-	@if [ ! -d "venv" ]; then \
-		echo "Creating virtual environment..."; \
-		python3 -m venv venv; \
+serve: ## Run app locally with Python (no Docker rebuild)
+	@if [ ! -x "venv/bin/python" ]; then \
+		echo "Virtual environment not found — run 'make install' first."; \
+		exit 1; \
 	fi
-	@echo "Installing dependencies..."
-	venv/bin/pip install -r requirements.txt
-	@echo "Starting Flask development server..."
-	FLASK_ENV=development venv/bin/python app.py
+	@echo "Starting Flask at http://localhost:8001 (Ctrl+C to stop)..."
+	FLASK_ENV=development PORT=8001 venv/bin/python app.py
+
+dev: install serve ## Install deps and run locally
 
 install: ## Install dependencies locally
 	@if [ ! -d "venv" ]; then \

@@ -16,7 +16,7 @@
             <div class="container">
                 <header>
                     <h1>Cars</h1>
-                    <p class="subtitle">Shortlist cars you’re looking at. Paste an <a href="https://www.autotrader.co.uk/" target="_blank" rel="noopener">Autotrader</a> link and use <strong>Fetch from link</strong> to fill in the details.</p>
+                    <p class="subtitle">Shortlist cars you’re looking at. Paste an <a href="https://www.autotrader.co.uk/" target="_blank" rel="noopener">Autotrader</a>, <a href="https://www.carwow.co.uk/" target="_blank" rel="noopener">Carwow</a>, or <a href="https://www.cazoo.co.uk/" target="_blank" rel="noopener">Cazoo</a> link and use <strong>Fetch from link</strong> to fill in the details.</p>
                     <button type="button" id="carAddBtn" class="upload-btn" style="margin-top: 1rem;"><span>+ Add car</span></button>
                 </header>
 
@@ -52,7 +52,7 @@
                         <tbody id="carTableBody"></tbody>
                     </table>
                 </div>
-                <p id="carEmpty" class="cars-empty" style="display: none;">No cars yet. Add an Autotrader listing with the button above.</p>
+                <p id="carEmpty" class="cars-empty" style="display: none;">No cars yet. Add a listing with the button above.</p>
             </div>
         </main>
     </div>
@@ -63,8 +63,8 @@
             <h2 id="carModalTitle">Add car</h2>
             <form id="carForm">
                 <div class="form-group">
-                    <label for="carLink">Autotrader link *</label>
-                    <input type="url" id="carLink" required placeholder="https://www.autotrader.co.uk/car-details/…">
+                    <label for="carLink">Listing link *</label>
+                    <input type="url" id="carLink" required placeholder="Autotrader, Carwow, or Cazoo URL…">
                     <button type="button" id="carFetchBtn" class="btn-fetch-preview" style="margin-top: 0.5rem;">Fetch from link</button>
                 </div>
                 <div class="form-group">
@@ -218,7 +218,7 @@
             if (!all.length) {
                 tableWrap.style.display = 'none';
                 emptyEl.style.display = 'block';
-                emptyEl.textContent = 'No cars yet. Add an Autotrader listing with the button above.';
+                emptyEl.textContent = 'No cars yet. Add a listing with the button above.';
                 return;
             }
             emptyEl.style.display = 'none';
@@ -327,6 +327,10 @@
                     if (d.engine) document.getElementById('carEngine').value = d.engine;
                     if (d.owners) document.getElementById('carOwners').value = d.owners;
                     if (d.registration) document.getElementById('carRegistration').value = d.registration;
+                    if (!d.title && !d.price) {
+                        throw new Error('Could not read listing details from that page');
+                    }
+                    statusMsg.style.display = 'none';
                 })
                 .catch(function(err) {
                     statusMsg.style.display = 'block';
