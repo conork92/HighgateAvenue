@@ -7,7 +7,7 @@
     <title>Highgate Avenue – Travel</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260706">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260706">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260810">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260813c">
 </head>
 <body>
     <div class="app-layout">
@@ -169,7 +169,6 @@
             <form id="trStayForm">
                 <input type="hidden" id="trStayId">
                 <input type="hidden" id="trStayTripId">
-                <input type="hidden" id="trStayLocationId">
                 <div class="tr-form-grid">
                     <div class="tr-form-row full tr-fetch-block">
                         <label for="trStayMapsUrl">Google Maps link</label>
@@ -201,6 +200,14 @@
                         <label for="trStayPrice">Price</label>
                         <input type="text" id="trStayPrice" placeholder="e.g. €120/night, £450 total">
                     </div>
+                    <div class="tr-form-row tr-form-row--date">
+                        <label for="trStayCheckIn">Check-in</label>
+                        <input type="date" id="trStayCheckIn">
+                    </div>
+                    <div class="tr-form-row tr-form-row--date">
+                        <label for="trStayCheckOut">Check-out</label>
+                        <input type="date" id="trStayCheckOut">
+                    </div>
                     <div class="tr-form-row">
                         <label for="trStayStatus">Status</label>
                         <select id="trStayStatus">
@@ -211,10 +218,12 @@
                         </select>
                     </div>
                     <div class="tr-form-row full">
-                        <label for="trStayLocationSelect">Location <span class="tr-label-opt">(optional)</span></label>
-                        <select id="trStayLocationSelect">
-                            <option value="">Trip-wide (anywhere)</option>
-                        </select>
+                        <label for="trStayLocationName">Location <span class="tr-label-opt">(optional)</span></label>
+                        <input type="text" id="trStayLocationName" placeholder="e.g. Saint-Paul-de-Vence, Nice">
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trStayImageUrl">Image URL <span class="tr-label-opt">(optional)</span></label>
+                        <input type="url" id="trStayImageUrl" placeholder="Filled automatically from Google Maps fetch">
                     </div>
                     <div class="tr-form-row full">
                         <label for="trStayPros">Pros</label>
@@ -246,7 +255,7 @@
 
         let trips = [];
         let currentTrip = null;
-        let stayStatusFilter = 'active';
+        let stayStatusFilter = 'all';
         let calViewMonth = new Date().getMonth();
         let calViewYear = new Date().getFullYear();
         const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -538,8 +547,8 @@
                 booked: stays.filter(function(s) { return s.status === 'booked'; }).length,
                 rejected: stays.filter(function(s) { return s.status === 'rejected'; }).length
             };
-            [{ key: 'active', label: 'In play' }, { key: 'shortlist', label: 'Shortlist' }, { key: 'considering', label: 'Considering' },
-             { key: 'booked', label: 'Booked' }, { key: 'rejected', label: 'Rejected' }, { key: 'all', label: 'All' }].forEach(function(chip) {
+            [{ key: 'all', label: 'All' }, { key: 'active', label: 'In play' }, { key: 'shortlist', label: 'Shortlist' }, { key: 'considering', label: 'Considering' },
+             { key: 'booked', label: 'Booked' }, { key: 'rejected', label: 'Rejected' }].forEach(function(chip) {
                 if (chip.key !== 'all' && chip.key !== 'active' && !counts[chip.key]) return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -556,16 +565,13 @@
             return stays.filter(function(s) { return (s.status || 'considering') === stayStatusFilter; });
         }
 
-        function populateStayLocationSelect(selectedId) {
-            const sel = document.getElementById('trStayLocationSelect');
-            sel.innerHTML = '<option value="">Trip-wide (anywhere)</option>';
-            (currentTrip && currentTrip.locations || []).forEach(function(loc) {
-                const opt = document.createElement('option');
-                opt.value = loc.id;
-                opt.textContent = loc.name;
-                sel.appendChild(opt);
-            });
-            sel.value = selectedId != null && selectedId !== '' ? String(selectedId) : '';
+        function stayLocationLabel(stay) {
+            if (stay.location_name) return stay.location_name;
+            if (stay.location_id && currentTrip) {
+                const loc = (currentTrip.locations || []).find(function(l) { return l.id === stay.location_id; });
+                return loc ? loc.name : '';
+            }
+            return '';
         }
 
         function renderStaysGrid(stays) {
@@ -620,7 +626,7 @@
             const r = await fetch('/api/trips?id=' + encodeURIComponent(id));
             if (!r.ok) throw new Error('Could not load trip');
             currentTrip = await r.json();
-            stayStatusFilter = 'active';
+            stayStatusFilter = 'all';
             renderTripDetail();
         }
 
@@ -630,11 +636,14 @@
             const linkHtml = stay.link
                 ? '<a href="' + esc(stay.link) + '" target="_blank" rel="noopener" class="tr-stay-link">Open listing ↗</a>'
                 : '';
-            const locName = stay.location_id && currentTrip
-                ? ((currentTrip.locations || []).find(function(l) { return l.id === stay.location_id; }) || {}).name || ''
+            const locName = stayLocationLabel(stay);
+            const photoHtml = stay.image_url
+                ? '<a href="' + esc(stay.link || stay.image_url) + '" target="_blank" rel="noopener" class="tr-stay-photo-link">'
+                    + '<img src="' + esc(stay.image_url) + '" alt="" class="tr-stay-photo" loading="lazy">'
+                  + '</a>'
                 : '';
-            const locId = stay.location_id || null;
             card.innerHTML = ''
+                + photoHtml
                 + '<div class="tr-stay-card-head">'
                 +   '<strong>' + esc(stay.title) + '</strong>'
                 +   '<span class="tr-stay-badges">'
@@ -643,6 +652,9 @@
                 +   '</span>'
                 + '</div>'
                 + (locName ? '<div class="tr-stay-loc">' + esc(locName) + '</div>' : '')
+                + (stay.check_in_date || stay.check_out_date
+                    ? '<div class="tr-stay-dates">' + esc(fmtRange(stay.check_in_date, stay.check_out_date)) + '</div>'
+                    : '')
                 + (stay.price ? '<div class="tr-stay-price">' + esc(stay.price) + '</div>' : '')
                 + (stay.pros ? '<div class="tr-stay-pros"><span>Pros</span>' + esc(stay.pros) + '</div>' : '')
                 + (stay.cons ? '<div class="tr-stay-cons"><span>Cons</span>' + esc(stay.cons) + '</div>' : '')
@@ -652,7 +664,7 @@
                 +   '<button type="button" data-action="edit-stay">Edit</button>'
                 +   '<button type="button" data-action="delete-stay">Delete</button>'
                 + '</div>';
-            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay, locId); });
+            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay); });
             card.querySelector('[data-action="delete-stay"]').addEventListener('click', function() {
                 if (!confirm('Remove this option?')) return;
                 fetch('/api/trip-stays/' + stay.id, { method: 'DELETE' }).then(function() { loadTrip(currentTrip.id); });
@@ -724,11 +736,8 @@
 
         function openStayModal(stay, locationId) {
             stay = stay || {};
-            const locId = stay.location_id != null ? stay.location_id : (locationId || '');
             document.getElementById('trStayId').value = stay.id || '';
             document.getElementById('trStayTripId').value = stay.trip_id || (currentTrip && currentTrip.id) || '';
-            document.getElementById('trStayLocationId').value = locId;
-            populateStayLocationSelect(locId);
             document.getElementById('trStayModalTitle').textContent = stay.id ? 'Edit hotel / Airbnb' : 'Add hotel / Airbnb';
             document.getElementById('trStayTitle').value = stay.title || '';
             const stayLink = stay.link || '';
@@ -737,6 +746,17 @@
             document.getElementById('trStayType').value = stay.stay_type || 'hotel';
             document.getElementById('trStayPrice').value = stay.price || '';
             document.getElementById('trStayStatus').value = stay.status || 'considering';
+            document.getElementById('trStayCheckIn').value = stay.check_in_date
+                || (!stay.id && currentTrip && currentTrip.start_date ? currentTrip.start_date : '');
+            document.getElementById('trStayCheckOut').value = stay.check_out_date
+                || (!stay.id && currentTrip && currentTrip.end_date ? currentTrip.end_date : '');
+            let locName = stay.location_name || stayLocationLabel(stay) || '';
+            if (!locName && locationId && currentTrip) {
+                const loc = (currentTrip.locations || []).find(function(l) { return l.id === locationId; });
+                locName = loc ? loc.name : '';
+            }
+            document.getElementById('trStayLocationName').value = locName;
+            document.getElementById('trStayImageUrl').value = stay.image_url || '';
             document.getElementById('trStayPros').value = stay.pros || '';
             document.getElementById('trStayCons').value = stay.cons || '';
             document.getElementById('trStayNotes').value = stay.notes || '';
@@ -787,7 +807,10 @@
                     document.getElementById('trStayMapsUrl').value = data.link;
                 }
                 if (data.stay_type) document.getElementById('trStayType').value = data.stay_type;
-                setFormStatus('trStayFormStatus', 'Loaded — add price and pros/cons, then save.', false);
+                if (data.location_name) document.getElementById('trStayLocationName').value = data.location_name;
+                if (data.notes) document.getElementById('trStayNotes').value = data.notes;
+                if (data.image_url) document.getElementById('trStayImageUrl').value = data.image_url;
+                setFormStatus('trStayFormStatus', 'Loaded — check dates, price, then save.', false);
             } catch (err) {
                 setFormStatus('trStayFormStatus', err.message, true);
             } finally {
@@ -862,15 +885,18 @@
         document.getElementById('trStayForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const id = document.getElementById('trStayId').value;
-            const locRaw = document.getElementById('trStayLocationSelect').value || document.getElementById('trStayLocationId').value;
             const payload = {
                 trip_id: document.getElementById('trStayTripId').value,
-                location_id: locRaw ? parseInt(locRaw, 10) : null,
+                location_id: null,
+                location_name: document.getElementById('trStayLocationName').value.trim() || null,
+                image_url: document.getElementById('trStayImageUrl').value.trim() || null,
                 title: document.getElementById('trStayTitle').value.trim(),
                 link: document.getElementById('trStayLink').value.trim(),
                 stay_type: document.getElementById('trStayType').value,
                 price: document.getElementById('trStayPrice').value.trim(),
                 status: document.getElementById('trStayStatus').value,
+                check_in_date: document.getElementById('trStayCheckIn').value || null,
+                check_out_date: document.getElementById('trStayCheckOut').value || null,
                 pros: document.getElementById('trStayPros').value.trim(),
                 cons: document.getElementById('trStayCons').value.trim(),
                 notes: document.getElementById('trStayNotes').value.trim()
