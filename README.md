@@ -89,21 +89,25 @@ PORT=5000
 # Start the application with Docker
 make start
 
-# Or run in development mode (local Python)
+# Or run locally without Docker (fast — picks up code changes immediately)
+make serve
+
+# First time only: install Python deps, then run
 make dev
 ```
 
-The app will be available at `http://localhost:8000`
+The app will be available at `http://localhost:8001`
 
 #### Available Make Commands
 
 ```bash
-make start      # Start the application using Docker Compose
+make start      # Start the application using Docker Compose (rebuilds image)
+make serve      # Run locally with Python — no Docker rebuild
 make stop       # Stop the application
 make restart    # Restart the application
 make build      # Build the Docker image
 make logs       # View application logs
-make dev        # Run in development mode (local Python)
+make dev        # Install deps and run locally
 make install    # Install dependencies locally
 make clean      # Clean up Docker containers and images
 make help       # Show all available commands

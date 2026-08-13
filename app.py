@@ -499,11 +499,253 @@ def delete_work_thought(thought_id):
         return jsonify({'error': str(e)}), 500
 
 
+_CAR_LISTING_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-GB,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate',
+}
+
+
+def _car_preview_is_usable(data):
+    if not isinstance(data, dict):
+        return False
+    return bool((data.get('title') or '').strip() or data.get('price') or data.get('price_amount'))
+
+
+def _parse_mileage_amount(mileage_text):
+    if not mileage_text:
+        return None
+    m = re.search(r'([\d,]+)', str(mileage_text))
+    if not m:
+        return None
+    try:
+        return int(m.group(1).replace(',', ''))
+    except ValueError:
+        return None
+
+
+def _coerce_int(value):
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(str(value).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_html_dt_dd(html):
+    """Return {label: value} from <dt>/<dd> pairs in HTML."""
+    if not html:
+        return {}
+    out = {}
+    for dt, dd in re.findall(r'<dt[^>]*>([^<]+)</dt>\s*<dd[^>]*>([^<]+)</dd>', html, re.I | re.S):
+        label = re.sub(r'\s+', ' ', dt).strip()
+        value = re.sub(r'\s+', ' ', dd).strip()
+        if label:
+            out[label] = value
+    return out
+
+
+def _looks_like_uk_registration(value):
+    return bool(value and re.match(r'^[A-Z]{2}\d{2}[A-Z]{3}$', value.strip().upper()))
+
+
 def _autotrader_advert_id_from_url(url):
     if not url:
         return None
     m = re.search(r'autotrader\.co\.uk/car-details/(\d+)', url, re.I)
     return m.group(1) if m else None
+
+
+def _carwow_deal_id_from_url(url):
+    if not url:
+        return None
+    m = re.search(r'quotes\.carwow\.co\.uk/deals/([a-f0-9]+)', url, re.I)
+    return m.group(1) if m else None
+
+
+def _cazoo_listing_id_from_url(url):
+    if not url:
+        return None
+    m = re.search(r'cazoo\.co\.uk/cars-for-sale/(\d+)', url, re.I)
+    return m.group(1) if m else None
+
+
+def _cazoo_page_is_blocked(html, status_code=None):
+    if status_code in (403, 429):
+        return True
+    if not html or len(html) < 5000:
+        return True
+    lower = html.lower()
+    if 'vercel security checkpoint' in lower or 'security checkpoint' in lower:
+        return True
+    if 'application/ld+json' not in html and 'cars-for-sale' not in lower:
+        return True
+    return False
+
+
+def _cazoo_meta_content(html, name):
+    if not html:
+        return None
+    m = re.search(rf'<meta[^>]+name="{re.escape(name)}"[^>]+content="([^"]+)"', html, re.I)
+    if not m:
+        m = re.search(rf'<meta[^>]+content="([^"]+)"[^>]+name="{re.escape(name)}"', html, re.I)
+    return m.group(1).strip() if m else None
+
+
+def _cazoo_embedded_value(html, key):
+    if not html:
+        return None
+    m = re.search(rf'\\"{re.escape(key)}\\":\\"([^\\"]+)\\"', html)
+    if m:
+        return m.group(1)
+    m = re.search(rf'\\"{re.escape(key)}\\":(\d+)', html)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return m.group(1)
+
+
+def _cazoo_fetch_html(clean_url):
+    session = requests.Session()
+    session.headers.update(_CAR_LISTING_HEADERS)
+    try:
+        session.get('https://www.cazoo.co.uk/', timeout=15)
+    except Exception:
+        pass
+    return session.get(clean_url, headers={'Referer': 'https://www.cazoo.co.uk/'}, timeout=18)
+
+
+def _parse_cazoo_html(html, clean_url, listing_id):
+    product_ld = None
+    for m in re.finditer(r'<script type="application/ld\+json">(.*?)</script>', html, re.I | re.S):
+        try:
+            data = json.loads(m.group(1))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(data, dict) and data.get('@type') == 'Product':
+            product_ld = data
+            break
+
+    make = _cazoo_embedded_value(html, 'vehicleMake') or ((product_ld or {}).get('brand') or {}).get('name')
+    model = _cazoo_embedded_value(html, 'vehicleModel') or (product_ld or {}).get('model')
+    make = (make or '').strip() or None
+    model = (model or '').strip() or None
+
+    title = _cazoo_embedded_value(html, 'vehicleTitle') or (product_ld or {}).get('name')
+    if not title:
+        h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.I | re.S)
+        if h1_match:
+            title = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', h1_match.group(1))).strip()
+    title = (title or '').strip() or None
+
+    year = _coerce_int(_cazoo_embedded_value(html, 'vehicleYear'))
+    if year is None and title:
+        ym = re.match(r'^(\d{4})\b', title)
+        if ym:
+            try:
+                year = int(ym.group(1))
+            except ValueError:
+                year = None
+    if year is None and make and model:
+        ym = re.search(rf'{re.escape(model)}\s+(\d{{4}})\b', _cazoo_meta_content(html, 'description') or '', re.I)
+        if ym:
+            try:
+                year = int(ym.group(1))
+            except ValueError:
+                year = None
+
+    derivative = None
+    if title:
+        dm = re.match(r'^\d{4}\s*\(\d{2}\)\s+(.*)$', title)
+        derivative = dm.group(1).strip() if dm else None
+
+    offers = (product_ld or {}).get('offers') or {}
+    price_amount = offers.get('price')
+    if price_amount is None:
+        price_amount = _cazoo_embedded_value(html, 'vehiclePrice')
+    try:
+        price_amount = float(price_amount) if price_amount is not None else None
+    except (TypeError, ValueError):
+        price_amount = None
+    price = f'£{int(price_amount):,}' if price_amount is not None else None
+
+    meta_desc = _cazoo_meta_content(html, 'description') or ''
+    mileage_amount = _coerce_int(_cazoo_embedded_value(html, 'vehicleMileage'))
+    if mileage_amount is None:
+        mm = re.search(r'Mileage\s*-\s*([\d,]+)\s*Miles?', meta_desc, re.I)
+        if mm:
+            mileage_amount = _parse_mileage_amount(mm.group(1))
+    mileage = f'{mileage_amount:,} miles' if mileage_amount is not None else None
+
+    fuel_type = _cazoo_embedded_value(html, 'fuel')
+    if not fuel_type:
+        fm = re.search(r'Hybrid[^,]*|Petrol[^,]*|Diesel[^,]*|Electric[^,]*', meta_desc, re.I)
+        fuel_type = fm.group(0).strip() if fm else None
+
+    transmission = _cazoo_embedded_value(html, 'transmission')
+    if not transmission:
+        tm = re.search(r'(Automatic|Manual)\b', meta_desc, re.I)
+        transmission = tm.group(1) if tm else None
+
+    body_type = _cazoo_embedded_value(html, 'body')
+    registration = _cazoo_embedded_value(html, 'registration')
+
+    seller_name = None
+    seller_location = None
+    seller = offers.get('seller') or {}
+    if isinstance(seller, dict):
+        seller_name = (seller.get('name') or '').strip() or None
+        address = seller.get('address') or {}
+        if isinstance(address, dict):
+            seller_location = (address.get('addressLocality') or '').strip() or None
+    if not seller_location and meta_desc:
+        lm = re.search(r'for sale in\s+([A-Za-z\s-]+)\.', meta_desc, re.I)
+        if lm:
+            seller_location = lm.group(1).strip()
+
+    owners = None
+    description = (product_ld or {}).get('description') or ''
+    om = re.search(r'(\d+)\s+Previous Owners?', description, re.I)
+    if om:
+        owners = om.group(1)
+
+    image_url = None
+    og_match = re.search(r'property="og:image"\s+content="([^"]+)"', html, re.I)
+    if not og_match:
+        og_match = re.search(r'name="image"\s+property="og:image"\s+content="([^"]+)"', html, re.I)
+    if og_match:
+        image_url = og_match.group(1).strip() or None
+
+    return {
+        'link': clean_url,
+        'advert_id': listing_id,
+        'title': title,
+        'derivative': derivative,
+        'make': make,
+        'model': model,
+        'year': year,
+        'price': price,
+        'price_amount': price_amount,
+        'mileage': mileage,
+        'mileage_amount': mileage_amount,
+        'fuel_type': fuel_type,
+        'body_type': body_type,
+        'transmission': transmission,
+        'registration': registration,
+        'owners': owners,
+        'seller_name': seller_name,
+        'seller_location': seller_location,
+        'image_url': image_url,
+        'website_name': 'Cazoo',
+    }
 
 
 def _autotrader_spec_value(specs, spec_key):
@@ -517,79 +759,103 @@ def _autotrader_spec_value(specs, spec_key):
     return None
 
 
-def _fetch_autotrader_car(url):
-    """Fetch car listing details from Autotrader product-page API."""
-    advert_id = _autotrader_advert_id_from_url(url)
-    if not advert_id:
+def _autotrader_overview_value(html, label):
+    if not html or not label:
         return None
-    api_url = f'https://www.autotrader.co.uk/product-page/v1/advert/{advert_id}?channel=cars'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-    }
-    try:
-        r = requests.get(api_url, headers=headers, timeout=18)
-        r.raise_for_status()
-        data = r.json()
-    except Exception as e:
-        app.logger.warning(f'Autotrader fetch failed for {advert_id}: {e}')
-        return {'link': url, 'advert_id': advert_id, 'website_name': 'Autotrader'}
-    heading = data.get('heading') or {}
-    title = (heading.get('title') or '').strip() or None
-    derivative = (heading.get('subTitle') or '').strip() or None
-    price_block = heading.get('priceBreakdown') or {}
-    price_obj = price_block.get('price') if isinstance(price_block.get('price'), dict) else {}
-    price_amount = price_obj.get('price')
-    price = price_obj.get('priceFormatted') or (f'£{int(price_amount):,}' if price_amount else None)
-    if not price and (data.get('gallery') or {}).get('price'):
-        price = data['gallery']['price']
-    specs = data.get('keySpecification') or (data.get('overview') or {}).get('keySpecification') or []
-    ctx = (data.get('advertTrackingData') or {}).get('advertContext') or {}
-    vehicle_ctx = (data.get('advertTrackingData') or {}).get('vehicleContext') or {}
-    nav = (data.get('navigation') or {}).get('backToSearch') or {}
-    mileage = _autotrader_spec_value(specs, 'MILEAGE')
-    mileage_amount = ctx.get('mileage')
-    if mileage_amount is None and mileage:
-        m = re.search(r'([\d,]+)', mileage)
-        if m:
+    m = re.search(
+        rf'>{re.escape(label)}</p><p[^>]*>(?:<button[^>]*>)?([^<]+)',
+        html,
+        re.I,
+    )
+    return m.group(1).strip() if m else None
+
+
+def _fetch_autotrader_car_from_html(html, url, advert_id):
+    """Parse Autotrader car-details HTML when the product-page API is unavailable."""
+    clean_url = url.split('?')[0] if '?' in url else url
+    h1_match = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.I)
+    title = h1_match.group(1).strip() if h1_match else None
+
+    derivative = None
+    if h1_match:
+        after_h1 = html[h1_match.end():h1_match.end() + 600]
+        deriv_match = re.search(r'<span[^>]*>([^<]+)</span>', after_h1, re.I)
+        derivative = deriv_match.group(1).strip() if deriv_match else None
+
+    price = None
+    price_amount = None
+    price_match = re.search(r'data-testid="advert-price"[^>]*>([^<]+)<', html, re.I)
+    if price_match:
+        price = price_match.group(1).strip()
+        pm = re.search(r'([\d,]+)', price)
+        if pm:
             try:
-                mileage_amount = int(m.group(1).replace(',', ''))
+                price_amount = int(pm.group(1).replace(',', ''))
             except ValueError:
-                pass
-    gallery = data.get('gallery') or {}
+                price_amount = None
+
+    mileage = _autotrader_overview_value(html, 'Mileage')
+    mileage_amount = _parse_mileage_amount(mileage)
+
+    seller_name = None
+    seller_match = re.search(r'>From\s+([^<]+)</p>', html, re.I)
+    if seller_match:
+        seller_name = seller_match.group(1).strip() or None
+
+    seller_location = None
+    loc_match = re.search(
+        r'>From\s+[^<]+</p>\s*<div[^>]*>\s*<span[^>]*>([^<]+)</span>',
+        html,
+        re.I | re.S,
+    )
+    if loc_match:
+        seller_location = loc_match.group(1).strip() or None
+    if not seller_location:
+        title_tag = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+        if title_tag:
+            loc_in_title = re.search(r'\bin\s+([A-Z][A-Z\s,]+)\s*$', title_tag.group(1).strip())
+            if loc_in_title:
+                seller_location = loc_in_title.group(1).strip(' ,').title()
+
     image_url = None
-    images = gallery.get('images') or []
-    if images and isinstance(images[0], dict):
-        raw_img = (images[0].get('url') or '').strip()
-        if raw_img:
-            image_url = raw_img.replace('{resize}', 'w800')
-    contact = data.get('contactDetails') or {}
-    seller_name = (contact.get('advertiserName') or (data.get('seller') or {}).get('name') or '').strip() or None
-    seller_location = ', '.join(
-        p for p in [
-            (contact.get('advertiserTown') or '').strip(),
-            (contact.get('advertiserCounty') or '').strip(),
-        ] if p
-    ) or None
+    img_match = re.search(r'property="og:image"\s+content="([^"]+)"', html, re.I)
+    if img_match:
+        image_url = img_match.group(1).strip() or None
+
+    year = None
+    make = None
+    model = None
+    if title:
+        ym = re.match(r'^(\d{4})\s+(.+)$', title.strip())
+        if ym:
+            try:
+                year = int(ym.group(1))
+            except ValueError:
+                year = None
+            remainder = ym.group(2).strip()
+            parts = remainder.split(None, 1)
+            if parts:
+                make = parts[0]
+                model = parts[1] if len(parts) > 1 else None
+
     return {
-        'link': url.split('?')[0] if '?' in url else url,
+        'link': clean_url,
         'advert_id': advert_id,
         'title': title,
         'derivative': derivative,
-        'make': (nav.get('make') or ctx.get('make') or '').strip() or None,
-        'model': (nav.get('model') or ctx.get('model') or '').strip() or None,
-        'year': ctx.get('year'),
+        'make': make,
+        'model': model,
+        'year': year,
         'price': price,
         'price_amount': price_amount,
         'mileage': mileage,
         'mileage_amount': mileage_amount,
-        'fuel_type': _autotrader_spec_value(specs, 'FUELTYPE') or (nav.get('fuel') or '').strip() or None,
-        'body_type': _autotrader_spec_value(specs, 'BODYTYPE') or (vehicle_ctx.get('bodyType') or '').strip() or None,
-        'transmission': _autotrader_spec_value(specs, 'GEARBOX') or (vehicle_ctx.get('transmission') or '').strip() or None,
-        'colour': _autotrader_spec_value(specs, 'BODYCOLOUR') or (vehicle_ctx.get('colour') or '').strip() or None,
-        'engine': _autotrader_spec_value(specs, 'ENGINESIZELITRES'),
-        'owners': _autotrader_spec_value(specs, 'OWNERS'),
-        'registration': _autotrader_spec_value(specs, 'REGISTRATION'),
+        'fuel_type': _autotrader_overview_value(html, 'Fuel type'),
+        'body_type': _autotrader_overview_value(html, 'Body type'),
+        'transmission': _autotrader_overview_value(html, 'Gearbox'),
+        'colour': _autotrader_overview_value(html, 'Body colour'),
+        'engine': _autotrader_overview_value(html, 'Engine'),
+        'registration': _autotrader_overview_value(html, 'Registration'),
         'seller_name': seller_name,
         'seller_location': seller_location,
         'image_url': image_url,
@@ -597,19 +863,278 @@ def _fetch_autotrader_car(url):
     }
 
 
+def _fetch_autotrader_car(url):
+    """Fetch car listing details from Autotrader product-page API or HTML fallback."""
+    advert_id = _autotrader_advert_id_from_url(url)
+    if not advert_id:
+        return None
+    clean_url = url.split('?')[0] if '?' in url else url
+    api_url = f'https://www.autotrader.co.uk/product-page/v1/advert/{advert_id}?channel=cars'
+    headers = {
+        'User-Agent': _CAR_LISTING_HEADERS['User-Agent'],
+        'Accept': 'application/json',
+    }
+    try:
+        r = requests.get(api_url, headers=headers, timeout=18)
+        if r.status_code == 200:
+            data = r.json()
+        else:
+            data = None
+    except Exception as e:
+        app.logger.warning(f'Autotrader API fetch failed for {advert_id}: {e}')
+        data = None
+
+    if isinstance(data, dict) and data.get('heading'):
+        heading = data.get('heading') or {}
+        title = (heading.get('title') or '').strip() or None
+        derivative = (heading.get('subTitle') or '').strip() or None
+        price_block = heading.get('priceBreakdown') or {}
+        price_obj = price_block.get('price') if isinstance(price_block.get('price'), dict) else {}
+        price_amount = price_obj.get('price')
+        price = price_obj.get('priceFormatted') or (f'£{int(price_amount):,}' if price_amount else None)
+        if not price and (data.get('gallery') or {}).get('price'):
+            price = data['gallery']['price']
+        specs = data.get('keySpecification') or (data.get('overview') or {}).get('keySpecification') or []
+        ctx = (data.get('advertTrackingData') or {}).get('advertContext') or {}
+        vehicle_ctx = (data.get('advertTrackingData') or {}).get('vehicleContext') or {}
+        nav = (data.get('navigation') or {}).get('backToSearch') or {}
+        mileage = _autotrader_spec_value(specs, 'MILEAGE')
+        mileage_amount = ctx.get('mileage')
+        if mileage_amount is None and mileage:
+            mileage_amount = _parse_mileage_amount(mileage)
+        gallery = data.get('gallery') or {}
+        image_url = None
+        images = gallery.get('images') or []
+        if images and isinstance(images[0], dict):
+            raw_img = (images[0].get('url') or '').strip()
+            if raw_img:
+                image_url = raw_img.replace('{resize}', 'w800')
+        contact = data.get('contactDetails') or {}
+        seller_name = (contact.get('advertiserName') or (data.get('seller') or {}).get('name') or '').strip() or None
+        seller_location = ', '.join(
+            p for p in [
+                (contact.get('advertiserTown') or '').strip(),
+                (contact.get('advertiserCounty') or '').strip(),
+            ] if p
+        ) or None
+        return {
+            'link': clean_url,
+            'advert_id': advert_id,
+            'title': title,
+            'derivative': derivative,
+            'make': (nav.get('make') or ctx.get('make') or '').strip() or None,
+            'model': (nav.get('model') or ctx.get('model') or '').strip() or None,
+            'year': ctx.get('year'),
+            'price': price,
+            'price_amount': price_amount,
+            'mileage': mileage,
+            'mileage_amount': mileage_amount,
+            'fuel_type': _autotrader_spec_value(specs, 'FUELTYPE') or (nav.get('fuel') or '').strip() or None,
+            'body_type': _autotrader_spec_value(specs, 'BODYTYPE') or (vehicle_ctx.get('bodyType') or '').strip() or None,
+            'transmission': _autotrader_spec_value(specs, 'GEARBOX') or (vehicle_ctx.get('transmission') or '').strip() or None,
+            'colour': _autotrader_spec_value(specs, 'BODYCOLOUR') or (vehicle_ctx.get('colour') or '').strip() or None,
+            'engine': _autotrader_spec_value(specs, 'ENGINESIZELITRES'),
+            'owners': _autotrader_spec_value(specs, 'OWNERS'),
+            'registration': _autotrader_spec_value(specs, 'REGISTRATION'),
+            'seller_name': seller_name,
+            'seller_location': seller_location,
+            'image_url': image_url,
+            'website_name': 'Autotrader',
+        }
+
+    try:
+        r = requests.get(clean_url, headers=_CAR_LISTING_HEADERS, timeout=18)
+        r.raise_for_status()
+        parsed = _fetch_autotrader_car_from_html(r.text, url, advert_id)
+        if parsed.get('title') or parsed.get('price'):
+            return parsed
+    except Exception as e:
+        app.logger.warning(f'Autotrader HTML fetch failed for {advert_id}: {e}')
+
+    return {'link': clean_url, 'advert_id': advert_id, 'website_name': 'Autotrader'}
+
+
+def _fetch_carwow_car(url):
+    """Fetch car listing details from a Carwow deal page."""
+    deal_id = _carwow_deal_id_from_url(url)
+    if not deal_id:
+        return None
+    clean_url = f'https://quotes.carwow.co.uk/deals/{deal_id}'
+    try:
+        r = requests.get(clean_url, headers=_CAR_LISTING_HEADERS, timeout=18)
+        r.raise_for_status()
+        html = r.text
+    except Exception as e:
+        app.logger.warning(f'Carwow fetch failed for {deal_id}: {e}')
+        return {'link': clean_url, 'advert_id': deal_id, 'website_name': 'Carwow'}
+
+    tracking = None
+    for m in re.finditer(r'dataLayer\.push\(\s*(\{.*?\})\s*\)', html, re.S):
+        try:
+            obj = json.loads(m.group(1))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(obj, dict) and (obj.get('deal_id') or obj.get('vehicle')):
+            tracking = obj
+            break
+
+    vehicle = (tracking or {}).get('vehicle') or {}
+    deal = (tracking or {}).get('deal') or {}
+    make = (vehicle.get('brand_name') or '').strip() or None
+    model = (vehicle.get('model_name') or '').strip() or None
+
+    h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.I | re.S)
+    h1_lines = []
+    if h1_match:
+        h1_lines = [
+            re.sub(r'\s+', ' ', line).strip()
+            for line in re.sub(r'<[^>]+>', '\n', h1_match.group(1)).split('\n')
+            if line.strip()
+        ]
+    title = h1_lines[0] if h1_lines else None
+    derivative = h1_lines[1] if len(h1_lines) > 1 else None
+    if not title and make and model:
+        title = f'{make} {model}'.strip()
+
+    summary = _parse_html_dt_dd(html)
+    year = summary.get('Year')
+    try:
+        year = int(year) if year else None
+    except (TypeError, ValueError):
+        year = None
+    if year is None and title:
+        ym = re.match(r'^(\d{4})\b', title)
+        if ym:
+            try:
+                year = int(ym.group(1))
+            except ValueError:
+                year = None
+
+    price_amount = deal.get('price')
+    if price_amount is None and tracking:
+        price_amount = tracking.get('price')
+    try:
+        price_amount = float(price_amount) if price_amount is not None else None
+    except (TypeError, ValueError):
+        price_amount = None
+    price = f'£{int(price_amount):,}' if price_amount is not None else None
+
+    mileage = summary.get('Mileage')
+    mileage_amount = _parse_mileage_amount(mileage)
+
+    fuel_type = summary.get('Fuel') or (vehicle.get('fuel') or '').strip() or None
+    if fuel_type:
+        fuel_type = fuel_type[0].upper() + fuel_type[1:]
+
+    transmission = summary.get('Transmission') or (vehicle.get('transmission') or '').strip() or None
+    if transmission:
+        transmission = transmission[0].upper() + transmission[1:]
+
+    body_raw = (vehicle.get('body_type') or '').strip()
+    body_type = body_raw[0].upper() + body_raw[1:] if body_raw else None
+
+    registration = summary.get('Registration number')
+    colour = summary.get('Colour')
+    if colour and _looks_like_uk_registration(colour):
+        registration = registration or colour
+        colour = None
+
+    seller_name = ((tracking or {}).get('supplier_name') or '').strip() or None
+    seller_location = None
+    loc_match = re.search(
+        r"dealership-info[^>]*>.*?location[^>]*>.*?</svg>\s*<span>([^<]+)</span>",
+        html,
+        re.I | re.S,
+    )
+    if loc_match:
+        seller_location = loc_match.group(1).strip() or None
+
+    image_url = None
+    img_match = re.search(r'(https://[^"\']*imgix\.net/stock-car-custom-images/original/[^"\']+)', html)
+    if img_match:
+        image_url = img_match.group(1).split()[0].replace('&amp;', '&')
+        image_url = re.sub(r'&w=\d+', '&w=1600', image_url)
+
+    return {
+        'link': clean_url,
+        'advert_id': deal_id,
+        'title': title,
+        'derivative': derivative,
+        'make': make,
+        'model': model,
+        'year': year,
+        'price': price,
+        'price_amount': price_amount,
+        'mileage': mileage,
+        'mileage_amount': mileage_amount,
+        'fuel_type': fuel_type,
+        'body_type': body_type,
+        'transmission': transmission,
+        'colour': colour,
+        'registration': registration,
+        'seller_name': seller_name,
+        'seller_location': seller_location,
+        'image_url': image_url,
+        'website_name': 'Carwow',
+    }
+
+
+def _fetch_cazoo_car(url):
+    """Fetch car listing details from a Cazoo listing page."""
+    listing_id = _cazoo_listing_id_from_url(url)
+    if not listing_id:
+        return None
+    clean_url = f'https://www.cazoo.co.uk/cars-for-sale/{listing_id}/'
+    html = None
+    status_code = None
+    try:
+        r = _cazoo_fetch_html(clean_url)
+        status_code = r.status_code
+        r.raise_for_status()
+        html = r.text
+    except Exception as e:
+        app.logger.warning(f'Cazoo fetch failed for {listing_id}: {e}')
+
+    if _cazoo_page_is_blocked(html, status_code):
+        app.logger.warning(f'Cazoo page blocked or empty for {listing_id} (status={status_code})')
+        return None
+
+    parsed = _parse_cazoo_html(html, clean_url, listing_id)
+    return parsed if _car_preview_is_usable(parsed) else None
+
+
+def _fetch_car_preview(url):
+    """Fetch car listing fields from a supported listing URL."""
+    url_lower = url.lower()
+    if 'autotrader.co.uk' in url_lower:
+        return _fetch_autotrader_car(url)
+    if 'carwow.co.uk' in url_lower:
+        return _fetch_carwow_car(url)
+    if 'cazoo.co.uk' in url_lower:
+        return _fetch_cazoo_car(url)
+    return None
+
+
 @app.route('/api/cars/preview')
 def car_preview():
-    """GET ?url=... — fetch Autotrader listing fields."""
+    """GET ?url=... — fetch car listing fields from Autotrader, Carwow, or Cazoo."""
     url = (request.args.get('url') or '').strip()
     if not url:
         return jsonify({'error': 'url is required'}), 400
     if not url.startswith(('http://', 'https://')):
         return jsonify({'error': 'Invalid URL'}), 400
-    if 'autotrader.co.uk' not in url.lower():
-        return jsonify({'error': 'Only Autotrader UK car-details links are supported for now'}), 400
-    data = _fetch_autotrader_car(url)
-    if not data:
-        return jsonify({'error': 'Could not parse Autotrader URL'}), 400
+    url_lower = url.lower()
+    supported = ('autotrader.co.uk', 'carwow.co.uk', 'cazoo.co.uk')
+    if not any(host in url_lower for host in supported):
+        return jsonify({'error': 'Supported sites: Autotrader, Carwow, and Cazoo UK listing links'}), 400
+    data = _fetch_car_preview(url)
+    if not data or not _car_preview_is_usable(data):
+        host = urlparse(url).netloc.lower()
+        if 'cazoo.co.uk' in host:
+            return jsonify({
+                'error': 'Could not load Cazoo listing (their site often blocks server requests). Try make serve locally, or enter details manually.',
+            }), 400
+        return jsonify({'error': 'Could not parse listing URL'}), 400
     return jsonify(data), 200
 
 
@@ -3739,6 +4264,48 @@ def _parse_google_maps_url(url):
     return out
 
 
+def _guess_stay_type_from_maps(name, url):
+    blob = ((name or '') + ' ' + (url or '')).lower()
+    if 'airbnb' in blob:
+        return 'airbnb'
+    if 'hostel' in blob:
+        return 'hostel'
+    if 'b&b' in blob or 'b and b' in blob or 'bed and breakfast' in blob:
+        return 'b_and_b'
+    if any(w in blob for w in ('hotel', ' inn', ' lodge', ' resort', ' guesthouse', ' guest house')):
+        return 'hotel'
+    return 'other'
+
+
+def _parse_stay_from_maps_url(url):
+    parsed = _parse_google_maps_url(url)
+    if not parsed:
+        return {}
+    name = parsed.get('name')
+    link = parsed.get('google_maps_link') or url.strip()
+    out = {'link': link}
+    if name:
+        out['title'] = name
+    out['stay_type'] = _guess_stay_type_from_maps(name, link)
+    return out
+
+
+@app.route('/api/trip-stays/preview')
+def trip_stay_preview():
+    """GET ?url= — parse a Google Maps place link for stay autofill."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'url is required'}), 400
+    if not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Invalid URL'}), 400
+    if 'google' not in url.lower() and 'goo.gl' not in url.lower() and 'maps.app' not in url.lower():
+        return jsonify({'error': 'Use a Google Maps place link'}), 400
+    data = _parse_stay_from_maps_url(url)
+    if not data.get('title') and not data.get('link'):
+        return jsonify({'error': 'Could not extract details from this URL'}), 400
+    return jsonify(data), 200
+
+
 @app.route('/api/restaurants/preview')
 def restaurant_preview():
     """GET ?url= — parse a Google Maps link and return what we can."""
@@ -3899,7 +4466,7 @@ def get_trips():
             if not bundle:
                 return jsonify({'error': 'Trip not found'}), 404
             return jsonify(bundle), 200
-        r = supabase.table('ha_trips').select('*').order('start_date', desc=True).order('created_at', desc=True).execute()
+        r = supabase.table('ha_trips').select('*').order('start_date').order('created_at').execute()
         trips = [_trip_row_dates(dict(t)) for t in (r.data or [])]
         return jsonify(trips), 200
     except Exception as e:

@@ -7,7 +7,7 @@
     <title>Highgate Avenue – Travel</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260706">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260706">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260706">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260810">
 </head>
 <body>
     <div class="app-layout">
@@ -18,11 +18,25 @@
                 <div id="trListView">
                     <header class="tr-header">
                         <h1>Travel</h1>
-                        <p class="subtitle">Plan trips with locations and compare hotels &amp; Airbnbs — share the page to decide together.</p>
+                        <p class="subtitle">Upcoming holidays, places to stay, and plans — sorted by date so you always know what is next.</p>
                         <button type="button" class="tr-btn" id="trAddTripBtn">+ Add trip</button>
                     </header>
-                    <div id="trTripCards" class="tr-trip-cards"></div>
-                    <p id="trListEmpty" class="tr-empty" style="display:none;">No trips yet. Add one — e.g. “Ireland summer 2026”.</p>
+                    <div class="tr-list-body">
+                        <div class="tr-list-main">
+                            <div id="trNextTrip" class="tr-next-trip" style="display:none;"></div>
+                            <div id="trTripCards"></div>
+                            <p id="trListEmpty" class="tr-empty" style="display:none;">No trips yet. Add one — e.g. “Ireland summer 2026”.</p>
+                        </div>
+                        <aside class="tr-cal-panel" id="trCalPanel" aria-label="Holiday calendar">
+                            <div class="tr-cal-head">
+                                <button type="button" class="tr-cal-nav" id="trCalPrev" aria-label="Previous month">‹</button>
+                                <span class="tr-cal-label" id="trCalLabel"></span>
+                                <button type="button" class="tr-cal-nav" id="trCalNext" aria-label="Next month">›</button>
+                            </div>
+                            <div class="tr-cal-months" id="trCalMonths"></div>
+                            <div class="tr-cal-legend" id="trCalLegend"></div>
+                        </aside>
+                    </div>
                 </div>
 
                 <!-- Trip detail -->
@@ -36,17 +50,22 @@
                         </div>
                         <div class="tr-detail-actions">
                             <button type="button" class="tr-btn tr-btn--ghost" id="trEditTripBtn">Edit trip</button>
+                            <button type="button" class="tr-btn tr-btn--danger" id="trDeleteTripBtn">Delete</button>
                             <button type="button" class="tr-btn" id="trAddLocationBtn">+ Location</button>
                         </div>
                     </header>
                     <div class="tr-overview" id="trDetailNotes"></div>
 
-                    <section class="tr-section" id="trTripStaysSection" style="display:none;">
+                    <section class="tr-section" id="trStaysSection">
                         <div class="tr-section-head">
-                            <h2>Trip-wide stays</h2>
-                            <button type="button" class="tr-btn tr-btn--sm" id="trAddTripStayBtn">+ Add stay</button>
+                            <div>
+                                <h2>Hotels &amp; Airbnbs</h2>
+                                <p class="tr-section-sub">Options you are comparing — shortlist favourites or mark as booked.</p>
+                            </div>
+                            <button type="button" class="tr-btn tr-btn--sm" id="trAddStayBtn">+ Add option</button>
                         </div>
-                        <div class="tr-stay-grid" id="trTripStaysGrid"></div>
+                        <div class="tr-stay-filters" id="trStayFilters"></div>
+                        <div class="tr-stay-grid" id="trStaysGrid"></div>
                     </section>
 
                     <div id="trLocationsWrap"></div>
@@ -144,7 +163,7 @@
     <div class="tr-modal" id="trStayModal">
         <div class="tr-modal-card tr-modal-card--wide">
             <div class="tr-modal-head">
-                <h3 id="trStayModalTitle">Add stay option</h3>
+                <h3 id="trStayModalTitle">Add hotel / Airbnb</h3>
                 <button type="button" class="tr-modal-close" data-close="trStayModal">×</button>
             </div>
             <form id="trStayForm">
@@ -152,13 +171,21 @@
                 <input type="hidden" id="trStayTripId">
                 <input type="hidden" id="trStayLocationId">
                 <div class="tr-form-grid">
+                    <div class="tr-form-row full tr-fetch-block">
+                        <label for="trStayMapsUrl">Google Maps link</label>
+                        <div class="tr-fetch-row">
+                            <input type="url" id="trStayMapsUrl" placeholder="https://maps.app.goo.gl/…" autocomplete="off">
+                            <button type="button" class="tr-btn" id="trStayFetchBtn">Fetch details</button>
+                        </div>
+                        <p class="tr-fetch-hint">Paste a Google Maps link for hotels. For Airbnb or Booking.com, paste the listing URL in <strong>Listing link</strong> below.</p>
+                    </div>
                     <div class="tr-form-row full">
                         <label for="trStayTitle">Name *</label>
                         <input type="text" id="trStayTitle" required placeholder="e.g. Lakeside cottage, Muckross Hotel">
                     </div>
                     <div class="tr-form-row full">
-                        <label for="trStayLink">Link</label>
-                        <input type="url" id="trStayLink" placeholder="https://airbnb.com/… or booking.com/…">
+                        <label for="trStayLink">Listing link</label>
+                        <input type="url" id="trStayLink" placeholder="Google Maps, Airbnb, Booking.com…">
                     </div>
                     <div class="tr-form-row">
                         <label for="trStayType">Type</label>
@@ -181,6 +208,12 @@
                             <option value="shortlist">Shortlist</option>
                             <option value="booked">Booked</option>
                             <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <div class="tr-form-row full">
+                        <label for="trStayLocationSelect">Location <span class="tr-label-opt">(optional)</span></label>
+                        <select id="trStayLocationSelect">
+                            <option value="">Trip-wide (anywhere)</option>
                         </select>
                     </div>
                     <div class="tr-form-row full">
@@ -213,6 +246,11 @@
 
         let trips = [];
         let currentTrip = null;
+        let stayStatusFilter = 'active';
+        let calViewMonth = new Date().getMonth();
+        let calViewYear = new Date().getFullYear();
+        const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -230,6 +268,319 @@
             if (!iso) return '';
             const d = new Date(iso + 'T12:00:00');
             return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function fmtDateParts(iso) {
+            if (!iso) return { day: '—', month: '' };
+            const d = new Date(iso + 'T12:00:00');
+            return {
+                day: d.getDate(),
+                month: d.toLocaleDateString('en-GB', { month: 'short' })
+            };
+        }
+
+        function todayISO() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function parseISO(iso) {
+            if (!iso) return null;
+            const p = iso.split('-');
+            return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        }
+
+        function daysUntil(iso) {
+            if (!iso) return null;
+            return Math.round((parseISO(iso) - parseISO(todayISO())) / 86400000);
+        }
+
+        function countdownLabel(iso) {
+            const n = daysUntil(iso);
+            if (n == null) return '';
+            if (n < 0) return 'Started';
+            if (n === 0) return 'Starts today';
+            if (n === 1) return 'Tomorrow';
+            if (n <= 60) return 'In ' + n + ' days';
+            return fmtDate(iso);
+        }
+
+        function tripStart(t) { return t.start_date || t.end_date || null; }
+        function tripEnd(t) { return t.end_date || t.start_date || null; }
+        function isTripPast(t) { const e = tripEnd(t); return e ? e < todayISO() : false; }
+
+        function sortTripsForList(list) {
+            const upcoming = [], past = [], tbc = [];
+            list.forEach(function(t) {
+                if (!t.start_date && !t.end_date) tbc.push(t);
+                else if (isTripPast(t)) past.push(t);
+                else upcoming.push(t);
+            });
+            upcoming.sort(function(a, b) { return (tripStart(a) || '9999').localeCompare(tripStart(b) || '9999'); });
+            past.sort(function(a, b) { return (tripStart(b) || '').localeCompare(tripStart(a) || ''); });
+            return { upcoming: upcoming, past: past, tbc: tbc };
+        }
+
+        function openTripFromList(id) {
+            document.getElementById('trListView').style.display = 'none';
+            document.getElementById('trDetailView').style.display = 'block';
+            loadTrip(id).catch(function() { alert('Could not load trip'); });
+        }
+
+        function alignCalendarToTrips() {
+            const first = sortTripsForList(trips).upcoming[0];
+            if (!first || !tripStart(first)) return;
+            const d = parseISO(tripStart(first));
+            calViewMonth = d.getMonth();
+            calViewYear = d.getFullYear();
+        }
+
+        function tripsOnDay(iso) {
+            return trips.filter(function(t) {
+                const s = tripStart(t), e = tripEnd(t);
+                if (!s && !e) return false;
+                return iso >= (s || e) && iso <= (e || s);
+            });
+        }
+
+        function renderNextTripHero(trip) {
+            const el = document.getElementById('trNextTrip');
+            if (!trip) { el.style.display = 'none'; return; }
+            const parts = fmtDateParts(trip.start_date || trip.end_date);
+            const cd = countdownLabel(trip.start_date || trip.end_date);
+            el.style.display = 'block';
+            el.className = 'tr-next-trip tr-next-trip--' + (trip.status || 'planning');
+            el.innerHTML = ''
+                + '<div class="tr-next-trip-date"><span class="tr-next-trip-day">' + parts.day + '</span><span class="tr-next-trip-mon">' + esc(parts.month) + '</span></div>'
+                + '<div class="tr-next-trip-body">'
+                +   '<p class="tr-next-trip-kicker">Next up</p>'
+                +   '<h2 class="tr-next-trip-title">' + esc(trip.title) + '</h2>'
+                +   '<p class="tr-next-trip-when">' + esc(fmtRange(trip.start_date, trip.end_date)) + '</p>'
+                +   '<span class="tr-status tr-status--' + esc(trip.status || 'planning') + '">' + esc(TRIP_STATUS_LABEL[trip.status] || trip.status) + '</span>'
+                + '</div>'
+                + '<div class="tr-next-trip-countdown">' + esc(cd) + '</div>';
+            el.onclick = function() { openTripFromList(trip.id); };
+        }
+
+        function buildTimelineRow(t) {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'tr-timeline-row tr-timeline-row--' + (t.status || 'planning');
+            const parts = fmtDateParts(t.start_date || t.end_date);
+            const cd = countdownLabel(t.start_date || tripEnd(t));
+            row.innerHTML = ''
+                + '<div class="tr-timeline-date">'
+                +   (t.start_date || t.end_date
+                    ? '<span class="tr-timeline-day">' + parts.day + '</span><span class="tr-timeline-mon">' + esc(parts.month) + '</span>'
+                    : '<span class="tr-timeline-tbc">TBC</span>')
+                + '</div>'
+                + '<div class="tr-timeline-main">'
+                +   '<strong>' + esc(t.title) + '</strong>'
+                +   '<span class="tr-timeline-range">' + esc(fmtRange(t.start_date, t.end_date) || 'Dates not set') + '</span>'
+                + '</div>'
+                + '<div class="tr-timeline-meta">'
+                +   '<span class="tr-status tr-status--' + esc(t.status || 'planning') + '">' + esc(TRIP_STATUS_LABEL[t.status] || t.status) + '</span>'
+                +   (cd ? '<span class="tr-timeline-cd">' + esc(cd) + '</span>' : '')
+                + '</div>';
+            row.addEventListener('click', function() { openTripFromList(t.id); });
+            return row;
+        }
+
+        function renderMonthGrid(year, month) {
+            const first = new Date(year, month, 1);
+            const startPad = (first.getDay() + 6) % 7;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = todayISO();
+            const wrap = document.createElement('div');
+            wrap.className = 'tr-cal-month';
+            wrap.innerHTML = '<div class="tr-cal-month-name">' + esc(MONTHS_SHORT[month]) + ' ' + year + '</div>';
+            const grid = document.createElement('div');
+            grid.className = 'tr-cal-grid';
+            WEEKDAYS.forEach(function(w) {
+                const h = document.createElement('div');
+                h.className = 'tr-cal-weekday';
+                h.textContent = w;
+                grid.appendChild(h);
+            });
+            for (let i = 0; i < startPad; i++) {
+                const b = document.createElement('div');
+                b.className = 'tr-cal-day tr-cal-day--blank';
+                grid.appendChild(b);
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const iso = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+                const dayTrips = tripsOnDay(iso);
+                const cell = document.createElement('button');
+                cell.type = 'button';
+                cell.className = 'tr-cal-day';
+                if (iso === today) cell.classList.add('tr-cal-day--today');
+                if (dayTrips.length) {
+                    cell.classList.add('tr-cal-day--trip', 'tr-cal-day--' + (dayTrips[0].status || 'planning'));
+                    cell.title = dayTrips.map(function(t) { return t.title; }).join(', ');
+                    cell.addEventListener('click', function() { openTripFromList(dayTrips[0].id); });
+                } else {
+                    cell.disabled = true;
+                }
+                cell.innerHTML = '<span class="tr-cal-day-num">' + day + '</span>'
+                    + (dayTrips.length ? '<span class="tr-cal-day-bar"></span>' : '');
+                grid.appendChild(cell);
+            }
+            wrap.appendChild(grid);
+            return wrap;
+        }
+
+        function renderTravelCalendar() {
+            const m1 = calViewMonth, y1 = calViewYear;
+            const m2 = (m1 + 1) % 12, y2 = m1 === 11 ? y1 + 1 : y1;
+            document.getElementById('trCalLabel').textContent = MONTHS_SHORT[m1] + ' – ' + MONTHS_SHORT[m2] + ' ' + y1;
+            const monthsWrap = document.getElementById('trCalMonths');
+            monthsWrap.innerHTML = '';
+            monthsWrap.appendChild(renderMonthGrid(y1, m1));
+            monthsWrap.appendChild(renderMonthGrid(y2, m2));
+            const legend = document.getElementById('trCalLegend');
+            legend.innerHTML = '';
+            const upcoming = sortTripsForList(trips).upcoming;
+            if (!upcoming.length) {
+                legend.innerHTML = '<p class="tr-cal-legend-empty">Add dates to trips to see them here.</p>';
+                return;
+            }
+            upcoming.slice(0, 5).forEach(function(t) {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'tr-cal-legend-item tr-cal-legend-item--' + (t.status || 'planning');
+                chip.innerHTML = '<span class="tr-cal-legend-dot"></span><span class="tr-cal-legend-text">' + esc(t.title) + '</span>'
+                    + '<span class="tr-cal-legend-when">' + esc(fmtRange(t.start_date, t.end_date) || 'TBC') + '</span>';
+                chip.addEventListener('click', function() { openTripFromList(t.id); });
+                legend.appendChild(chip);
+            });
+        }
+
+        function renderTripList() {
+            const wrap = document.getElementById('trTripCards');
+            const empty = document.getElementById('trListEmpty');
+            wrap.innerHTML = '';
+            if (!trips.length) {
+                empty.style.display = 'block';
+                document.getElementById('trNextTrip').style.display = 'none';
+                document.getElementById('trCalPanel').style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            document.getElementById('trCalPanel').style.display = '';
+            const groups = sortTripsForList(trips);
+            renderNextTripHero(groups.upcoming[0] || null);
+            const rest = groups.upcoming.slice(1);
+            if (rest.length) {
+                const sec = document.createElement('section');
+                sec.className = 'tr-trip-group';
+                sec.innerHTML = '<h2 class="tr-trip-group-title">Also coming up <span class="tr-trip-group-count">' + rest.length + '</span></h2>';
+                const list = document.createElement('div');
+                list.className = 'tr-timeline';
+                rest.forEach(function(t) { list.appendChild(buildTimelineRow(t)); });
+                sec.appendChild(list);
+                wrap.appendChild(sec);
+            }
+            if (groups.tbc.length) {
+                const sec = document.createElement('section');
+                sec.className = 'tr-trip-group tr-trip-group--muted';
+                sec.innerHTML = '<h2 class="tr-trip-group-title">Dates to confirm <span class="tr-trip-group-count">' + groups.tbc.length + '</span></h2>';
+                const list = document.createElement('div');
+                list.className = 'tr-timeline';
+                groups.tbc.forEach(function(t) { list.appendChild(buildTimelineRow(t)); });
+                sec.appendChild(list);
+                wrap.appendChild(sec);
+            }
+            if (groups.past.length) {
+                const sec = document.createElement('section');
+                sec.className = 'tr-trip-group tr-trip-group--past';
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'tr-trip-group-toggle';
+                toggle.innerHTML = 'Past trips <span class="tr-trip-group-count">' + groups.past.length + '</span>';
+                const list = document.createElement('div');
+                list.className = 'tr-timeline';
+                list.style.display = 'none';
+                groups.past.forEach(function(t) { list.appendChild(buildTimelineRow(t)); });
+                toggle.addEventListener('click', function() {
+                    const open = list.style.display !== 'none';
+                    list.style.display = open ? 'none' : 'flex';
+                    toggle.classList.toggle('is-open', !open);
+                });
+                sec.appendChild(toggle);
+                sec.appendChild(list);
+                wrap.appendChild(sec);
+            }
+            renderTravelCalendar();
+        }
+
+        function collectAllStays(t) {
+            const all = (t.trip_stays || []).slice();
+            (t.locations || []).forEach(function(loc) {
+                (loc.stays || []).forEach(function(s) { all.push(s); });
+            });
+            const rank = { shortlist: 0, considering: 1, booked: 2, rejected: 3 };
+            all.sort(function(a, b) {
+                const ra = rank[a.status] != null ? rank[a.status] : 9;
+                const rb = rank[b.status] != null ? rank[b.status] : 9;
+                return ra !== rb ? ra - rb : (a.title || '').localeCompare(b.title || '');
+            });
+            return all;
+        }
+
+        function renderStayFilters(stays) {
+            const wrap = document.getElementById('trStayFilters');
+            wrap.innerHTML = '';
+            const counts = {
+                active: stays.filter(function(s) { return s.status === 'considering' || s.status === 'shortlist'; }).length,
+                all: stays.length,
+                shortlist: stays.filter(function(s) { return s.status === 'shortlist'; }).length,
+                considering: stays.filter(function(s) { return s.status === 'considering'; }).length,
+                booked: stays.filter(function(s) { return s.status === 'booked'; }).length,
+                rejected: stays.filter(function(s) { return s.status === 'rejected'; }).length
+            };
+            [{ key: 'active', label: 'In play' }, { key: 'shortlist', label: 'Shortlist' }, { key: 'considering', label: 'Considering' },
+             { key: 'booked', label: 'Booked' }, { key: 'rejected', label: 'Rejected' }, { key: 'all', label: 'All' }].forEach(function(chip) {
+                if (chip.key !== 'all' && chip.key !== 'active' && !counts[chip.key]) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tr-stay-filter' + (stayStatusFilter === chip.key ? ' is-active' : '');
+                btn.textContent = chip.label + ' (' + counts[chip.key] + ')';
+                btn.addEventListener('click', function() { stayStatusFilter = chip.key; renderTripDetail(); });
+                wrap.appendChild(btn);
+            });
+        }
+
+        function filterStays(stays) {
+            if (stayStatusFilter === 'all') return stays;
+            if (stayStatusFilter === 'active') return stays.filter(function(s) { return s.status === 'considering' || s.status === 'shortlist'; });
+            return stays.filter(function(s) { return (s.status || 'considering') === stayStatusFilter; });
+        }
+
+        function populateStayLocationSelect(selectedId) {
+            const sel = document.getElementById('trStayLocationSelect');
+            sel.innerHTML = '<option value="">Trip-wide (anywhere)</option>';
+            (currentTrip && currentTrip.locations || []).forEach(function(loc) {
+                const opt = document.createElement('option');
+                opt.value = loc.id;
+                opt.textContent = loc.name;
+                sel.appendChild(opt);
+            });
+            sel.value = selectedId != null && selectedId !== '' ? String(selectedId) : '';
+        }
+
+        function renderStaysGrid(stays) {
+            const grid = document.getElementById('trStaysGrid');
+            grid.innerHTML = '';
+            const filtered = filterStays(stays);
+            if (!stays.length) {
+                grid.innerHTML = '<p class="tr-empty-inline">No hotels or Airbnbs yet — add options to compare.</p>';
+                return;
+            }
+            if (!filtered.length) {
+                grid.innerHTML = '<p class="tr-empty-inline">Nothing in this filter.</p>';
+                return;
+            }
+            filtered.forEach(function(s) { grid.appendChild(buildStayCard(s)); });
         }
 
         function setFormStatus(id, msg, err) {
@@ -261,6 +612,7 @@
             const r = await fetch('/api/trips');
             trips = await r.json();
             if (!Array.isArray(trips)) trips = [];
+            alignCalendarToTrips();
             renderTripList();
         }
 
@@ -268,41 +620,20 @@
             const r = await fetch('/api/trips?id=' + encodeURIComponent(id));
             if (!r.ok) throw new Error('Could not load trip');
             currentTrip = await r.json();
+            stayStatusFilter = 'active';
             renderTripDetail();
         }
 
-        function renderTripList() {
-            const wrap = document.getElementById('trTripCards');
-            const empty = document.getElementById('trListEmpty');
-            wrap.innerHTML = '';
-            if (!trips.length) {
-                empty.style.display = 'block';
-                return;
-            }
-            empty.style.display = 'none';
-            trips.forEach(function(t) {
-                const card = document.createElement('button');
-                card.type = 'button';
-                card.className = 'tr-trip-card';
-                card.innerHTML = ''
-                    + '<div class="tr-trip-card-title">' + esc(t.title) + '</div>'
-                    + '<div class="tr-trip-card-dates">' + esc(fmtRange(t.start_date, t.end_date) || 'Dates TBC') + '</div>'
-                    + '<span class="tr-status tr-status--' + esc(t.status || 'planning') + '">' + esc(TRIP_STATUS_LABEL[t.status] || t.status) + '</span>';
-                card.addEventListener('click', function() {
-                    document.getElementById('trListView').style.display = 'none';
-                    document.getElementById('trDetailView').style.display = 'block';
-                    loadTrip(t.id).catch(function() { alert('Could not load trip'); });
-                });
-                wrap.appendChild(card);
-            });
-        }
-
-        function buildStayCard(stay, locationId) {
+        function buildStayCard(stay) {
             const card = document.createElement('div');
             card.className = 'tr-stay-card tr-stay-card--' + (stay.status || 'considering');
             const linkHtml = stay.link
                 ? '<a href="' + esc(stay.link) + '" target="_blank" rel="noopener" class="tr-stay-link">Open listing ↗</a>'
                 : '';
+            const locName = stay.location_id && currentTrip
+                ? ((currentTrip.locations || []).find(function(l) { return l.id === stay.location_id; }) || {}).name || ''
+                : '';
+            const locId = stay.location_id || null;
             card.innerHTML = ''
                 + '<div class="tr-stay-card-head">'
                 +   '<strong>' + esc(stay.title) + '</strong>'
@@ -311,6 +642,7 @@
                 +     '<span class="tr-stay-status">' + esc(STAY_STATUS_LABEL[stay.status] || stay.status) + '</span>'
                 +   '</span>'
                 + '</div>'
+                + (locName ? '<div class="tr-stay-loc">' + esc(locName) + '</div>' : '')
                 + (stay.price ? '<div class="tr-stay-price">' + esc(stay.price) + '</div>' : '')
                 + (stay.pros ? '<div class="tr-stay-pros"><span>Pros</span>' + esc(stay.pros) + '</div>' : '')
                 + (stay.cons ? '<div class="tr-stay-cons"><span>Cons</span>' + esc(stay.cons) + '</div>' : '')
@@ -320,9 +652,9 @@
                 +   '<button type="button" data-action="edit-stay">Edit</button>'
                 +   '<button type="button" data-action="delete-stay">Delete</button>'
                 + '</div>';
-            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay, locationId); });
+            card.querySelector('[data-action="edit-stay"]').addEventListener('click', function() { openStayModal(stay, locId); });
             card.querySelector('[data-action="delete-stay"]').addEventListener('click', function() {
-                if (!confirm('Remove this stay option?')) return;
+                if (!confirm('Remove this option?')) return;
                 fetch('/api/trip-stays/' + stay.id, { method: 'DELETE' }).then(function() { loadTrip(currentTrip.id); });
             });
             return card;
@@ -339,16 +671,9 @@
             const notesEl = document.getElementById('trDetailNotes');
             notesEl.innerHTML = t.notes ? esc(t.notes).replace(/\n/g, '<br>') : '<span class="tr-muted">No overview notes yet — edit the trip to add context for your partner.</span>';
 
-            const tripStays = t.trip_stays || [];
-            const tripSection = document.getElementById('trTripStaysSection');
-            const tripGrid = document.getElementById('trTripStaysGrid');
-            tripSection.style.display = 'block';
-            tripGrid.innerHTML = '';
-            if (!tripStays.length) {
-                tripGrid.innerHTML = '<p class="tr-empty-inline">Optional: stays not tied to a specific location.</p>';
-            } else {
-                tripStays.forEach(function(s) { tripGrid.appendChild(buildStayCard(s, null)); });
-            }
+            const allStays = collectAllStays(t);
+            renderStayFilters(allStays);
+            renderStaysGrid(allStays);
 
             const locWrap = document.getElementById('trLocationsWrap');
             locWrap.innerHTML = '';
@@ -361,17 +686,10 @@
                     +   '<p class="tr-loc-dates">' + esc(fmtRange(loc.start_date, loc.end_date)) + '</p></div>'
                     +   '<div class="tr-loc-actions">'
                     +     '<button type="button" class="tr-btn tr-btn--ghost tr-btn--sm" data-action="edit-loc">Edit</button>'
-                    +     '<button type="button" class="tr-btn tr-btn--sm" data-action="add-stay">+ Stay</button>'
+                    +     '<button type="button" class="tr-btn tr-btn--sm" data-action="add-stay">+ Hotel</button>'
                     +   '</div>'
                     + '</div>'
-                    + (loc.notes ? '<p class="tr-loc-notes">' + esc(loc.notes).replace(/\n/g, '<br>') + '</p>' : '')
-                    + '<div class="tr-stay-grid tr-loc-stays"></div>';
-                const grid = sec.querySelector('.tr-loc-stays');
-                if (!(loc.stays || []).length) {
-                    grid.innerHTML = '<p class="tr-empty-inline">No stay options yet — add hotels or Airbnbs to compare.</p>';
-                } else {
-                    loc.stays.forEach(function(s) { grid.appendChild(buildStayCard(s, loc.id)); });
-                }
+                    + (loc.notes ? '<p class="tr-loc-notes">' + esc(loc.notes).replace(/\n/g, '<br>') + '</p>' : '');
                 sec.querySelector('[data-action="edit-loc"]').addEventListener('click', function() { openLocationModal(loc); });
                 sec.querySelector('[data-action="add-stay"]').addEventListener('click', function() { openStayModal(null, loc.id); });
                 locWrap.appendChild(sec);
@@ -406,12 +724,16 @@
 
         function openStayModal(stay, locationId) {
             stay = stay || {};
+            const locId = stay.location_id != null ? stay.location_id : (locationId || '');
             document.getElementById('trStayId').value = stay.id || '';
             document.getElementById('trStayTripId').value = stay.trip_id || (currentTrip && currentTrip.id) || '';
-            document.getElementById('trStayLocationId').value = stay.location_id != null ? stay.location_id : (locationId || '');
-            document.getElementById('trStayModalTitle').textContent = stay.id ? 'Edit stay' : 'Add stay option';
+            document.getElementById('trStayLocationId').value = locId;
+            populateStayLocationSelect(locId);
+            document.getElementById('trStayModalTitle').textContent = stay.id ? 'Edit hotel / Airbnb' : 'Add hotel / Airbnb';
             document.getElementById('trStayTitle').value = stay.title || '';
-            document.getElementById('trStayLink').value = stay.link || '';
+            const stayLink = stay.link || '';
+            document.getElementById('trStayLink').value = stayLink;
+            document.getElementById('trStayMapsUrl').value = /google\.|goo\.gl|maps\.app/i.test(stayLink) ? stayLink : '';
             document.getElementById('trStayType').value = stay.stay_type || 'hotel';
             document.getElementById('trStayPrice').value = stay.price || '';
             document.getElementById('trStayStatus').value = stay.status || 'considering';
@@ -424,8 +746,55 @@
 
         document.getElementById('trAddTripBtn').addEventListener('click', function() { openTripModal(); });
         document.getElementById('trEditTripBtn').addEventListener('click', function() { if (currentTrip) openTripModal(currentTrip); });
+        document.getElementById('trDeleteTripBtn').addEventListener('click', async function() {
+            if (!currentTrip || !confirm('Delete “' + (currentTrip.title || 'this trip') + '”?')) return;
+            try {
+                const r = await fetch('/api/trips/' + currentTrip.id, { method: 'DELETE' });
+                if (!r.ok) throw new Error('Delete failed');
+                currentTrip = null;
+                document.getElementById('trDetailView').style.display = 'none';
+                document.getElementById('trListView').style.display = 'block';
+                await loadTrips();
+            } catch (err) { alert(err.message || 'Could not delete trip'); }
+        });
         document.getElementById('trAddLocationBtn').addEventListener('click', function() { openLocationModal(); });
-        document.getElementById('trAddTripStayBtn').addEventListener('click', function() { openStayModal(null, null); });
+        document.getElementById('trAddStayBtn').addEventListener('click', function() { openStayModal(null, null); });
+        document.getElementById('trCalPrev').addEventListener('click', function() {
+            calViewMonth -= 1;
+            if (calViewMonth < 0) { calViewMonth = 11; calViewYear -= 1; }
+            renderTravelCalendar();
+        });
+        document.getElementById('trCalNext').addEventListener('click', function() {
+            calViewMonth += 1;
+            if (calViewMonth > 11) { calViewMonth = 0; calViewYear += 1; }
+            renderTravelCalendar();
+        });
+
+        document.getElementById('trStayFetchBtn').addEventListener('click', async function() {
+            const url = (document.getElementById('trStayMapsUrl').value || '').trim();
+            if (!url) { setFormStatus('trStayFormStatus', 'Paste a Google Maps link first.', true); return; }
+            const btn = document.getElementById('trStayFetchBtn');
+            const prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Fetching…';
+            try {
+                const r = await fetch('/api/trip-stays/preview?url=' + encodeURIComponent(url));
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Fetch failed');
+                if (data.title) document.getElementById('trStayTitle').value = data.title;
+                if (data.link) {
+                    document.getElementById('trStayLink').value = data.link;
+                    document.getElementById('trStayMapsUrl').value = data.link;
+                }
+                if (data.stay_type) document.getElementById('trStayType').value = data.stay_type;
+                setFormStatus('trStayFormStatus', 'Loaded — add price and pros/cons, then save.', false);
+            } catch (err) {
+                setFormStatus('trStayFormStatus', err.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        });
 
         document.getElementById('trBackBtn').addEventListener('click', function() {
             document.getElementById('trDetailView').style.display = 'none';
@@ -493,7 +862,7 @@
         document.getElementById('trStayForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const id = document.getElementById('trStayId').value;
-            const locRaw = document.getElementById('trStayLocationId').value;
+            const locRaw = document.getElementById('trStayLocationSelect').value || document.getElementById('trStayLocationId').value;
             const payload = {
                 trip_id: document.getElementById('trStayTripId').value,
                 location_id: locRaw ? parseInt(locRaw, 10) : null,
