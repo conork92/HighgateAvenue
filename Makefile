@@ -1,4 +1,4 @@
-.PHONY: help start run stop build clean install dev serve test
+.PHONY: help start run stop build clean install dev serve docker-start docker-logs test
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -6,35 +6,49 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-start: ## Start the application using Docker Compose (with rebuild)
+start: ## Run app locally at http://localhost:8001 (creates venv on first run)
+	@if [ ! -x "venv/bin/python" ]; then \
+		$(MAKE) install; \
+	fi
+	$(MAKE) serve
+
+run: start ## Same as start
+
+docker-start: ## Start with Docker Compose (with rebuild)
 	@echo "Building Docker image..."
 	docker-compose build
 	@echo "Starting Highgate Avenue application..."
 	docker-compose up -d
 	@echo "Application is running at http://localhost:8001"
 
-run: start ## Same as start (Docker Compose with rebuild)
-
-stop: ## Stop the application
+stop: ## Stop Docker Compose stack
 	@echo "Stopping Highgate Avenue application..."
 	docker-compose down
 
-restart: stop start ## Restart the application
+restart: stop docker-start ## Rebuild and restart Docker stack
 
 build: ## Build the Docker image
 	@echo "Building Docker image..."
 	docker-compose build
 
-logs: ## View application logs
+docker-logs: ## View Docker application logs
 	docker-compose logs -f
+
+logs: docker-logs ## Alias for docker-logs
 
 serve: ## Run app locally with Python (no Docker rebuild)
 	@if [ ! -x "venv/bin/python" ]; then \
 		echo "Virtual environment not found — run 'make install' first."; \
 		exit 1; \
 	fi
-	@echo "Starting Flask at http://localhost:8001 (Ctrl+C to stop)..."
-	FLASK_ENV=development PORT=8001 venv/bin/python app.py
+	@PORT=$${PORT:-8001}; \
+	if lsof -ti :$$PORT >/dev/null 2>&1; then \
+		echo "Port $$PORT in use — stopping existing process..."; \
+		lsof -ti :$$PORT | xargs kill -9 2>/dev/null || true; \
+		sleep 0.5; \
+	fi; \
+	echo "Starting Flask at http://localhost:$$PORT (Ctrl+C to stop)..."; \
+	FLASK_ENV=development PORT=$$PORT venv/bin/python app.py
 
 dev: install serve ## Install deps and run locally
 
