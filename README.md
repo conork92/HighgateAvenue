@@ -86,14 +86,8 @@ PORT=5000
 #### Quick Start (Recommended)
 
 ```bash
-# Start the application with Docker
+# Run locally (creates venv on first run; picks up code changes immediately)
 make start
-
-# Or run locally without Docker (fast — picks up code changes immediately)
-make serve
-
-# First time only: install Python deps, then run
-make dev
 ```
 
 The app will be available at `http://localhost:8001`
@@ -101,16 +95,17 @@ The app will be available at `http://localhost:8001`
 #### Available Make Commands
 
 ```bash
-make start      # Start the application using Docker Compose (rebuilds image)
-make serve      # Run locally with Python — no Docker rebuild
-make stop       # Stop the application
-make restart    # Restart the application
-make build      # Build the Docker image
-make logs       # View application logs
-make dev        # Install deps and run locally
-make install    # Install dependencies locally
-make clean      # Clean up Docker containers and images
-make help       # Show all available commands
+make start        # Run locally at http://localhost:8001
+make serve        # Same as start, without auto-install check
+make dev          # Install deps and run locally
+make install      # Install dependencies locally
+make docker-start # Start with Docker Compose (rebuilds image)
+make stop         # Stop Docker Compose stack
+make restart      # Rebuild and restart Docker stack
+make build        # Build the Docker image
+make logs         # View Docker application logs
+make clean        # Clean up Docker containers and images
+make help         # Show all available commands
 ```
 
 #### Manual Setup Options

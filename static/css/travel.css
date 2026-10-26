@@ -204,6 +204,7 @@
 .tr-cal-legend-when { grid-column: 2; font-size: 0.62rem; color: #6b6b6b; }
 
 .tr-section-sub { margin: 0.25rem 0 0; font-size: 0.78rem; color: #6b6b6b; }
+.tr-section-sub.is-error { color: #b00020; }
 .tr-label-opt { font-weight: normal; text-transform: none; letter-spacing: 0; color: #999; }
 .tr-loc-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .tr-stay-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.85rem; }
@@ -226,6 +227,157 @@
 .tr-fetch-row { display: flex; gap: 0.5rem; }
 .tr-fetch-row input { flex: 1; font: inherit; padding: 0.5rem 0.6rem; border: 1.5px solid #0d0d0d; }
 .tr-fetch-hint { font-size: 0.72rem; color: #6b6b6b; margin: 0.35rem 0 0; line-height: 1.45; }
+
+.tr-packing-head-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.tr-packing-db-missing {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.85rem;
+    border: 1.5px solid #b00020;
+    background: #fff5f5;
+    color: #333;
+}
+.tr-packing-db-missing code { font-size: 0.8rem; }
+.tr-packing-progress-bar {
+    height: 6px;
+    background: #eee;
+    border: 1px solid #0d0d0d;
+    margin-bottom: 0.85rem;
+    overflow: hidden;
+}
+.tr-packing-progress-fill {
+    height: 100%;
+    background: #2e7d32;
+    width: 0%;
+    transition: width 0.2s ease;
+}
+.tr-packing-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; }
+.tr-packing-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+.tr-packing-add input {
+    flex: 1;
+    min-width: 10rem;
+    font: inherit;
+    padding: 0.45rem 0.55rem;
+    border: 1.5px solid #0d0d0d;
+}
+.tr-packing-add select {
+    font: inherit;
+    padding: 0.45rem 0.55rem;
+    border: 1.5px solid #0d0d0d;
+    background: #fff;
+}
+.tr-packing-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+@media (max-width: 720px) {
+    .tr-packing-columns { grid-template-columns: 1fr; }
+}
+.tr-packing-bag-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1.5px solid #0d0d0d;
+    padding-bottom: 0.35rem;
+}
+.tr-packing-bag-count { font-weight: normal; color: #6b6b6b; }
+.tr-packing-person-section {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed #ddd;
+}
+.tr-packing-person-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.tr-packing-person-title {
+    margin: 0 0 0.4rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #333;
+}
+.tr-packing-person-empty {
+    list-style: none;
+    margin: 0;
+    padding: 0.35rem 0;
+    font-size: 0.78rem;
+    color: #999;
+    font-style: italic;
+}
+.tr-packing-person-select {
+    font: inherit;
+    font-size: 0.62rem;
+    padding: 0.2rem 0.25rem;
+    border: 1px solid #ccc;
+    max-width: 5rem;
+}
+.tr-packing-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.tr-packing-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border: 1.5px solid #ddd;
+    background: #fff;
+    padding: 0.4rem 0.5rem;
+}
+.tr-packing-item.is-packed {
+    background: #f4fff4;
+    border-color: #2e7d32;
+}
+.tr-packing-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+}
+.tr-packing-check input { margin-top: 0.2rem; flex-shrink: 0; }
+.tr-packing-name { font-size: 0.88rem; line-height: 1.35; word-break: break-word; }
+.tr-packing-item.is-packed .tr-packing-name {
+    text-decoration: line-through;
+    color: #6b6b6b;
+}
+.tr-packing-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+.tr-packing-bag-select {
+    font: inherit;
+    font-size: 0.62rem;
+    padding: 0.2rem 0.25rem;
+    border: 1px solid #ccc;
+    max-width: 7.5rem;
+}
+.tr-packing-delete {
+    font: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: #888;
+    padding: 0 0.15rem;
+}
+.tr-packing-delete:hover { color: #b00020; }
 
 .tr-trip-cards {
     display: grid;

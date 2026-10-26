@@ -13,7 +13,7 @@ import requests
 import hmac
 import hashlib
 import base64
-from urllib.parse import quote, urlparse, unquote, parse_qs
+from urllib.parse import quote, urlparse, unquote, parse_qs, urlencode, urlunparse
 from html import unescape
 from io import BytesIO
 import re
@@ -4533,18 +4533,374 @@ def _parse_stay_from_maps_url(url):
     return out
 
 
+def _airbnb_listing_id_from_url(url):
+    if not url:
+        return None
+    m = re.search(r'airbnb\.[^/]+/rooms/(\d+)', url, re.I)
+    return m.group(1) if m else None
+
+
+def _clean_airbnb_url(url):
+    parsed = urlparse(url.strip())
+    listing_id = _airbnb_listing_id_from_url(url)
+    if not listing_id:
+        return url.split('#')[0].split('?')[0]
+    path = f'/rooms/{listing_id}'
+    query_params = parse_qs(parsed.query)
+    keep = {}
+    for key in ('check_in', 'check_out'):
+        values = query_params.get(key) or []
+        if values and values[0]:
+            keep[key] = values[0]
+    query = urlencode(keep) if keep else ''
+    return urlunparse((parsed.scheme or 'https', parsed.netloc or 'www.airbnb.co.uk', path, '', query, ''))
+
+
+def _meta_content(html, prop):
+    if not html:
+        return None
+    m = re.search(rf'property="{re.escape(prop)}"\s+content="([^"]+)"', html, re.I)
+    if not m:
+        m = re.search(rf'content="([^"]+)"\s+property="{re.escape(prop)}"', html, re.I)
+    return unescape(m.group(1).replace('&amp;', '&')) if m else None
+
+
+def _parse_stay_from_airbnb_url(url):
+    """Fetch Airbnb listing fields from HTML / JSON-LD."""
+    listing_id = _airbnb_listing_id_from_url(url)
+    if not listing_id:
+        return {}
+    clean_url = _clean_airbnb_url(url)
+    query_params = parse_qs(urlparse(url).query)
+    check_in = (query_params.get('check_in') or [None])[0]
+    check_out = (query_params.get('check_out') or [None])[0]
+    location_param = (query_params.get('location') or [None])[0]
+
+    try:
+        resp = requests.get(url.split('#')[0], headers=_CAR_LISTING_HEADERS, timeout=18)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        app.logger.warning(f'Airbnb fetch failed for {listing_id}: {e}')
+        out = {'link': clean_url, 'stay_type': 'airbnb'}
+        if check_in:
+            out['check_in_date'] = check_in
+        if check_out:
+            out['check_out_date'] = check_out
+        if location_param:
+            out['location_name'] = unquote(location_param).replace('+', ' ').strip()
+        return out
+
+    rental_ld = None
+    product_ld = None
+    for m in re.finditer(r'<script type="application/ld\+json"[^>]*>(.*?)</script>', html, re.I | re.S):
+        try:
+            data = json.loads(m.group(1))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        ld_type = data.get('@type')
+        if ld_type == 'VacationRental':
+            rental_ld = data
+        elif ld_type == 'Product' and not product_ld:
+            product_ld = data
+
+    ld = rental_ld or product_ld or {}
+    title = (ld.get('name') or _meta_content(html, 'og:description') or '').strip() or None
+    description = (ld.get('description') or '').strip() or None
+
+    location_name = None
+    address = ld.get('address') or {}
+    if isinstance(address, dict):
+        location_name = (address.get('addressLocality') or address.get('addressRegion') or '').strip() or None
+    if not location_name:
+        og_title = _meta_content(html, 'og:title') or ''
+        loc_match = re.search(r'\bin\s+([^·]+)', og_title)
+        if loc_match:
+            location_name = loc_match.group(1).strip()
+    if not location_name and location_param:
+        location_name = unquote(location_param).replace('+', ' ').strip()
+
+    image_url = _meta_content(html, 'og:image')
+    images = ld.get('image') or []
+    if isinstance(images, list):
+        for img in images:
+            if not isinstance(img, str):
+                continue
+            if img.lower().endswith('.jpeg') or img.lower().endswith('.jpg'):
+                image_url = img
+                break
+        if not image_url and images:
+            image_url = images[0] if isinstance(images[0], str) else None
+
+    rating_line = None
+    rating = ld.get('aggregateRating') or {}
+    if isinstance(rating, dict) and rating.get('ratingValue'):
+        count = rating.get('ratingCount') or rating.get('reviewCount')
+        rating_line = f"★{rating['ratingValue']}"
+        if count:
+            rating_line += f" · {count} reviews"
+
+    out = {
+        'link': clean_url,
+        'stay_type': 'airbnb',
+    }
+    if title:
+        out['title'] = title
+    if location_name:
+        out['location_name'] = location_name
+    if image_url:
+        out['image_url'] = image_url
+    if check_in:
+        out['check_in_date'] = check_in
+    if check_out:
+        out['check_out_date'] = check_out
+    if description:
+        out['notes'] = description[:1000]
+    if rating_line:
+        out['pros'] = rating_line
+
+    return out
+
+
+def _booking_hotel_slug_from_url(url):
+    if not url:
+        return None
+    m = re.search(r'booking\.com/hotel/[^/]+/([^./?#]+)', url, re.I)
+    return m.group(1) if m else None
+
+
+def _booking_country_from_url(url):
+    if not url:
+        return None
+    m = re.search(r'booking\.com/hotel/([^/]+)/', url, re.I)
+    return m.group(1) if m else None
+
+
+def _clean_booking_url(url):
+    parsed = urlparse(url.strip())
+    path_match = re.search(r'(/hotel/.+\.html)', parsed.path, re.I)
+    path = path_match.group(1) if path_match else parsed.path
+    query_params = parse_qs(parsed.query)
+    keep = {}
+    for key in ('checkin', 'checkout', 'group_adults', 'no_rooms'):
+        values = query_params.get(key) or []
+        if values and values[0]:
+            keep[key] = values[0]
+    query = urlencode(keep) if keep else ''
+    return urlunparse((parsed.scheme or 'https', parsed.netloc or 'www.booking.com', path, '', query, ''))
+
+
+def _humanize_booking_slug(slug):
+    if not slug:
+        return None
+    base = slug.split('.')[0]
+    if '-' in base:
+        return ' '.join(part.capitalize() for part in base.replace('_', '-').split('-'))
+    if base.lower().startswith('hotel') and len(base) > 5:
+        return f'Hotel {base[5:].title()}'
+    return base.replace('_', ' ').title()
+
+
+def _booking_fetch_blocked(resp):
+    if resp.status_code in (202, 403, 429):
+        return True
+    html = resp.text or ''
+    if len(html) < 15000:
+        return True
+    if 'reportChallengeError' in html or 'window.aws' in html:
+        return True
+    return False
+
+
+def _parse_booking_html(html):
+    """Parse Booking.com hotel page HTML (JSON-LD / Open Graph)."""
+    if not html:
+        return {}
+    out = {}
+    hotel_ld = None
+    for m in re.finditer(r'<script type="application/ld\+json"[^>]*>(.*?)</script>', html, re.I | re.S):
+        try:
+            data = json.loads(m.group(1))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            ld_type = item.get('@type')
+            if ld_type in ('Hotel', 'LodgingBusiness'):
+                hotel_ld = item
+                break
+        if hotel_ld:
+            break
+
+    title = (hotel_ld or {}).get('name') or _meta_content(html, 'og:title')
+    if title:
+        title = re.sub(r'\s*[-|·].*$', '', title).strip()
+        title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
+        out['title'] = title or None
+
+    address = (hotel_ld or {}).get('address') or {}
+    if isinstance(address, dict):
+        location_name = (address.get('addressLocality') or address.get('addressRegion') or '').strip() or None
+        if location_name:
+            out['location_name'] = location_name
+
+    if not out.get('location_name'):
+        og_title = _meta_content(html, 'og:title') or out.get('title') or ''
+        loc_match = re.search(r',\s*([^,(|]+?)(?:\s*\(|$)', og_title)
+        if loc_match:
+            out['location_name'] = loc_match.group(1).strip()
+
+    image_url = _meta_content(html, 'og:image')
+    images = (hotel_ld or {}).get('image') or []
+    if isinstance(images, list):
+        for img in images:
+            if isinstance(img, str) and 'bstatic.com' in img:
+                image_url = img
+                break
+        if not image_url and images and isinstance(images[0], str):
+            image_url = images[0]
+    if image_url:
+        out['image_url'] = image_url
+
+    description = ((hotel_ld or {}).get('description') or _meta_content(html, 'og:description') or '').strip()
+    if description:
+        out['notes'] = description[:1000]
+
+    rating = (hotel_ld or {}).get('aggregateRating') or {}
+    if isinstance(rating, dict) and rating.get('ratingValue'):
+        count = rating.get('ratingCount') or rating.get('reviewCount')
+        rating_line = f"★{rating['ratingValue']}/10"
+        if count:
+            rating_line += f" · {count} reviews"
+        out['pros'] = rating_line
+
+    return out
+
+
+def _parse_booking_jina_markdown(text):
+    """Parse hotel fields from r.jina.ai markdown fallback."""
+    if not text:
+        return {}
+    out = {}
+    title_match = re.search(r'^Title:\s*(.+)$', text, re.M)
+    if title_match:
+        raw = title_match.group(1).strip()
+        raw = re.sub(r'\s*\([^)]*\)\s*$', '', raw).strip()
+        if ',' in raw:
+            title, location_name = [part.strip() for part in raw.split(',', 1)]
+            out['title'] = title
+            out['location_name'] = location_name
+        else:
+            out['title'] = raw
+
+    for img in re.findall(r'!\[[^\]]*\]\((https://[^)]+)\)', text):
+        if 'bstatic.com/xdata/images/hotel' in img:
+            out['image_url'] = img
+            break
+
+    rating_match = re.search(
+        r'Scored\s+([\d.]+).*?(\d[\d,]*)\s+reviews',
+        text,
+        re.I | re.S,
+    )
+    if rating_match:
+        review_count = rating_match.group(2).replace(',', '')
+        out['pros'] = f"★{rating_match.group(1)}/10 · {review_count} reviews"
+
+    located_match = re.search(r'(Located in [^\n#]{20,500})', text)
+    if located_match:
+        out['notes'] = located_match.group(1).strip()[:1000]
+
+    return out
+
+
+def _fetch_booking_via_jina(url):
+    try:
+        resp = requests.get(
+            f'https://r.jina.ai/{url.split("#")[0]}',
+            headers={'Accept': 'text/plain', 'User-Agent': 'HighgateAvenue/1.0 (travel stays)'},
+            timeout=45,
+        )
+        resp.raise_for_status()
+        if len(resp.text) < 500 or 'Title:' not in resp.text:
+            return {}
+        return _parse_booking_jina_markdown(resp.text)
+    except Exception as e:
+        app.logger.warning(f'Booking.com Jina fallback failed: {e}')
+        return {}
+
+
+def _parse_stay_from_booking_url(url):
+    """Fetch Booking.com listing fields from HTML or a reader fallback."""
+    slug = _booking_hotel_slug_from_url(url)
+    if not slug:
+        return {}
+    clean_url = _clean_booking_url(url)
+    query_params = parse_qs(urlparse(url).query)
+    check_in = (query_params.get('checkin') or [None])[0]
+    check_out = (query_params.get('checkout') or [None])[0]
+
+    parsed = {}
+    try:
+        resp = requests.get(url.split('#')[0], headers=_CAR_LISTING_HEADERS, timeout=18)
+        if resp.status_code == 200 and not _booking_fetch_blocked(resp):
+            parsed = _parse_booking_html(resp.text)
+    except Exception as e:
+        app.logger.warning(f'Booking.com fetch failed for {slug}: {e}')
+
+    if not parsed.get('title'):
+        parsed = {**parsed, **_fetch_booking_via_jina(url)}
+
+    out = {
+        'link': clean_url,
+        'stay_type': 'hotel',
+    }
+    if check_in:
+        out['check_in_date'] = check_in
+    if check_out:
+        out['check_out_date'] = check_out
+
+    for key in ('title', 'location_name', 'image_url', 'notes', 'pros'):
+        value = parsed.get(key)
+        if value:
+            out[key] = value
+
+    if not out.get('title'):
+        out['title'] = _humanize_booking_slug(slug)
+
+    return out
+
+
+def _parse_stay_preview(url):
+    """Fetch stay listing fields from a supported listing URL."""
+    url_lower = url.lower()
+    if 'airbnb.' in url_lower:
+        return _parse_stay_from_airbnb_url(url)
+    if 'booking.com' in url_lower:
+        return _parse_stay_from_booking_url(url)
+    if any(token in url_lower for token in ('google', 'goo.gl', 'maps.app')):
+        return _parse_stay_from_maps_url(url)
+    return None
+
+
 @app.route('/api/trip-stays/preview')
 def trip_stay_preview():
-    """GET ?url= — parse a Google Maps place link for stay autofill."""
+    """GET ?url= — parse a Google Maps, Airbnb, or Booking.com link for stay autofill."""
     url = (request.args.get('url') or '').strip()
     if not url:
         return jsonify({'error': 'url is required'}), 400
     if not url.startswith(('http://', 'https://')):
         return jsonify({'error': 'Invalid URL'}), 400
-    if 'google' not in url.lower() and 'goo.gl' not in url.lower() and 'maps.app' not in url.lower():
-        return jsonify({'error': 'Use a Google Maps place link'}), 400
-    data = _parse_stay_from_maps_url(url)
-    if not data.get('title') and not data.get('link'):
+    url_lower = url.lower()
+    supported = ('google', 'goo.gl', 'maps.app', 'airbnb.', 'booking.com')
+    if not any(token in url_lower for token in supported):
+        return jsonify({'error': 'Supported links: Google Maps, Airbnb, or Booking.com URLs'}), 400
+    data = _parse_stay_preview(url)
+    if not data or not (data.get('title') or data.get('link')):
         return jsonify({'error': 'Could not extract details from this URL'}), 400
     return jsonify(data), 200
 
@@ -4669,6 +5025,76 @@ def delete_restaurant(restaurant_id):
 TRIP_STATUSES = {'planning', 'booked', 'completed'}
 STAY_TYPES = {'hotel', 'airbnb', 'b_and_b', 'hostel', 'other'}
 STAY_STATUSES = {'considering', 'shortlist', 'rejected', 'booked'}
+PACKING_BAGS = {'hand_luggage', 'suitcase'}
+PACKING_PEOPLE = {'shared', 'conor', 'cian', 'rebecca'}
+
+
+def _normalize_packing_person(value):
+    person = (value or 'shared').strip().lower()
+    return person if person in PACKING_PEOPLE else 'shared'
+
+
+def _is_packing_table_missing(exc):
+    text = str(exc)
+    return 'PGRST205' in text or (
+        'ha_trip_packing_items' in text and 'Could not find the table' in text
+    )
+
+
+# Default family holiday packing list (added per trip via template endpoint).
+TRIP_PACKING_TEMPLATE = [
+    {'name': 'Milton', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Bottles', 'bag': 'hand_luggage', 'person': 'cian'},
+    {'name': 'Bottles', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Bubble Bath', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Lotions [Day/ Night]', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Nappies', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Formula', 'bag': 'hand_luggage', 'person': 'cian'},
+    {'name': 'Formula', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'SMA Milk', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Socks', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Night Suits', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Sleep Sack', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Tops', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Body Suits', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Bibs', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Muslims', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Calpol', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'teething gel', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Toys', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Hat', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Boks Pills', 'bag': 'hand_luggage', 'person': 'rebecca'},
+    {'name': 'Contacts', 'bag': 'hand_luggage', 'person': 'rebecca'},
+    {'name': 'sunglasses', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Nail File', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Wipes', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Trousers', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Swimming Stuff', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Passports', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Visas', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Travel sims', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Ipad', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Laptop + Charger', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Battery Pack', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Switch', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Rockit', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Chargers', 'bag': 'hand_luggage', 'person': 'conor'},
+    {'name': 'Deodrant', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Toothpaste', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Turle sleep', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Travel Cot', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'cradle cap shampoo', 'bag': 'suitcase', 'person': 'cian'},
+    {'name': 'Towel', 'bag': 'suitcase', 'person': 'shared'},
+    {'name': 'Eyemask', 'bag': 'suitcase', 'person': 'shared'},
+]
+
+TRIP_PACKING_TEMPLATE_LEN = len(TRIP_PACKING_TEMPLATE)
+
+# Old template spellings → canonical holiday list name (rename on sync).
+PACKING_TEMPLATE_NAME_ALIASES = {
+    'muslins': 'Muslims',
+    'ipad': 'Ipad',
+}
 
 
 def _trip_row_dates(row):
@@ -4695,6 +5121,14 @@ def _fetch_trip_bundle(trip_id):
         loc['stays'] = [s for s in stays if s.get('location_id') == loc['id']]
     trip['locations'] = locations
     trip['trip_stays'] = [s for s in stays if not s.get('location_id')]
+    try:
+        pack_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).order('sort_order').order('id').execute()
+        trip['packing_items'] = [dict(x) for x in (pack_r.data or [])]
+    except Exception as e:
+        app.logger.warning(f'Packing items unavailable for trip {trip_id}: {e}')
+        trip['packing_items'] = []
+        if _is_packing_table_missing(e):
+            trip['packing_db_missing'] = True
     return trip
 
 
@@ -4939,6 +5373,170 @@ def delete_trip_stay(stay_id):
         return jsonify({'ok': True}), 200
     except Exception as e:
         app.logger.error(f'Error deleting trip stay {stay_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-packing', methods=['POST'], strict_slashes=False)
+def create_trip_packing_item():
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        trip_id = data.get('trip_id')
+        name = (data.get('name') or '').strip()
+        if not trip_id or not name:
+            return jsonify({'error': 'trip_id and name are required'}), 400
+        bag = (data.get('bag') or 'suitcase').strip().lower()
+        if bag not in PACKING_BAGS:
+            bag = 'suitcase'
+        payload = {
+            'trip_id': int(trip_id),
+            'name': name,
+            'bag': bag,
+            'person': _normalize_packing_person(data.get('person')),
+            'packed': bool(data.get('packed')),
+            'sort_order': int(data.get('sort_order') or 0),
+        }
+        r = supabase.table('ha_trip_packing_items').insert(payload).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 201
+    except Exception as e:
+        app.logger.error(f'Error creating packing item: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-packing/<int:item_id>', methods=['PATCH'])
+def update_trip_packing_item(item_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        data = request.get_json() or {}
+        payload = {}
+        if 'name' in data:
+            payload['name'] = (data.get('name') or '').strip()
+        if 'bag' in data:
+            bag = (data.get('bag') or 'suitcase').strip().lower()
+            payload['bag'] = bag if bag in PACKING_BAGS else 'suitcase'
+        if 'person' in data:
+            payload['person'] = _normalize_packing_person(data.get('person'))
+        if 'packed' in data:
+            payload['packed'] = bool(data.get('packed'))
+        if 'sort_order' in data:
+            payload['sort_order'] = int(data.get('sort_order') or 0)
+        if not payload:
+            return jsonify({'error': 'No fields to update'}), 400
+        r = supabase.table('ha_trip_packing_items').update(payload).eq('id', item_id).execute()
+        rows = r.data or []
+        return jsonify(rows[0] if rows else payload), 200
+    except Exception as e:
+        app.logger.error(f'Error updating packing item {item_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trip-packing/<int:item_id>', methods=['DELETE'])
+def delete_trip_packing_item(item_id):
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        supabase.table('ha_trip_packing_items').delete().eq('id', item_id).execute()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        app.logger.error(f'Error deleting packing item {item_id}: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+def _packing_template_row_key(name, bag):
+    bag_norm = bag if bag in PACKING_BAGS else 'suitcase'
+    return ((name or '').strip().lower(), bag_norm)
+
+
+def _sync_trip_packing_template(trip_id):
+    """Ensure every holiday list item exists with default hand/suitcase selection."""
+    existing_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).execute()
+    rows = [dict(x) for x in (existing_r.data or [])]
+    by_name = {}
+    for row in rows:
+        key = (row.get('name') or '').strip().lower()
+        if key:
+            by_name[key] = row
+
+    template_names = {(item.get('name') or '').strip().lower() for item in TRIP_PACKING_TEMPLATE}
+
+    for row in rows:
+        key = (row.get('name') or '').strip().lower()
+        canonical = PACKING_TEMPLATE_NAME_ALIASES.get(key)
+        if canonical and canonical.lower() not in by_name and canonical.lower() in template_names:
+            supabase.table('ha_trip_packing_items').update({'name': canonical}).eq('id', row['id']).execute()
+            del by_name[key]
+            by_name[canonical.lower()] = {**row, 'name': canonical}
+
+    existing_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).execute()
+    by_key = {}
+    for row in (existing_r.data or []):
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        bag = row.get('bag') or 'suitcase'
+        by_key[_packing_template_row_key(name, bag)] = dict(row)
+
+    added = 0
+    updated = 0
+    to_insert = []
+    for idx, item in enumerate(TRIP_PACKING_TEMPLATE):
+        name = (item.get('name') or '').strip()
+        if not name:
+            continue
+        bag = item.get('bag') or 'suitcase'
+        if bag not in PACKING_BAGS:
+            bag = 'suitcase'
+        person = _normalize_packing_person(item.get('person'))
+        key = _packing_template_row_key(name, bag)
+        existing = by_key.get(key)
+        if existing:
+            patch = {}
+            if existing.get('bag') != bag:
+                patch['bag'] = bag
+            if _normalize_packing_person(existing.get('person')) != person:
+                patch['person'] = person
+            if existing.get('sort_order') != idx:
+                patch['sort_order'] = idx
+            if patch:
+                supabase.table('ha_trip_packing_items').update(patch).eq('id', existing['id']).execute()
+                updated += 1
+            continue
+        to_insert.append({
+            'trip_id': trip_id,
+            'name': name,
+            'bag': bag,
+            'person': person,
+            'packed': False,
+            'sort_order': idx,
+        })
+
+    if to_insert:
+        r = supabase.table('ha_trip_packing_items').insert(to_insert).execute()
+        added = len(r.data or [])
+    return {'added': added, 'updated': updated}
+
+
+@app.route('/api/trips/<int:trip_id>/packing-template', methods=['POST'])
+def seed_trip_packing_template(trip_id):
+    """Add/sync default holiday packing items with hand luggage vs suitcase defaults."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        result = _sync_trip_packing_template(trip_id)
+        pack_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).order('sort_order').order('id').execute()
+        result['items'] = pack_r.data or []
+        status = 201 if result['added'] else 200
+        return jsonify(result), status
+    except Exception as e:
+        app.logger.error(f'Error seeding packing template for trip {trip_id}: {e}')
+        if _is_packing_table_missing(e):
+            return jsonify({
+                'error': 'Packing list table missing in Supabase. Run tables/ha_travel_packing.sql in the SQL Editor, then reload.',
+                'code': 'packing_table_missing',
+            }), 503
         return jsonify({'error': str(e)}), 500
 
 

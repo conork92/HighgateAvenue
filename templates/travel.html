@@ -7,7 +7,7 @@
     <title>Highgate Avenue – Travel</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260706">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}?v=20260706">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20260813c">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/travel.css') }}?v=20261002a">
 </head>
 <body>
     <div class="app-layout">
@@ -68,11 +68,56 @@
                         <div class="tr-stay-grid" id="trStaysGrid"></div>
                     </section>
 
+                    <section class="tr-section" id="trPackingSection">
+                        <div class="tr-section-head">
+                            <div>
+                                <h2>Packing list</h2>
+                                <p class="tr-section-sub" id="trPackingProgress">Tick items off as you pack — hand luggage vs suitcase.</p>
+                            </div>
+                            <div class="tr-packing-head-actions">
+                                <button type="button" class="tr-btn tr-btn--ghost tr-btn--sm" id="trLoadPackingTemplate">Sync holiday list</button>
+                            </div>
+                        </div>
+                        <p class="tr-packing-db-missing" id="trPackingDbMissing" style="display:none;">
+                            Packing list database table is not set up yet. In Supabase → SQL Editor, run
+                            <code>tables/ha_travel_packing.sql</code>, then refresh this page.
+                        </p>
+                        <div class="tr-packing-progress-bar" id="trPackingProgressBar" aria-hidden="true">
+                            <div class="tr-packing-progress-fill" id="trPackingProgressFill"></div>
+                        </div>
+                        <div class="tr-packing-filters" id="trPackingFilters"></div>
+                        <form class="tr-packing-add" id="trPackingAddForm">
+                            <input type="text" id="trPackingNewName" placeholder="Add something to pack…" autocomplete="off">
+                            <select id="trPackingNewBag" aria-label="Bag">
+                                <option value="hand_luggage">Hand luggage</option>
+                                <option value="suitcase">Suitcase</option>
+                            </select>
+                            <select id="trPackingNewPerson" aria-label="Whose hand luggage">
+                                <option value="conor">Conor</option>
+                                <option value="cian">Cian</option>
+                                <option value="rebecca">Rebecca</option>
+                                <option value="shared">General</option>
+                            </select>
+                            <button type="submit" class="tr-btn tr-btn--sm">Add</button>
+                        </form>
+                        <div class="tr-packing-columns">
+                            <div class="tr-packing-bag-col">
+                                <h3 class="tr-packing-bag-title">Hand luggage <span class="tr-packing-bag-count" id="trPackingHandCount"></span></h3>
+                                <div id="trPackingHandSections"></div>
+                            </div>
+                            <div class="tr-packing-bag-col">
+                                <h3 class="tr-packing-bag-title">Suitcase <span class="tr-packing-bag-count" id="trPackingSuitcaseCount"></span></h3>
+                                <div id="trPackingSuitcaseSections"></div>
+                            </div>
+                        </div>
+                        <p class="tr-empty-inline" id="trPackingEmpty" style="display:none;">No items yet — load the holiday list or add your own.</p>
+                    </section>
+
                     <div id="trLocationsWrap"></div>
                 </div>
 
                 <footer class="tr-footer">
-                    Run <code>tables/ha_travel.sql</code> in Supabase before first use.
+                    Run <code>tables/ha_travel_packing.sql</code> in Supabase SQL Editor before using the packing list.
                 </footer>
             </div>
         </main>
@@ -171,12 +216,12 @@
                 <input type="hidden" id="trStayTripId">
                 <div class="tr-form-grid">
                     <div class="tr-form-row full tr-fetch-block">
-                        <label for="trStayMapsUrl">Google Maps link</label>
+                        <label for="trStayMapsUrl">Google Maps, Airbnb, or Booking.com link</label>
                         <div class="tr-fetch-row">
-                            <input type="url" id="trStayMapsUrl" placeholder="https://maps.app.goo.gl/…" autocomplete="off">
+                            <input type="url" id="trStayMapsUrl" placeholder="Google Maps, airbnb.co.uk/rooms/…, booking.com/hotel/…" autocomplete="off">
                             <button type="button" class="tr-btn" id="trStayFetchBtn">Fetch details</button>
                         </div>
-                        <p class="tr-fetch-hint">Paste a Google Maps link for hotels. For Airbnb or Booking.com, paste the listing URL in <strong>Listing link</strong> below.</p>
+                        <p class="tr-fetch-hint">Paste a Google Maps, Airbnb, or Booking.com listing URL to autofill the form.</p>
                     </div>
                     <div class="tr-form-row full">
                         <label for="trStayTitle">Name *</label>
@@ -256,10 +301,17 @@
         let trips = [];
         let currentTrip = null;
         let stayStatusFilter = 'all';
+        let packingFilter = 'all';
         let calViewMonth = new Date().getMonth();
         let calViewYear = new Date().getFullYear();
         const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        const PACKING_PERSON_SECTIONS = [
+            { key: 'conor', label: 'Conor' },
+            { key: 'cian', label: 'Cian' },
+            { key: 'rebecca', label: 'Rebecca' },
+            { key: 'shared', label: 'General' }
+        ];
 
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -574,6 +626,219 @@
             return '';
         }
 
+        function packingItems() {
+            return (currentTrip && currentTrip.packing_items) ? currentTrip.packing_items.slice() : [];
+        }
+
+        function filterPackingItems(items) {
+            if (packingFilter === 'todo') return items.filter(function(i) { return !i.packed; });
+            if (packingFilter === 'hand_luggage' || packingFilter === 'suitcase') {
+                return items.filter(function(i) { return i.bag === packingFilter; });
+            }
+            return items;
+        }
+
+        function renderPackingList() {
+            const dbMissing = !!(currentTrip && currentTrip.packing_db_missing);
+            const missingEl = document.getElementById('trPackingDbMissing');
+            const addForm = document.getElementById('trPackingAddForm');
+            const syncBtn = document.getElementById('trLoadPackingTemplate');
+            if (missingEl) missingEl.style.display = dbMissing ? 'block' : 'none';
+            if (addForm) addForm.style.display = dbMissing ? 'none' : '';
+            if (syncBtn) syncBtn.disabled = dbMissing;
+
+            const items = packingItems();
+            const filtered = filterPackingItems(items);
+            const packedCount = items.filter(function(i) { return i.packed; }).length;
+            const progressEl = document.getElementById('trPackingProgress');
+            const fillEl = document.getElementById('trPackingProgressFill');
+            const emptyEl = document.getElementById('trPackingEmpty');
+            const columnsEl = document.querySelector('.tr-packing-columns');
+
+            if (currentTrip && currentTrip.packing_sync_error) {
+                progressEl.textContent = currentTrip.packing_sync_error;
+                progressEl.classList.add('is-error');
+            } else {
+                progressEl.classList.remove('is-error');
+            }
+
+            if (!items.length && !dbMissing) {
+                progressEl.textContent = currentTrip && currentTrip.packing_sync_error
+                    ? currentTrip.packing_sync_error
+                    : 'No packing items yet — click Sync holiday list (items are stored per trip in Supabase).';
+                fillEl.style.width = '0%';
+                emptyEl.style.display = 'block';
+                emptyEl.textContent = 'Nothing saved for this trip yet. Use Sync holiday list to load the default items.';
+                columnsEl.style.display = 'none';
+            } else if (!items.length) {
+                progressEl.textContent = 'Tick items off as you pack — hand luggage vs suitcase.';
+                fillEl.style.width = '0%';
+                emptyEl.style.display = 'block';
+                columnsEl.style.display = 'none';
+            } else {
+                emptyEl.style.display = 'none';
+                columnsEl.style.display = '';
+                const pct = Math.round((packedCount / items.length) * 100);
+                progressEl.textContent = packedCount + ' of ' + items.length + ' packed'
+                    + (packedCount === items.length ? ' — you\'re ready to go!' : '');
+                fillEl.style.width = pct + '%';
+            }
+
+            const filtersWrap = document.getElementById('trPackingFilters');
+            filtersWrap.innerHTML = '';
+            const todoCount = items.filter(function(i) { return !i.packed; }).length;
+            [{ key: 'all', label: 'All' }, { key: 'todo', label: 'Still to pack' },
+             { key: 'hand_luggage', label: 'Hand luggage' }, { key: 'suitcase', label: 'Suitcase' }].forEach(function(chip) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tr-stay-filter' + (packingFilter === chip.key ? ' is-active' : '');
+                const extra = chip.key === 'todo' && todoCount ? ' (' + todoCount + ')' : '';
+                btn.textContent = chip.label + extra;
+                btn.addEventListener('click', function() { packingFilter = chip.key; renderPackingList(); });
+                filtersWrap.appendChild(btn);
+            });
+
+            const handSections = document.getElementById('trPackingHandSections');
+            const suitSections = document.getElementById('trPackingSuitcaseSections');
+            handSections.innerHTML = '';
+            suitSections.innerHTML = '';
+
+            const byBag = { hand_luggage: [], suitcase: [] };
+            filtered.forEach(function(item) {
+                const bag = item.bag === 'hand_luggage' ? 'hand_luggage' : 'suitcase';
+                byBag[bag].push(item);
+            });
+
+            function packingPersonKey(item) {
+                const p = (item.person || 'shared').toLowerCase();
+                return PACKING_PERSON_SECTIONS.some(function(s) { return s.key === p; }) ? p : 'shared';
+            }
+
+            function appendRow(listEl, item) {
+                const li = document.createElement('li');
+                li.className = 'tr-packing-item' + (item.packed ? ' is-packed' : '');
+                const personSelectHtml = '<select class="tr-packing-person-select" aria-label="Person">'
+                    + PACKING_PERSON_SECTIONS.map(function(s) {
+                        return '<option value="' + s.key + '"' + (packingPersonKey(item) === s.key ? ' selected' : '') + '>' + s.label + '</option>';
+                    }).join('')
+                    + '</select>';
+                li.innerHTML = ''
+                    + '<label class="tr-packing-check">'
+                    +   '<input type="checkbox"' + (item.packed ? ' checked' : '') + ' aria-label="Packed">'
+                    +   '<span class="tr-packing-name">' + esc(item.name) + '</span>'
+                    + '</label>'
+                    + '<div class="tr-packing-item-actions">'
+                    +   personSelectHtml
+                    +   '<select class="tr-packing-bag-select" aria-label="Bag">'
+                    +     '<option value="hand_luggage"' + (item.bag === 'hand_luggage' ? ' selected' : '') + '>Hand luggage</option>'
+                    +     '<option value="suitcase"' + (item.bag === 'suitcase' ? ' selected' : '') + '>Suitcase</option>'
+                    +   '</select>'
+                    +   '<button type="button" class="tr-packing-delete" title="Remove">×</button>'
+                    + '</div>';
+                li.querySelector('input[type="checkbox"]').addEventListener('change', function(e) {
+                    patchPackingItem(item.id, { packed: e.target.checked });
+                });
+                li.querySelector('.tr-packing-bag-select').addEventListener('change', function(e) {
+                    patchPackingItem(item.id, { bag: e.target.value });
+                });
+                const personEl = li.querySelector('.tr-packing-person-select');
+                if (personEl) {
+                    personEl.addEventListener('change', function(e) {
+                        patchPackingItem(item.id, { person: e.target.value });
+                    });
+                }
+                li.querySelector('.tr-packing-delete').addEventListener('click', function() {
+                    if (!confirm('Remove “' + item.name + '” from the list?')) return;
+                    deletePackingItem(item.id);
+                });
+                listEl.appendChild(li);
+            }
+
+            const handByPerson = { conor: [], cian: [], rebecca: [], shared: [] };
+            byBag.hand_luggage.forEach(function(item) {
+                handByPerson[packingPersonKey(item)].push(item);
+            });
+
+            function renderPersonSections(container, byPerson) {
+                PACKING_PERSON_SECTIONS.forEach(function(section) {
+                    const sectionItems = byPerson[section.key] || [];
+                    if (section.key === 'shared' && !sectionItems.length) return;
+                    if (section.key !== 'shared' && !sectionItems.length && packingFilter !== 'all') return;
+                    const block = document.createElement('div');
+                    block.className = 'tr-packing-person-section';
+                    const packedInSection = sectionItems.filter(function(i) { return i.packed; }).length;
+                    block.innerHTML = '<h4 class="tr-packing-person-title">' + esc(section.label)
+                        + ' <span class="tr-packing-bag-count">' + (sectionItems.length ? '(' + packedInSection + '/' + sectionItems.length + ')' : '') + '</span></h4>';
+                    const list = document.createElement('ul');
+                    list.className = 'tr-packing-list';
+                    if (!sectionItems.length) {
+                        list.innerHTML = '<li class="tr-packing-person-empty">Nothing in this bag yet</li>';
+                    } else {
+                        sectionItems.forEach(function(item) { appendRow(list, item); });
+                    }
+                    block.appendChild(list);
+                    container.appendChild(block);
+                });
+            }
+
+            renderPersonSections(handSections, handByPerson);
+
+            const suitByPerson = { conor: [], cian: [], rebecca: [], shared: [] };
+            byBag.suitcase.forEach(function(item) {
+                suitByPerson[packingPersonKey(item)].push(item);
+            });
+            renderPersonSections(suitSections, suitByPerson);
+
+            const handTotal = items.filter(function(i) { return i.bag === 'hand_luggage'; });
+            const suitTotal = items.filter(function(i) { return i.bag === 'suitcase'; });
+            document.getElementById('trPackingHandCount').textContent = handTotal.length
+                ? '(' + handTotal.filter(function(i) { return i.packed; }).length + '/' + handTotal.length + ')'
+                : '';
+            document.getElementById('trPackingSuitcaseCount').textContent = suitTotal.length
+                ? '(' + suitTotal.filter(function(i) { return i.packed; }).length + '/' + suitTotal.length + ')'
+                : '';
+
+            if (packingFilter === 'hand_luggage') {
+                document.querySelector('.tr-packing-bag-col:last-child').style.display = 'none';
+                document.querySelector('.tr-packing-bag-col:first-child').style.display = '';
+            } else if (packingFilter === 'suitcase') {
+                document.querySelector('.tr-packing-bag-col:first-child').style.display = 'none';
+                document.querySelector('.tr-packing-bag-col:last-child').style.display = '';
+            } else {
+                document.querySelectorAll('.tr-packing-bag-col').forEach(function(el) { el.style.display = ''; });
+            }
+        }
+
+        async function patchPackingItem(id, payload) {
+            const item = packingItems().find(function(i) { return i.id === id; });
+            if (item) Object.assign(item, payload);
+            renderPackingList();
+            try {
+                const r = await fetch('/api/trip-packing/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Update failed');
+                if (item) Object.assign(item, data);
+                renderPackingList();
+            } catch (err) {
+                await loadTrip(currentTrip.id);
+                alert(err.message || 'Could not update item');
+            }
+        }
+
+        async function deletePackingItem(id) {
+            try {
+                const r = await fetch('/api/trip-packing/' + id, { method: 'DELETE' });
+                if (!r.ok) throw new Error('Delete failed');
+                await loadTrip(currentTrip.id);
+            } catch (err) {
+                alert(err.message || 'Could not remove item');
+            }
+        }
+
         function renderStaysGrid(stays) {
             const grid = document.getElementById('trStaysGrid');
             grid.innerHTML = '';
@@ -622,10 +887,31 @@
             renderTripList();
         }
 
+        async function ensureHolidayPackingList(tripId) {
+            const r = await fetch('/api/trips/' + tripId + '/packing-template', { method: 'POST' });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || 'Could not load holiday list');
+            return data;
+        }
+
         async function loadTrip(id) {
             const r = await fetch('/api/trips?id=' + encodeURIComponent(id));
             if (!r.ok) throw new Error('Could not load trip');
             currentTrip = await r.json();
+            delete currentTrip.packing_sync_error;
+            const items = currentTrip.packing_items || [];
+            const title = (currentTrip.title || '').toLowerCase();
+            const needsHolidayList = !items.length || (title.includes('nice') && items.length < 43);
+            if (needsHolidayList) {
+                try {
+                    await ensureHolidayPackingList(id);
+                    const r2 = await fetch('/api/trips?id=' + encodeURIComponent(id));
+                    if (r2.ok) currentTrip = await r2.json();
+                } catch (e) {
+                    currentTrip.packing_sync_error = e.message || 'Could not load holiday list';
+                    console.warn('Holiday packing list sync:', e);
+                }
+            }
             stayStatusFilter = 'all';
             renderTripDetail();
         }
@@ -686,6 +972,7 @@
             const allStays = collectAllStays(t);
             renderStayFilters(allStays);
             renderStaysGrid(allStays);
+            renderPackingList();
 
             const locWrap = document.getElementById('trLocationsWrap');
             locWrap.innerHTML = '';
@@ -742,7 +1029,7 @@
             document.getElementById('trStayTitle').value = stay.title || '';
             const stayLink = stay.link || '';
             document.getElementById('trStayLink').value = stayLink;
-            document.getElementById('trStayMapsUrl').value = /google\.|goo\.gl|maps\.app/i.test(stayLink) ? stayLink : '';
+            document.getElementById('trStayMapsUrl').value = /google\.|goo\.gl|maps\.app|airbnb\.|booking\.com/i.test(stayLink) ? stayLink : '';
             document.getElementById('trStayType').value = stay.stay_type || 'hotel';
             document.getElementById('trStayPrice').value = stay.price || '';
             document.getElementById('trStayStatus').value = stay.status || 'considering';
@@ -779,6 +1066,56 @@
         });
         document.getElementById('trAddLocationBtn').addEventListener('click', function() { openLocationModal(); });
         document.getElementById('trAddStayBtn').addEventListener('click', function() { openStayModal(null, null); });
+
+        document.getElementById('trLoadPackingTemplate').addEventListener('click', async function() {
+            if (!currentTrip) return;
+            const btn = document.getElementById('trLoadPackingTemplate');
+            const prev = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Loading…';
+            try {
+                const r = await fetch('/api/trips/' + currentTrip.id + '/packing-template', { method: 'POST' });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Could not load list');
+                await loadTrip(currentTrip.id);
+                if (data.added === 0 && !data.updated) {
+                    alert('Holiday list is already up to date on this trip.');
+                }
+            } catch (err) {
+                alert(err.message || 'Could not load holiday list');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        });
+
+        document.getElementById('trPackingAddForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!currentTrip) return;
+            const nameInput = document.getElementById('trPackingNewName');
+            const name = nameInput.value.trim();
+            if (!name) return;
+            const bag = document.getElementById('trPackingNewBag').value;
+            const person = document.getElementById('trPackingNewPerson').value;
+            try {
+                const r = await fetch('/api/trip-packing', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        trip_id: currentTrip.id,
+                        name: name,
+                        bag: bag,
+                        person: person
+                    })
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Add failed');
+                nameInput.value = '';
+                await loadTrip(currentTrip.id);
+            } catch (err) {
+                alert(err.message || 'Could not add item');
+            }
+        });
         document.getElementById('trCalPrev').addEventListener('click', function() {
             calViewMonth -= 1;
             if (calViewMonth < 0) { calViewMonth = 11; calViewYear -= 1; }
@@ -792,7 +1129,7 @@
 
         document.getElementById('trStayFetchBtn').addEventListener('click', async function() {
             const url = (document.getElementById('trStayMapsUrl').value || '').trim();
-            if (!url) { setFormStatus('trStayFormStatus', 'Paste a Google Maps link first.', true); return; }
+            if (!url) { setFormStatus('trStayFormStatus', 'Paste a Google Maps, Airbnb, or Booking.com link first.', true); return; }
             const btn = document.getElementById('trStayFetchBtn');
             const prev = btn.textContent;
             btn.disabled = true;
@@ -808,7 +1145,11 @@
                 }
                 if (data.stay_type) document.getElementById('trStayType').value = data.stay_type;
                 if (data.location_name) document.getElementById('trStayLocationName').value = data.location_name;
+                if (data.check_in_date) document.getElementById('trStayCheckIn').value = data.check_in_date;
+                if (data.check_out_date) document.getElementById('trStayCheckOut').value = data.check_out_date;
+                if (data.price) document.getElementById('trStayPrice').value = data.price;
                 if (data.notes) document.getElementById('trStayNotes').value = data.notes;
+                if (data.pros) document.getElementById('trStayPros').value = data.pros;
                 if (data.image_url) document.getElementById('trStayImageUrl').value = data.image_url;
                 setFormStatus('trStayFormStatus', 'Loaded — check dates, price, then save.', false);
             } catch (err) {
