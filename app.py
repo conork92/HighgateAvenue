@@ -5106,6 +5106,36 @@ def _trip_row_dates(row):
     return row
 
 
+def _fetch_trip_packing(trip_id):
+    """Packing list payload for GET /api/trips/<id>/packing."""
+    payload = {
+        'trip_id': trip_id,
+        'items': [],
+        'needs_sync': False,
+        'template_len': TRIP_PACKING_TEMPLATE_LEN,
+        'db_missing': False,
+    }
+    if not supabase:
+        return payload
+    try:
+        pack_r = (
+            supabase.table('ha_trip_packing_items')
+            .select('*')
+            .eq('trip_id', trip_id)
+            .order('sort_order')
+            .order('id')
+            .execute()
+        )
+        items = [dict(x) for x in (pack_r.data or [])]
+        payload['items'] = items
+        payload['needs_sync'] = _packing_needs_template_sync(items)
+    except Exception as e:
+        app.logger.warning(f'Packing items unavailable for trip {trip_id}: {e}')
+        if _is_packing_table_missing(e):
+            payload['db_missing'] = True
+    return payload
+
+
 def _fetch_trip_bundle(trip_id):
     """Return trip dict with locations[] and stays[] nested."""
     tr = supabase.table('ha_trips').select('*').eq('id', trip_id).execute()
@@ -5121,14 +5151,6 @@ def _fetch_trip_bundle(trip_id):
         loc['stays'] = [s for s in stays if s.get('location_id') == loc['id']]
     trip['locations'] = locations
     trip['trip_stays'] = [s for s in stays if not s.get('location_id')]
-    try:
-        pack_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).order('sort_order').order('id').execute()
-        trip['packing_items'] = [dict(x) for x in (pack_r.data or [])]
-    except Exception as e:
-        app.logger.warning(f'Packing items unavailable for trip {trip_id}: {e}')
-        trip['packing_items'] = []
-        if _is_packing_table_missing(e):
-            trip['packing_db_missing'] = True
     return trip
 
 
@@ -5450,6 +5472,107 @@ def _packing_template_row_key(name, bag):
     return ((name or '').strip().lower(), bag_norm)
 
 
+def _packing_template_key_sets():
+    template_names = set()
+    template_keys = set()
+    for item in TRIP_PACKING_TEMPLATE:
+        name = (item.get('name') or '').strip()
+        if not name:
+            continue
+        template_names.add(name.lower())
+        template_keys.add(_packing_template_row_key(name, item.get('bag') or 'suitcase'))
+    return template_names, template_keys
+
+
+def _packing_needs_template_sync(items):
+    """True when DB rows disagree with holiday template (dupes, wrong bag, wrong count)."""
+    if not items:
+        return False
+    template_names, template_keys = _packing_template_key_sets()
+    if len(items) != TRIP_PACKING_TEMPLATE_LEN:
+        return True
+    seen_keys = set()
+    for row in items:
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        row_key = _packing_template_row_key(name, row.get('bag'))
+        if row_key in seen_keys:
+            return True
+        seen_keys.add(row_key)
+        if name.lower() in template_names and row_key not in template_keys:
+            return True
+    return bool(template_keys - seen_keys)
+
+
+def _merge_packing_packed_flag(keeper_id, packed):
+    if not keeper_id or not packed:
+        return
+    try:
+        kr = supabase.table('ha_trip_packing_items').select('packed').eq('id', keeper_id).limit(1).execute()
+        rows = kr.data or []
+        if rows and not rows[0].get('packed'):
+            supabase.table('ha_trip_packing_items').update({'packed': True}).eq('id', keeper_id).execute()
+    except Exception as e:
+        app.logger.warning(f'Could not merge packed flag onto packing item {keeper_id}: {e}')
+
+
+def _cleanup_trip_packing_against_template(trip_id, template_names, template_keys):
+    """Drop wrong-bag / duplicate template rows; keep Bottles & Formula in both bags only."""
+    fresh_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).execute()
+    fresh_rows = sorted([dict(x) for x in (fresh_r.data or [])], key=lambda r: r.get('id') or 0)
+    by_key = {}
+    for row in fresh_rows:
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        row_key = _packing_template_row_key(name, row.get('bag'))
+        by_key.setdefault(row_key, []).append(row)
+
+    removed = 0
+    keepers = {}
+    for tpl_key in template_keys:
+        group = by_key.get(tpl_key, [])
+        if not group:
+            continue
+        group.sort(key=lambda r: r.get('id') or 0)
+        keeper = group[0]
+        keepers[tpl_key] = keeper
+        for dup in group[1:]:
+            if dup.get('packed'):
+                _merge_packing_packed_flag(keeper.get('id'), True)
+            supabase.table('ha_trip_packing_items').delete().eq('id', dup['id']).execute()
+            removed += 1
+
+    keeper_ids_for_name = {}
+    for tpl_key, keeper in keepers.items():
+        keeper_ids_for_name.setdefault(tpl_key[0], []).append(keeper)
+
+    for row in fresh_rows:
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        name_lower = name.lower()
+        row_key = _packing_template_row_key(name, row.get('bag'))
+        row_id = row.get('id')
+        if name_lower not in template_names:
+            continue
+        if row_key in template_keys:
+            if keepers.get(row_key, {}).get('id') == row_id:
+                continue
+            supabase.table('ha_trip_packing_items').delete().eq('id', row_id).execute()
+            removed += 1
+            continue
+        for candidate in keeper_ids_for_name.get(name_lower, []):
+            if row.get('packed'):
+                _merge_packing_packed_flag(candidate.get('id'), True)
+            break
+        supabase.table('ha_trip_packing_items').delete().eq('id', row_id).execute()
+        removed += 1
+
+    return removed
+
+
 def _sync_trip_packing_template(trip_id):
     """Ensure every holiday list item exists with default hand/suitcase selection."""
     existing_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).execute()
@@ -5460,7 +5583,7 @@ def _sync_trip_packing_template(trip_id):
         if key:
             by_name[key] = row
 
-    template_names = {(item.get('name') or '').strip().lower() for item in TRIP_PACKING_TEMPLATE}
+    template_names, template_keys_pre = _packing_template_key_sets()
 
     for row in rows:
         key = (row.get('name') or '').strip().lower()
@@ -5469,6 +5592,8 @@ def _sync_trip_packing_template(trip_id):
             supabase.table('ha_trip_packing_items').update({'name': canonical}).eq('id', row['id']).execute()
             del by_name[key]
             by_name[canonical.lower()] = {**row, 'name': canonical}
+
+    removed = _cleanup_trip_packing_against_template(trip_id, template_names, template_keys_pre)
 
     existing_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).execute()
     by_key = {}
@@ -5516,7 +5641,37 @@ def _sync_trip_packing_template(trip_id):
     if to_insert:
         r = supabase.table('ha_trip_packing_items').insert(to_insert).execute()
         added = len(r.data or [])
-    return {'added': added, 'updated': updated}
+
+    removed += _cleanup_trip_packing_against_template(trip_id, template_names, template_keys_pre)
+
+    return {'added': added, 'updated': updated, 'removed': removed}
+
+
+@app.route('/api/trips/<int:trip_id>/packing', methods=['GET'], strict_slashes=False)
+def get_trip_packing(trip_id):
+    """List packing items for a trip. ?sync=1 runs holiday template sync when needed."""
+    if not supabase:
+        return jsonify({'error': 'Database not available'}), 503
+    try:
+        sync = request.args.get('sync', '').lower() in ('1', 'true', 'yes')
+        payload = _fetch_trip_packing(trip_id)
+        if sync and not payload.get('db_missing') and (not payload['items'] or payload['needs_sync']):
+            _sync_trip_packing_template(trip_id)
+            payload = _fetch_trip_packing(trip_id)
+        return jsonify(payload)
+    except Exception as e:
+        app.logger.error(f'Error loading packing list for trip {trip_id}: {e}')
+        if _is_packing_table_missing(e):
+            return jsonify({
+                'error': 'Packing list table missing in Supabase. Run tables/ha_travel_packing.sql in the SQL Editor, then reload.',
+                'code': 'packing_table_missing',
+                'trip_id': trip_id,
+                'items': [],
+                'needs_sync': False,
+                'template_len': TRIP_PACKING_TEMPLATE_LEN,
+                'db_missing': True,
+            }), 503
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/trips/<int:trip_id>/packing-template', methods=['POST'])
@@ -5526,8 +5681,8 @@ def seed_trip_packing_template(trip_id):
         return jsonify({'error': 'Database not available'}), 503
     try:
         result = _sync_trip_packing_template(trip_id)
-        pack_r = supabase.table('ha_trip_packing_items').select('*').eq('trip_id', trip_id).order('sort_order').order('id').execute()
-        result['items'] = pack_r.data or []
+        packing = _fetch_trip_packing(trip_id)
+        result.update(packing)
         status = 201 if result['added'] else 200
         return jsonify(result), status
     except Exception as e:
