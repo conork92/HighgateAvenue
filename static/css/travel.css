@@ -273,37 +273,32 @@
     border: 1.5px solid #0d0d0d;
     background: #fff;
 }
-.tr-packing-columns {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
-    align-items: start;
+.tr-packing-by-person {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
 }
-@media (max-width: 720px) {
-    .tr-packing-columns { grid-template-columns: 1fr; }
+.tr-packing-person-block {
+    border: 1.5px solid #0d0d0d;
+    padding: 0.75rem 0.85rem;
+    background: #fafafa;
 }
-.tr-packing-bag-title {
-    margin: 0 0 0.5rem;
-    font-size: 0.78rem;
+.tr-packing-person-heading {
+    margin: 0 0 0.65rem;
+    font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    border-bottom: 1.5px solid #0d0d0d;
-    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.4rem;
+}
+.tr-packing-person-meta {
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.72rem;
+    color: #6b6b6b;
 }
 .tr-packing-bag-count { font-weight: normal; color: #6b6b6b; }
-.tr-packing-person-section {
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px dashed #ddd;
-}
-.tr-packing-person-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-.tr-packing-person-title {
-    margin: 0 0 0.4rem;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #333;
-}
 .tr-packing-person-empty {
     list-style: none;
     margin: 0;
@@ -362,8 +357,8 @@
 }
 .tr-packing-bag-select {
     font: inherit;
-    font-size: 0.62rem;
-    padding: 0.2rem 0.25rem;
+    font-size: 0.68rem;
+    padding: 0.25rem 0.3rem;
     border: 1px solid #ccc;
     max-width: 7.5rem;
 }

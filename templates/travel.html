@@ -72,7 +72,7 @@
                         <div class="tr-section-head">
                             <div>
                                 <h2>Packing list</h2>
-                                <p class="tr-section-sub" id="trPackingProgress">Tick items off as you pack — hand luggage vs suitcase.</p>
+                                <p class="tr-section-sub" id="trPackingProgress">Tick items off by person — set Hand luggage or Suitcase on each row.</p>
                             </div>
                             <div class="tr-packing-head-actions">
                                 <button type="button" class="tr-btn tr-btn--ghost tr-btn--sm" id="trLoadPackingTemplate">Sync holiday list</button>
@@ -92,7 +92,7 @@
                                 <option value="hand_luggage">Hand luggage</option>
                                 <option value="suitcase">Suitcase</option>
                             </select>
-                            <select id="trPackingNewPerson" aria-label="Whose hand luggage">
+                            <select id="trPackingNewPerson" aria-label="Person">
                                 <option value="conor">Conor</option>
                                 <option value="cian">Cian</option>
                                 <option value="rebecca">Rebecca</option>
@@ -100,16 +100,7 @@
                             </select>
                             <button type="submit" class="tr-btn tr-btn--sm">Add</button>
                         </form>
-                        <div class="tr-packing-columns">
-                            <div class="tr-packing-bag-col">
-                                <h3 class="tr-packing-bag-title">Hand luggage <span class="tr-packing-bag-count" id="trPackingHandCount"></span></h3>
-                                <div id="trPackingHandSections"></div>
-                            </div>
-                            <div class="tr-packing-bag-col">
-                                <h3 class="tr-packing-bag-title">Suitcase <span class="tr-packing-bag-count" id="trPackingSuitcaseCount"></span></h3>
-                                <div id="trPackingSuitcaseSections"></div>
-                            </div>
-                        </div>
+                        <div class="tr-packing-by-person" id="trPackingByPerson"></div>
                         <p class="tr-empty-inline" id="trPackingEmpty" style="display:none;">No items yet — load the holiday list or add your own.</p>
                     </section>
 
@@ -653,7 +644,7 @@
             const progressEl = document.getElementById('trPackingProgress');
             const fillEl = document.getElementById('trPackingProgressFill');
             const emptyEl = document.getElementById('trPackingEmpty');
-            const columnsEl = document.querySelector('.tr-packing-columns');
+            const personWrap = document.getElementById('trPackingByPerson');
 
             if (currentTrip && currentTrip.packing_sync_error) {
                 progressEl.textContent = currentTrip.packing_sync_error;
@@ -669,15 +660,15 @@
                 fillEl.style.width = '0%';
                 emptyEl.style.display = 'block';
                 emptyEl.textContent = 'Nothing saved for this trip yet. Use Sync holiday list to load the default items.';
-                columnsEl.style.display = 'none';
+                if (personWrap) personWrap.style.display = 'none';
             } else if (!items.length) {
-                progressEl.textContent = 'Tick items off as you pack — hand luggage vs suitcase.';
+                progressEl.textContent = 'Tick items off by person — set Hand luggage or Suitcase on each row.';
                 fillEl.style.width = '0%';
                 emptyEl.style.display = 'block';
-                columnsEl.style.display = 'none';
+                if (personWrap) personWrap.style.display = 'none';
             } else {
                 emptyEl.style.display = 'none';
-                columnsEl.style.display = '';
+                if (personWrap) personWrap.style.display = '';
                 const pct = Math.round((packedCount / items.length) * 100);
                 progressEl.textContent = packedCount + ' of ' + items.length + ' packed'
                     + (packedCount === items.length ? ' — you\'re ready to go!' : '');
@@ -698,16 +689,7 @@
                 filtersWrap.appendChild(btn);
             });
 
-            const handSections = document.getElementById('trPackingHandSections');
-            const suitSections = document.getElementById('trPackingSuitcaseSections');
-            handSections.innerHTML = '';
-            suitSections.innerHTML = '';
-
-            const byBag = { hand_luggage: [], suitcase: [] };
-            filtered.forEach(function(item) {
-                const bag = item.bag === 'hand_luggage' ? 'hand_luggage' : 'suitcase';
-                byBag[bag].push(item);
-            });
+            personWrap.innerHTML = '';
 
             function packingPersonKey(item) {
                 const p = (item.person || 'shared').toLowerCase();
@@ -728,11 +710,11 @@
                     +   '<span class="tr-packing-name">' + esc(item.name) + '</span>'
                     + '</label>'
                     + '<div class="tr-packing-item-actions">'
-                    +   personSelectHtml
                     +   '<select class="tr-packing-bag-select" aria-label="Bag">'
                     +     '<option value="hand_luggage"' + (item.bag === 'hand_luggage' ? ' selected' : '') + '>Hand luggage</option>'
                     +     '<option value="suitcase"' + (item.bag === 'suitcase' ? ' selected' : '') + '>Suitcase</option>'
                     +   '</select>'
+                    +   personSelectHtml
                     +   '<button type="button" class="tr-packing-delete" title="Remove">×</button>'
                     + '</div>';
                 li.querySelector('input[type="checkbox"]').addEventListener('change', function(e) {
@@ -754,59 +736,48 @@
                 listEl.appendChild(li);
             }
 
-            const handByPerson = { conor: [], cian: [], rebecca: [], shared: [] };
-            byBag.hand_luggage.forEach(function(item) {
-                handByPerson[packingPersonKey(item)].push(item);
+            const byPerson = { conor: [], cian: [], rebecca: [], shared: [] };
+            filtered.forEach(function(item) {
+                byPerson[packingPersonKey(item)].push(item);
             });
-
-            function renderPersonSections(container, byPerson) {
-                PACKING_PERSON_SECTIONS.forEach(function(section) {
-                    const sectionItems = byPerson[section.key] || [];
-                    if (section.key === 'shared' && !sectionItems.length) return;
-                    if (section.key !== 'shared' && !sectionItems.length && packingFilter !== 'all') return;
-                    const block = document.createElement('div');
-                    block.className = 'tr-packing-person-section';
-                    const packedInSection = sectionItems.filter(function(i) { return i.packed; }).length;
-                    block.innerHTML = '<h4 class="tr-packing-person-title">' + esc(section.label)
-                        + ' <span class="tr-packing-bag-count">' + (sectionItems.length ? '(' + packedInSection + '/' + sectionItems.length + ')' : '') + '</span></h4>';
-                    const list = document.createElement('ul');
-                    list.className = 'tr-packing-list';
-                    if (!sectionItems.length) {
-                        list.innerHTML = '<li class="tr-packing-person-empty">Nothing in this bag yet</li>';
-                    } else {
-                        sectionItems.forEach(function(item) { appendRow(list, item); });
-                    }
-                    block.appendChild(list);
-                    container.appendChild(block);
+            Object.keys(byPerson).forEach(function(key) {
+                byPerson[key].sort(function(a, b) {
+                    const bagOrder = (a.bag === 'hand_luggage' ? 0 : 1) - (b.bag === 'hand_luggage' ? 0 : 1);
+                    if (bagOrder !== 0) return bagOrder;
+                    return (a.sort_order || 0) - (b.sort_order || 0) || (a.id || 0) - (b.id || 0);
                 });
-            }
-
-            renderPersonSections(handSections, handByPerson);
-
-            const suitByPerson = { conor: [], cian: [], rebecca: [], shared: [] };
-            byBag.suitcase.forEach(function(item) {
-                suitByPerson[packingPersonKey(item)].push(item);
             });
-            renderPersonSections(suitSections, suitByPerson);
 
-            const handTotal = items.filter(function(i) { return i.bag === 'hand_luggage'; });
-            const suitTotal = items.filter(function(i) { return i.bag === 'suitcase'; });
-            document.getElementById('trPackingHandCount').textContent = handTotal.length
-                ? '(' + handTotal.filter(function(i) { return i.packed; }).length + '/' + handTotal.length + ')'
-                : '';
-            document.getElementById('trPackingSuitcaseCount').textContent = suitTotal.length
-                ? '(' + suitTotal.filter(function(i) { return i.packed; }).length + '/' + suitTotal.length + ')'
-                : '';
+            const hasSharedInTrip = items.some(function(i) { return packingPersonKey(i) === 'shared'; });
 
-            if (packingFilter === 'hand_luggage') {
-                document.querySelector('.tr-packing-bag-col:last-child').style.display = 'none';
-                document.querySelector('.tr-packing-bag-col:first-child').style.display = '';
-            } else if (packingFilter === 'suitcase') {
-                document.querySelector('.tr-packing-bag-col:first-child').style.display = 'none';
-                document.querySelector('.tr-packing-bag-col:last-child').style.display = '';
-            } else {
-                document.querySelectorAll('.tr-packing-bag-col').forEach(function(el) { el.style.display = ''; });
-            }
+            PACKING_PERSON_SECTIONS.forEach(function(section) {
+                const sectionItems = byPerson[section.key] || [];
+                if (section.key === 'shared' && !sectionItems.length && !hasSharedInTrip) return;
+                if (section.key !== 'shared' && !sectionItems.length && packingFilter !== 'all') return;
+                const block = document.createElement('section');
+                block.className = 'tr-packing-person-block';
+                const packedInSection = sectionItems.filter(function(i) { return i.packed; }).length;
+                const handN = sectionItems.filter(function(i) { return i.bag === 'hand_luggage'; }).length;
+                const suitN = sectionItems.length - handN;
+                let meta = '';
+                if (sectionItems.length) {
+                    meta = packedInSection + '/' + sectionItems.length + ' packed';
+                    if (handN && suitN) meta += ' · ' + handN + ' hand · ' + suitN + ' suitcase';
+                    else if (handN) meta += ' · hand luggage';
+                    else if (suitN) meta += ' · suitcase';
+                }
+                block.innerHTML = '<h3 class="tr-packing-person-heading">' + esc(section.label)
+                    + (meta ? ' <span class="tr-packing-person-meta">' + esc(meta) + '</span>' : '') + '</h3>';
+                const list = document.createElement('ul');
+                list.className = 'tr-packing-list';
+                if (!sectionItems.length) {
+                    list.innerHTML = '<li class="tr-packing-person-empty">Nothing for this person yet</li>';
+                } else {
+                    sectionItems.forEach(function(item) { appendRow(list, item); });
+                }
+                block.appendChild(list);
+                personWrap.appendChild(block);
+            });
         }
 
         async function patchPackingItem(id, payload) {
@@ -824,7 +795,7 @@
                 if (item) Object.assign(item, data);
                 renderPackingList();
             } catch (err) {
-                await loadTrip(currentTrip.id);
+                await loadPackingList(currentTrip.id);
                 alert(err.message || 'Could not update item');
             }
         }
@@ -833,7 +804,7 @@
             try {
                 const r = await fetch('/api/trip-packing/' + id, { method: 'DELETE' });
                 if (!r.ok) throw new Error('Delete failed');
-                await loadTrip(currentTrip.id);
+                await loadPackingList(currentTrip.id);
             } catch (err) {
                 alert(err.message || 'Could not remove item');
             }
@@ -887,10 +858,38 @@
             renderTripList();
         }
 
+        function applyPackingPayload(data) {
+            if (!currentTrip) return;
+            currentTrip.packing_items = Array.isArray(data.items) ? data.items : [];
+            currentTrip.packing_needs_sync = !!data.needs_sync;
+            currentTrip.packing_template_len = data.template_len;
+            currentTrip.packing_db_missing = !!data.db_missing;
+            delete currentTrip.packing_sync_error;
+        }
+
+        async function loadPackingList(tripId, opts) {
+            opts = opts || {};
+            const q = opts.syncIfNeeded ? '?sync=1' : '';
+            const r = await fetch('/api/trips/' + tripId + '/packing' + q);
+            const data = await r.json();
+            if (!r.ok) {
+                const err = new Error(data.error || 'Could not load packing list');
+                if (data.db_missing) {
+                    currentTrip.packing_db_missing = true;
+                    currentTrip.packing_items = [];
+                }
+                throw err;
+            }
+            applyPackingPayload(data);
+            renderPackingList();
+            return data;
+        }
+
         async function ensureHolidayPackingList(tripId) {
             const r = await fetch('/api/trips/' + tripId + '/packing-template', { method: 'POST' });
             const data = await r.json();
             if (!r.ok) throw new Error(data.error || 'Could not load holiday list');
+            if (currentTrip && Number(currentTrip.id) === Number(tripId)) applyPackingPayload(data);
             return data;
         }
 
@@ -898,22 +897,17 @@
             const r = await fetch('/api/trips?id=' + encodeURIComponent(id));
             if (!r.ok) throw new Error('Could not load trip');
             currentTrip = await r.json();
+            currentTrip.packing_items = [];
             delete currentTrip.packing_sync_error;
-            const items = currentTrip.packing_items || [];
-            const title = (currentTrip.title || '').toLowerCase();
-            const needsHolidayList = !items.length || (title.includes('nice') && items.length < 43);
-            if (needsHolidayList) {
-                try {
-                    await ensureHolidayPackingList(id);
-                    const r2 = await fetch('/api/trips?id=' + encodeURIComponent(id));
-                    if (r2.ok) currentTrip = await r2.json();
-                } catch (e) {
-                    currentTrip.packing_sync_error = e.message || 'Could not load holiday list';
-                    console.warn('Holiday packing list sync:', e);
-                }
-            }
             stayStatusFilter = 'all';
             renderTripDetail();
+            try {
+                await loadPackingList(id, { syncIfNeeded: true });
+            } catch (e) {
+                currentTrip.packing_sync_error = e.message || 'Could not load packing list';
+                console.warn('Packing list:', e);
+                renderPackingList();
+            }
         }
 
         function buildStayCard(stay) {
@@ -1074,12 +1068,12 @@
             btn.disabled = true;
             btn.textContent = 'Loading…';
             try {
-                const r = await fetch('/api/trips/' + currentTrip.id + '/packing-template', { method: 'POST' });
-                const data = await r.json();
-                if (!r.ok) throw new Error(data.error || 'Could not load list');
-                await loadTrip(currentTrip.id);
-                if (data.added === 0 && !data.updated) {
+                const data = await ensureHolidayPackingList(currentTrip.id);
+                renderPackingList();
+                if (data.added === 0 && !data.updated && !data.removed) {
                     alert('Holiday list is already up to date on this trip.');
+                } else if ((data.removed || 0) > 0) {
+                    alert('Removed ' + data.removed + ' duplicate or outdated row(s).');
                 }
             } catch (err) {
                 alert(err.message || 'Could not load holiday list');
@@ -1111,7 +1105,7 @@
                 const data = await r.json();
                 if (!r.ok) throw new Error(data.error || 'Add failed');
                 nameInput.value = '';
-                await loadTrip(currentTrip.id);
+                await loadPackingList(currentTrip.id);
             } catch (err) {
                 alert(err.message || 'Could not add item');
             }
